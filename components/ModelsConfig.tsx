@@ -97,6 +97,7 @@ interface ModelEntry {
   name?: string;
   api?: string;
   reasoning?: boolean;
+  thinkingLevelMap?: Record<string, string | null>;
   input?: string[];
   contextWindow?: number;
   maxTokens?: number;
@@ -314,16 +315,96 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
   );
 }
 
+// ── ThinkingLevelMap editor ───────────────────────────────────────────────────
+
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+type ThinkingLevel = typeof THINKING_LEVELS[number];
+
+function ThinkingLevelMapEditor({
+  value,
+  onChange,
+}: {
+  value: Record<string, string | null> | undefined;
+  onChange: (v: Record<string, string | null> | undefined) => void;
+}) {
+  const map = value ?? {};
+
+  const setLevel = (level: ThinkingLevel, entry: string | null | "omit") => {
+    const next = { ...map };
+    if (entry === "omit") {
+      delete next[level];
+    } else {
+      next[level] = entry;
+    }
+    onChange(Object.keys(next).length ? next : undefined);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {THINKING_LEVELS.map((level) => {
+        const raw = map[level];
+        // raw === undefined → omitted (default); raw === null → disabled; raw is string → mapped
+        const state: "omit" | "null" | "string" =
+          !(level in map) ? "omit" : raw === null ? "null" : "string";
+        const strVal = typeof raw === "string" ? raw : "";
+
+        return (
+          <div key={level} style={{ display: "grid", gridTemplateColumns: "56px 1fr", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>{level}</span>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {/* State selector */}
+              <div style={{ display: "flex", borderRadius: 4, border: "1px solid var(--border)", overflow: "hidden", flexShrink: 0 }}>
+                {(["omit", "string", "null"] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setLevel(level, s === "string" ? (strVal || level) : s === "null" ? null : s)}
+                    style={{
+                      padding: "2px 7px",
+                      fontSize: 10,
+                      border: "none",
+                      borderRight: s !== "null" ? "1px solid var(--border)" : "none",
+                      background: state === s ? "var(--accent)" : "var(--bg-panel)",
+                      color: state === s ? "#fff" : "var(--text-muted)",
+                      cursor: "pointer",
+                      fontFamily: s === "null" ? "var(--font-mono)" : "inherit",
+                    }}
+                  >
+                    {s === "omit" ? "default" : s === "null" ? "null" : "map"}
+                  </button>
+                ))}
+              </div>
+              {/* Value input, only shown when state is "string" */}
+              {state === "string" && (
+                <input
+                  value={strVal}
+                  onChange={(e) => setLevel(level, e.target.value)}
+                  placeholder={level}
+                  style={{ ...inputStyle, width: 110, fontFamily: "var(--font-mono)", fontSize: 11 }}
+                />
+              )}
+              {state === "null" && (
+                <span style={{ fontSize: 10, color: "var(--text-dim)" }}>hidden / unsupported</span>
+              )}
+              {state === "omit" && (
+                <span style={{ fontSize: 10, color: "var(--text-dim)" }}>provider default</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Model detail ──────────────────────────────────────────────────────────────
 
 const DEEPSEEK_COMPAT = {
   thinkingFormat: "deepseek",
   requiresReasoningContentOnAssistantMessages: true,
-  reasoningEffortMap: { minimal: "high", low: "high", medium: "high", high: "high", xhigh: "max" },
 } as const;
 
-function hasDeepseekCompat(compat: Record<string, unknown> | undefined): boolean {
-  return compat?.thinkingFormat === "deepseek";
+function hasDeepseekCompat(model: ModelEntry): boolean {
+  return model.compat?.thinkingFormat === "deepseek";
 }
 
 function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEntry {
@@ -334,7 +415,6 @@ function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEntry {
   const rest = { ...model.compat };
   delete rest.thinkingFormat;
   delete rest.requiresReasoningContentOnAssistantMessages;
-  delete rest.reasoningEffortMap;
   return { ...model, compat: Object.keys(rest).length ? rest : undefined };
 }
 
@@ -372,11 +452,30 @@ function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; onChang
       </div>
 
       {model.reasoning && (
-        <Check
-          label="DeepSeek thinking compat"
-          checked={hasDeepseekCompat(model.compat)}
-          onChange={(v) => onChange(setDeepseekCompat(model, v))}
-        />
+        <>
+          <Check
+            label="DeepSeek thinking compat"
+            checked={hasDeepseekCompat(model)}
+            onChange={(v) => onChange(setDeepseekCompat(model, v))}
+          />
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <SectionTitle>Thinking level map</SectionTitle>
+              {model.thinkingLevelMap && (
+                <button
+                  onClick={() => set("thinkingLevelMap", undefined)}
+                  style={{ fontSize: 10, padding: "2px 7px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", cursor: "pointer" }}
+                >
+                  clear all
+                </button>
+              )}
+            </div>
+            <ThinkingLevelMapEditor
+              value={model.thinkingLevelMap}
+              onChange={(v) => set("thinkingLevelMap", v)}
+            />
+          </div>
+        </>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

@@ -1,4 +1,5 @@
 import { AuthStorage, ModelRegistry, SettingsManager, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 
 export const dynamic = "force-dynamic";
 
@@ -6,6 +7,7 @@ export async function GET() {
   const nameMap = new Map<string, string>();
   let modelList: { id: string; name: string; provider: string }[] = [];
   let defaultModel: { provider: string; modelId: string } | null = null;
+  const thinkingLevels: Record<string, string[]> = {};
 
   try {
     const agentDir = getAgentDir();
@@ -17,7 +19,11 @@ export async function GET() {
       name: m.name,
       provider: m.provider,
     }));
-    for (const m of modelList) nameMap.set(`${m.provider}:${m.id}`, m.name);
+    for (const m of available) {
+      const key = `${m.provider}:${m.id}`;
+      nameMap.set(key, m.name);
+      thinkingLevels[key] = getSupportedThinkingLevels(m);
+    }
 
     const settings = SettingsManager.create(process.cwd(), agentDir);
     const provider = settings.getDefaultProvider();
@@ -27,5 +33,5 @@ export async function GET() {
     }
   } catch { /* return empty */ }
 
-  return Response.json({ models: Object.fromEntries(nameMap), modelList, defaultModel });
+  return Response.json({ models: Object.fromEntries(nameMap), modelList, defaultModel, thinkingLevels });
 }

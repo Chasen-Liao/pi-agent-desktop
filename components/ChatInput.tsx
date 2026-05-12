@@ -32,6 +32,7 @@ interface Props {
   onToolPresetChange?: (preset: "none" | "default" | "full") => void;
   thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
+  availableThinkingLevels?: string[] | null;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
@@ -60,7 +61,7 @@ const THINKING_LEVEL_DESC: Record<typeof THINKING_LEVELS[number], string> = {
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
   onCompact, onAbortCompaction, isCompacting, compactError, toolPreset, onToolPresetChange,
-  thinkingLevel, onThinkingLevelChange,
+  thinkingLevel, onThinkingLevelChange, availableThinkingLevels,
   retryInfo,
   soundEnabled, onSoundToggle,
 }: Props, ref) {
@@ -639,7 +640,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
                     overflow: "hidden", minWidth: 180,
                   }}>
-                    {THINKING_LEVELS.map((lvl) => {
+                    {THINKING_LEVELS.filter((lvl) => {
+                      if (!availableThinkingLevels) return true;
+                      if (lvl === "auto") return true;
+                      return availableThinkingLevels.includes(lvl);
+                    }).map((lvl) => {
                       const isActive = (thinkingLevel ?? "auto") === lvl;
                       const desc = THINKING_LEVEL_DESC[lvl];
                       return (
