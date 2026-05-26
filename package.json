@@ -3,6 +3,7 @@
   "version": "0.6.12",
   "description": "Web UI for the pi coding agent",
   "license": "MIT",
+  "author": "agegr",
   "main": "electron/dist/main.js",
   "bin": {
     "pi-web": "bin/pi-web.js"
