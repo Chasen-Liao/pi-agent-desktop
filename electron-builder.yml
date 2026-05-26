@@ -7,9 +7,11 @@ directories:
   buildResources: build
 
 files:
+  - package.json
   - electron/dist/**/*
   - "!electron/**/*.ts"
   - "!electron/tsconfig.json"
+  - "!node_modules/**/*"
 
 extraResources:
   - from: .next/standalone
@@ -25,13 +27,11 @@ extraResources:
     filter:
       - "**/*"
 
-asar: true
-asarUnpack:
-  - "**/*.node"
-  - "**/node_modules/@silvia-odwyer/**"
-  - "**/node_modules/@earendil-works/**"
+asar: false
 
 npmRebuild: true
+
+electronDist: node_modules/electron/dist
 
 win:
   target:
