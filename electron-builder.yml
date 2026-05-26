@@ -1,0 +1,55 @@
+appId: com.agegr.pi-web
+productName: Pi Agent
+copyright: Copyright © 2026 agegr
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - electron/dist/**/*
+  - "!electron/**/*.ts"
+  - "!electron/tsconfig.json"
+
+extraResources:
+  - from: .next/standalone
+    to: standalone
+    filter:
+      - "**/*"
+  - from: .next/static
+    to: standalone/.next/static
+    filter:
+      - "**/*"
+  - from: public
+    to: standalone/public
+    filter:
+      - "**/*"
+
+asar: true
+asarUnpack:
+  - "**/*.node"
+  - "**/node_modules/@silvia-odwyer/**"
+  - "**/node_modules/@earendil-works/**"
+
+npmRebuild: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Pi Agent
+  uninstallDisplayName: Pi Agent
+  artifactName: "${productName}-Setup-${version}.${ext}"
+
+publish:
+  provider: github
+  owner: agegr
+  repo: pi-web
