@@ -18,7 +18,10 @@
 /out/
 
 # production
-/build
+/build/*.exe
+/build/*.dmg
+/build/*.deb
+/build/*.AppImage
 
 # electron
 /electron/dist/
