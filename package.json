@@ -3,6 +3,7 @@
   "version": "0.6.12",
   "description": "Web UI for the pi coding agent",
   "license": "MIT",
+  "main": "electron/dist/main.js",
   "bin": {
     "pi-web": "bin/pi-web.js"
   },
@@ -21,7 +22,14 @@
     "build": "next build --webpack",
     "start": "next start -p 30141",
     "lint": "eslint .",
-    "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
+    "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "dev:electron": "npm run build:electron && npx electron .",
+    "pack": "npm run build && npm run build:electron && npx @electron/rebuild && npx electron-builder --dir",
+    "dist": "npm run build && npm run build:electron && npx @electron/rebuild && npx electron-builder"
+  },
+  "build": {
+    "extends": "electron-builder.yml"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "^0.75.5",
