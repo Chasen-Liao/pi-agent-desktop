@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi Web 架构深度解析</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #111827;
+    --bg3: #1a2235;
+    --bg4: #243049;
+    --accent: #6366f1;
+    --accent2: #8b5cf6;
+    --accent3: #a78bfa;
+    --cyan: #22d3ee;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --sky: #38bdf8;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --border: rgba(99,102,241,0.2);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+    line-height: 1.7;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+
+  /* ── Background Particles ── */
+  #particles {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* ── Navigation ── */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(10,14,26,0.8);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    height: 56px;
+    gap: 2rem;
+  }
+
+  nav .logo {
+    font-weight: 800;
+    font-size: 1.1rem;
+    background: linear-gradient(135deg, var(--accent), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
+  }
+
+  nav .links {
+    display: flex;
+    gap: 0.3rem;
+  }
+
+  nav .links a {
+    color: var(--text2);
+    text-decoration: none;
+    font-size: 0.82rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+
+  nav .links a:hover {
+    color: var(--text);
+    background: rgba(99,102,241,0.12);
+  }
+
+  /* ── Sections ── */
+  section {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    padding: 6rem 2rem 4rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .section-inner {
+    max-width: 1100px;
+    width: 100%;
+  }
+
+  .section-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.6s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .section-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.7s cubic-bezier(0.16,1,0.3,1) 0.1s;
+  }
+
+  .section-desc {
+    font-size: 1.05rem;
+    color: var(--text2);
+    max-width: 700px;
+    line-height: 1.8;
+    margin-bottom: 3rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.7s cubic-bezier(0.16,1,0.3,1) 0.2s;
+  }
+
+  .visible .section-tag,
+  .visible .section-title,
+  .visible .section-desc {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── Hero ── */
+  #hero {
+    min-height: 100vh;
+    justify-content: center;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  #hero .section-inner { max-width: 800px; }
+
+  #hero .glow {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulse-glow 4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  }
+
+  #hero h1 {
+    font-size: 4.5rem;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 1.05;
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: hero-in 1s cubic-bezier(0.16,1,0.3,1) 0.3s forwards;
+  }
+
+  #hero h1 span {
+    background: linear-gradient(135deg, var(--accent), var(--cyan), var(--green));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 200% 200%;
+    animation: gradient-shift 4s ease-in-out infinite;
+  }
+
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  @keyframes hero-in {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  #hero .subtitle {
+    font-size: 1.2rem;
+    color: var(--text2);
+    max-width: 560px;
+    margin: 0 auto 2.5rem;
+    opacity: 0;
+    animation: hero-in 1s cubic-bezier(0.16,1,0.3,1) 0.5s forwards;
+  }
+
+  #hero .badges {
+    display: flex;
+    justify-content: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    opacity: 0;
+    animation: hero-in 1s cubic-bezier(0.16,1,0.3,1) 0.7s forwards;
+  }
+
+  .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(99,102,241,0.06);
+    color: var(--text2);
+    white-space: nowrap;
+  }
+
+  .badge b { color: var(--accent3); font-weight: 600; }
+
+  /* ── Architecture Diagram ── */
+  .arch-container {
+    position: relative;
+    width: 100%;
+    padding: 2rem 0;
+  }
+
+  .arch-layer {
+    position: relative;
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.2rem;
+    opacity: 0;
+    transform: translateY(40px);
+    transition: all 0.8s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .visible .arch-layer {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .arch-layer:nth-child(2) { transition-delay: 0.15s; }
+  .arch-layer:nth-child(3) { transition-delay: 0.3s; }
+  .arch-layer:nth-child(4) { transition-delay: 0.45s; }
+
+  .layer-browser {
+    background: linear-gradient(135deg, rgba(34,211,238,0.08), rgba(99,102,241,0.08));
+    border: 1px solid rgba(34,211,238,0.2);
+  }
+
+  .layer-server {
+    background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08));
+    border: 1px solid rgba(99,102,241,0.2);
+  }
+
+  .layer-sdk {
+    background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(167,139,250,0.08));
+    border: 1px solid rgba(139,92,246,0.2);
+  }
+
+  .layer-files {
+    background: linear-gradient(135deg, rgba(52,211,153,0.08), rgba(34,211,238,0.08));
+    border: 1px solid rgba(52,211,153,0.2);
+  }
+
+  .layer-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .layer-browser .layer-label { color: var(--cyan); }
+  .layer-server .layer-label { color: var(--accent); }
+  .layer-sdk .layer-label { color: var(--accent2); }
+  .layer-files .layer-label { color: var(--green); }
+
+  .layer-label .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  .layer-browser .dot { background: var(--cyan); }
+  .layer-server .dot { background: var(--accent); }
+  .layer-sdk .dot { background: var(--accent2); }
+  .layer-files .dot { background: var(--green); }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .arch-nodes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+  }
+
+  .arch-node {
+    padding: 0.6rem 1rem;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.3s;
+    cursor: default;
+  }
+
+  .arch-node:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+
+  .layer-browser .arch-node {
+    background: rgba(34,211,238,0.1);
+    border: 1px solid rgba(34,211,238,0.25);
+    color: var(--cyan);
+  }
+  .layer-browser .arch-node:hover { background: rgba(34,211,238,0.18); }
+
+  .layer-server .arch-node {
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.25);
+    color: var(--accent3);
+  }
+  .layer-server .arch-node:hover { background: rgba(99,102,241,0.18); }
+
+  .layer-sdk .arch-node {
+    background: rgba(139,92,246,0.1);
+    border: 1px solid rgba(139,92,246,0.25);
+    color: var(--accent3);
+  }
+  .layer-sdk .arch-node:hover { background: rgba(139,92,246,0.18); }
+
+  .layer-files .arch-node {
+    background: rgba(52,211,153,0.1);
+    border: 1px solid rgba(52,211,153,0.25);
+    color: var(--green);
+  }
+  .layer-files .arch-node:hover { background: rgba(52,211,153,0.18); }
+
+  .arch-node .icon { font-size: 1rem; }
+
+  /* Connection arrows between layers */
+  .arch-arrows {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    padding: 0.5rem 0;
+    opacity: 0;
+    transition: all 0.6s cubic-bezier(0.16,1,0.3,1) 0.6s;
+  }
+
+  .visible .arch-arrows { opacity: 1; }
+
+  .arrow-down {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    color: var(--text3);
+    font-size: 0.68rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .arrow-down .line {
+    width: 2px;
+    height: 18px;
+    background: linear-gradient(to bottom, var(--accent3), var(--accent));
+    animation: flow-down 1.5s ease-in-out infinite;
+    border-radius: 1px;
+  }
+
+  @keyframes flow-down {
+    0% { opacity: 0.3; height: 10px; }
+    50% { opacity: 1; height: 22px; }
+    100% { opacity: 0.3; height: 10px; }
+  }
+
+  /* ── Data Flow (Sequence) ── */
+  .seq-container {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .seq-lanes {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding: 0 1rem;
+  }
+
+  .seq-lane {
+    flex: 1;
+    text-align: center;
+  }
+
+  .seq-lane-head {
+    padding: 0.7rem;
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin-bottom: 0;
+    position: relative;
+  }
+
+  .seq-lane:nth-child(1) .seq-lane-head { background: rgba(34,211,238,0.12); color: var(--cyan); border: 1px solid rgba(34,211,238,0.2); }
+  .seq-lane:nth-child(2) .seq-lane-head { background: rgba(99,102,241,0.12); color: var(--accent3); border: 1px solid rgba(99,102,241,0.2); }
+  .seq-lane:nth-child(3) .seq-lane-head { background: rgba(139,92,246,0.12); color: var(--accent3); border: 1px solid rgba(139,92,246,0.2); }
+  .seq-lane:nth-child(4) .seq-lane-head { background: rgba(251,191,36,0.12); color: var(--amber); border: 1px solid rgba(251,191,36,0.2); }
+  .seq-lane:nth-child(5) .seq-lane-head { background: rgba(52,211,153,0.12); color: var(--green); border: 1px solid rgba(52,211,153,0.2); }
+
+  .seq-steps {
+    position: relative;
+    padding: 0 1rem;
+  }
+
+  .seq-step {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.65rem 1rem;
+    border-radius: 10px;
+    margin-bottom: 0.5rem;
+    font-size: 0.82rem;
+    opacity: 0;
+    transform: translateX(-30px);
+    transition: all 0.6s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .visible .seq-step {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .seq-step:nth-child(1) { transition-delay: 0.1s; }
+  .seq-step:nth-child(2) { transition-delay: 0.2s; }
+  .seq-step:nth-child(3) { transition-delay: 0.3s; }
+  .seq-step:nth-child(4) { transition-delay: 0.4s; }
+  .seq-step:nth-child(5) { transition-delay: 0.5s; }
+  .seq-step:nth-child(6) { transition-delay: 0.6s; }
+  .seq-step:nth-child(7) { transition-delay: 0.7s; }
+  .seq-step:nth-child(8) { transition-delay: 0.8s; }
+  .seq-step:nth-child(9) { transition-delay: 0.9s; }
+
+  .seq-step .step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .seq-step.request { background: rgba(34,211,238,0.06); border: 1px solid rgba(34,211,238,0.12); }
+  .seq-step.request .step-num { background: rgba(34,211,238,0.15); color: var(--cyan); }
+  .seq-step.process { background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.12); }
+  .seq-step.process .step-num { background: rgba(99,102,241,0.15); color: var(--accent3); }
+  .seq-step.stream { background: rgba(52,211,153,0.06); border: 1px solid rgba(52,211,153,0.12); }
+  .seq-step.stream .step-num { background: rgba(52,211,153,0.15); color: var(--green); }
+  .seq-step.event { background: rgba(139,92,246,0.06); border: 1px solid rgba(139,92,246,0.12); }
+  .seq-step.event .step-num { background: rgba(139,92,246,0.15); color: var(--accent2); }
+  .seq-step.done { background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.12); }
+  .seq-step.done .step-num { background: rgba(251,191,36,0.15); color: var(--amber); }
+
+  .seq-step code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    background: rgba(255,255,255,0.06);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    color: var(--accent3);
+  }
+
+  /* ── Component Cards ── */
+  .comp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+
+  .comp-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.3rem;
+    opacity: 0;
+    transform: translateY(30px) scale(0.97);
+    transition: all 0.6s cubic-bezier(0.16,1,0.3,1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .visible .comp-card {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  .comp-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 14px 14px 0 0;
+    background: linear-gradient(90deg, var(--accent), var(--cyan));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .comp-card:hover::before { opacity: 1; }
+
+  .comp-card:hover {
+    border-color: rgba(99,102,241,0.4);
+    transform: translateY(-4px) scale(1);
+    box-shadow: 0 8px 30px rgba(99,102,241,0.12);
+  }
+
+  .comp-card .card-icon {
+    font-size: 1.6rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .comp-card h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .comp-card h4 code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    background: rgba(99,102,241,0.12);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    color: var(--accent3);
+  }
+
+  .comp-card p {
+    font-size: 0.78rem;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  .comp-card .tags {
+    display: flex;
+    gap: 0.3rem;
+    margin-top: 0.7rem;
+    flex-wrap: wrap;
+  }
+
+  .comp-card .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    background: rgba(99,102,241,0.08);
+    color: var(--text3);
+    border: 1px solid rgba(99,102,241,0.1);
+  }
+
+  /* ── Tech Stack ── */
+  .tech-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.8rem;
+  }
+
+  .tech-item {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 1rem 1.2rem;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    opacity: 0;
+    transform: scale(0.9);
+    transition: all 0.5s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .visible .tech-item {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .tech-item:hover {
+    border-color: rgba(99,102,241,0.4);
+    transform: translateY(-2px);
+  }
+
+  .tech-item .tech-icon {
+    font-size: 1.5rem;
+    width: 36px;
+    text-align: center;
+  }
+
+  .tech-item .tech-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .tech-item .tech-ver {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--text3);
+  }
+
+  /* ── Key Decision Cards ── */
+  .decision-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .decision-card {
+    display: flex;
+    gap: 1.2rem;
+    padding: 1.3rem 1.5rem;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    opacity: 0;
+    transform: translateX(-30px);
+    transition: all 0.7s cubic-bezier(0.16,1,0.3,1);
+    position: relative;
+  }
+
+  .visible .decision-card {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .decision-card:hover {
+    border-color: rgba(99,102,241,0.35);
+  }
+
+  .decision-card .dec-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.15);
+  }
+
+  .decision-card h4 {
+    font-size: 0.92rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+  }
+
+  .decision-card p {
+    font-size: 0.8rem;
+    color: var(--text2);
+    line-height: 1.65;
+  }
+
+  .decision-card code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    background: rgba(99,102,241,0.1);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    color: var(--accent3);
+  }
+
+  /* ── File Tree ── */
+  .file-tree {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.8s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .visible .file-tree {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .ft-line {
+    padding: 0.2rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background 0.2s;
+    padding-left: calc(var(--depth, 0) * 1.4rem);
+    border-radius: 4px;
+  }
+
+  .ft-line:hover {
+    background: rgba(99,102,241,0.06);
+  }
+
+  .ft-line .ft-icon { opacity: 0.6; width: 16px; text-align: center; }
+  .ft-line .ft-name { color: var(--text); }
+  .ft-line .ft-comment { color: var(--text3); margin-left: 0.5rem; font-size: 0.68rem; }
+
+  .ft-dir .ft-name { color: var(--cyan); font-weight: 600; }
+  .ft-api .ft-name { color: var(--accent3); }
+  .ft-lib .ft-name { color: var(--green); }
+  .ft-comp .ft-name { color: var(--amber); }
+  .ft-hook .ft-name { color: var(--rose); }
+
+  /* ── Two-Mode Comparison ── */
+  .compare-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .compare-item {
+    padding: 1.3rem;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.7s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .visible .compare-item {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .compare-item:nth-child(2) { transition-delay: 0.15s; }
+
+  .compare-item.read-mode {
+    background: linear-gradient(135deg, rgba(52,211,153,0.06), rgba(34,211,238,0.06));
+    border-color: rgba(52,211,153,0.2);
+  }
+
+  .compare-item.interact-mode {
+    background: linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.06));
+    border-color: rgba(99,102,241,0.2);
+  }
+
+  .compare-item h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .compare-item.read-mode h4 { color: var(--green); }
+  .compare-item.interact-mode h4 { color: var(--accent3); }
+
+  .compare-item p {
+    font-size: 0.78rem;
+    color: var(--text2);
+    line-height: 1.65;
+  }
+
+  .compare-item ul {
+    list-style: none;
+    padding: 0;
+    margin-top: 0.5rem;
+  }
+
+  .compare-item li {
+    font-size: 0.78rem;
+    color: var(--text2);
+    padding: 0.25rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .compare-item li::before {
+    content: '→';
+    color: var(--text3);
+    font-size: 0.7rem;
+  }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--text3);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    #hero h1 { font-size: 2.8rem; }
+    section { padding: 5rem 1.2rem 3rem; }
+    .comp-grid { grid-template-columns: 1fr; }
+    .tech-grid { grid-template-columns: repeat(2, 1fr); }
+    .compare-box { grid-template-columns: 1fr; }
+    nav .links { display: none; }
+    .seq-lanes { gap: 0.3rem; }
+    .seq-lane-head { font-size: 0.6rem; padding: 0.5rem 0.3rem; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="particles"></canvas>
+
+<nav>
+  <div class="logo">π Web</div>
+  <div class="links">
+    <a href="#hero">首页</a>
+    <a href="#architecture">架构</a>
+    <a href="#dataflow">数据流</a>
+    <a href="#components">组件</a>
+    <a href="#techstack">技术栈</a>
+    <a href="#decisions">设计决策</a>
+    <a href="#filemap">文件地图</a>
+  </div>
+</nav>
+
+<!-- ══════════ HERO ══════════ -->
+<section id="hero">
+  <div class="glow"></div>
+  <div class="section-inner">
+    <h1><span>Pi Web</span><br/>架构深度解析</h1>
+    <p class="subtitle">
+      pi coding agent 的 Web 前端界面 — 基于 Next.js 16 + React 19 构建的全栈 AI 编程助手交互系统
+    </p>
+    <div class="badges">
+      <span class="badge"><b>Next.js</b> 16.2</span>
+      <span class="badge"><b>React</b> 19</span>
+      <span class="badge"><b>Tailwind</b> 4</span>
+      <span class="badge"><b>TypeScript</b> strict</span>
+      <span class="badge"><b>pi-agent</b> ^0.75</span>
+      <span class="badge">零状态库</span>
+      <span class="badge">零UI库</span>
+      <span class="badge">SSE 流式</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ARCHITECTURE ══════════ -->
+<section id="architecture">
+  <div class="section-inner">
+    <div class="section-tag">// Architecture</div>
+    <h2 class="section-title">三层分离架构</h2>
+    <p class="section-desc">
+      系统采用浏览器 → Next.js 服务端 → Pi SDK 三层架构。浏览器通过 REST API 发送命令，通过 SSE 接收实时流式响应。服务端在进程内持有 AgentSession 实例，实现零延迟的事件推送。
+    </p>
+
+    <div class="arch-container">
+      <!-- Layer 1: Browser -->
+      <div class="arch-layer layer-browser">
+        <div class="layer-label"><span class="dot"></span>浏览器层 — React SPA</div>
+        <div class="arch-nodes">
+          <div class="arch-node"><span class="icon">💬</span> ChatWindow <code>SSE流式</code></div>
+          <div class="arch-node"><span class="icon">📝</span> ChatInput <code>模型/工具/思维</code></div>
+          <div class="arch-node"><span class="icon">🌳</span> SessionSidebar <code>会话树</code></div>
+          <div class="arch-node"><span class="icon">📂</span> FileExplorer <code>文件浏览</code></div>
+          <div class="arch-node"><span class="icon">🔀</span> BranchNavigator <code>分支切换</code></div>
+          <div class="arch-node"><span class="icon">📊</span> ChatMinimap <code>滚动缩略</code></div>
+          <div class="arch-node"><span class="icon">⚙️</span> ModelsConfig <code>25+ 提供商</code></div>
+          <div class="arch-node"><span class="icon">🧩</span> SkillsConfig <code>技能管理</code></div>
+        </div>
+      </div>
+
+      <!-- Arrows -->
+      <div class="arch-arrows">
+        <div class="arrow-down"><div class="line"></div>fetch / POST</div>
+        <div class="arrow-down"><div class="line"></div>SSE 事件流</div>
+        <div class="arrow-down"><div class="line"></div>文件请求</div>
+      </div>
+
+      <!-- Layer 2: Server -->
+      <div class="arch-layer layer-server">
+        <div class="layer-label"><span class="dot"></span>服务端层 — Next.js App Router</div>
+        <div class="arch-nodes">
+          <div class="arch-node"><span class="icon">🔌</span> rpc-manager.ts <code>AgentSessionWrapper</code></div>
+          <div class="arch-node"><span class="icon">📖</span> session-reader.ts <code>.jsonl 解析</code></div>
+          <div class="arch-node"><span class="icon">🔄</span> normalize.ts <code>ToolCall 归一化</code></div>
+          <div class="arch-node"><span class="icon">📁</span> files API <code>安全根限制</code></div>
+          <div class="arch-node"><span class="icon">🔐</span> auth API <code>OAuth + API Key</code></div>
+          <div class="arch-node"><span class="icon">🤖</span> agent API <code>19 条路由</code></div>
+        </div>
+      </div>
+
+      <!-- Arrows -->
+      <div class="arch-arrows">
+        <div class="arrow-down"><div class="line"></div>进程内调用</div>
+        <div class="arrow-down"><div class="line"></div>文件 I/O</div>
+      </div>
+
+      <!-- Layer 3: SDK -->
+      <div class="arch-layer layer-sdk">
+        <div class="layer-label"><span class="dot"></span>SDK 层 — @earendil-works/pi-coding-agent</div>
+        <div class="arch-nodes">
+          <div class="arch-node"><span class="icon">🧠</span> AgentSession <code>对话引擎</code></div>
+          <div class="arch-node"><span class="icon">📚</span> SessionManager <code>文件管理</code></div>
+          <div class="arch-node"><span class="icon">🏷️</span> ModelRegistry <code>模型注册</code></div>
+          <div class="arch-node"><span class="icon">🔑</span> AuthStorage <code>认证存储</code></div>
+          <div class="arch-node"><span class="icon">🛠️</span> DefaultResourceLoader <code>Skills 加载</code></div>
+        </div>
+      </div>
+
+      <!-- Arrows -->
+      <div class="arch-arrows">
+        <div class="arrow-down"><div class="line"></div>读写</div>
+      </div>
+
+      <!-- Layer 4: File System -->
+      <div class="arch-layer layer-files">
+        <div class="layer-label"><span class="dot"></span>持久层 — 文件系统</div>
+        <div class="arch-nodes">
+          <div class="arch-node"><span class="icon">📄</span> ~/.pi/agent/sessions/ <code>.jsonl 会话</code></div>
+          <div class="arch-node"><span class="icon">📋</span> ~/.pi/agent/settings.json <code>配置</code></div>
+          <div class="arch-node"><span class="icon">🗝️</span> ~/.pi/agent/auth/ <code>认证</code></div>
+          <div class="arch-node"><span class="icon">📂</span> 工作区目录 <code>cwd</code></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ DATA FLOW ══════════ -->
+<section id="dataflow">
+  <div class="section-inner">
+    <div class="section-tag">// Data Flow</div>
+    <h2 class="section-title">一次对话的完整旅程</h2>
+    <p class="section-desc">
+      从用户按下回车到 AI 响应完成，数据经历了浏览器 → API → AgentSession → SSE → 流式渲染的完整循环。AgentSession.prompt() 是异步的，实际内容通过 subscribe 回调推送到 SSE。
+    </p>
+
+    <div class="seq-container">
+      <div class="seq-lanes">
+        <div class="seq-lane"><div class="seq-lane-head">👤 用户</div></div>
+        <div class="seq-lane"><div class="seq-lane-head">🌐 浏览器</div></div>
+        <div class="seq-lane"><div class="seq-lane-head">⚡ 服务端</div></div>
+        <div class="seq-lane"><div class="seq-lane-head">🧠 Agent</div></div>
+        <div class="seq-lane"><div class="seq-lane-head">📡 SSE</div></div>
+      </div>
+
+      <div class="seq-steps">
+        <div class="seq-step request">
+          <span class="step-num">1</span>
+          用户输入消息，ChatInput 调用 <code>onSend(message, images)</code>
+        </div>
+        <div class="seq-step request">
+          <span class="step-num">2</span>
+          前端 POST <code>/api/agent/[id]</code>，body: <code>{type:"prompt", message:"..."}</code>
+        </div>
+        <div class="seq-step process">
+          <span class="step-num">3</span>
+          API 路由调用 <code>rpc-manager.send()</code>，查找或创建 AgentSessionWrapper
+        </div>
+        <div class="seq-step process">
+          <span class="step-num">4</span>
+          Wrapper 调用 <code>inner.prompt()</code> — 异步执行，立即返回 <code>{success:true}</code>
+        </div>
+        <div class="seq-step stream">
+          <span class="step-num">5</span>
+          AgentSession 开始生成，subscribe 回调发射 <code>content_block_delta</code> 事件
+        </div>
+        <div class="seq-step event">
+          <span class="step-num">6</span>
+          rpc-manager 转发事件到 SSE 连接，浏览器接收 <code>data: {...}</code>
+        </div>
+        <div class="seq-step event">
+          <span class="step-num">7</span>
+          ChatWindow 的 <code>streamReducer</code> 增量更新流式消息，实时渲染
+        </div>
+        <div class="seq-step stream">
+          <span class="step-num">8</span>
+          工具调用 <code>toolCall</code> → 执行 → <code>toolResult</code> 事件成对返回
+        </div>
+        <div class="seq-step done">
+          <span class="step-num">9</span>
+          <code>message_stop</code> 事件到达，<code>isStreaming = false</code>，播放完成音效 🔔
+        </div>
+      </div>
+    </div>
+
+    <!-- Two access modes -->
+    <h3 style="font-size:1.3rem; font-weight:700; margin-top:3rem; margin-bottom:0.5rem;">两种会话访问模式</h3>
+    <p style="color:var(--text2); font-size:0.88rem; margin-bottom:1.5rem;">会话浏览和交互对话走完全不同的路径，避免为只读操作创建重量级的 AgentSession。</p>
+    <div class="compare-box">
+      <div class="compare-item read-mode">
+        <h4>📖 只读浏览</h4>
+        <p>侧边栏点击会话时触发，直接读取 .jsonl 文件，无需创建 AgentSession。</p>
+        <ul>
+          <li>session-reader.ts 解析 .jsonl</li>
+          <li>buildTree() 构建消息树</li>
+          <li>buildSessionContext() 提取上下文</li>
+          <li>零内存开销，零启动延迟</li>
+        </ul>
+      </div>
+      <div class="compare-item interact-mode">
+        <h4>⚡ 交互对话</h4>
+        <p>发送消息时触发，通过 rpc-manager 在进程内创建 AgentSessionWrapper。</p>
+        <ul>
+          <li>startRpcSession() 创建实例</li>
+          <li>globalThis.__piSessions 注册表</li>
+          <li>10 分钟空闲超时自动销毁</li>
+          <li>并发启动共享 Promise 锁</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ COMPONENTS ══════════ -->
+<section id="components">
+  <div class="section-inner">
+    <div class="section-tag">// Components</div>
+    <h2 class="section-title">14 个精心打磨的组件</h2>
+    <p class="section-desc">
+      全部手写，零 UI 组件库依赖。每个组件通过 CSS 变量实现暗色/亮色主题，使用 React 19 的最新特性构建。
+    </p>
+
+    <div class="comp-grid">
+      <div class="comp-card" style="transition-delay:0.05s">
+        <div class="card-icon">🏠</div>
+        <h4>AppShell <code>顶层</code></h4>
+        <p>整体布局管理：侧边栏 + 聊天区 + 标签页。统一管理分支导航、系统提示词、会话统计等全局状态。</p>
+        <div class="tags"><span class="tag">URL状态</span><span class="tag">布局</span><span class="tag">三栏</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.1s">
+        <div class="card-icon">💬</div>
+        <h4>ChatWindow <code>核心</code></h4>
+        <p>消息列表 + SSE 流式处理 + Fork 操作。内置 streamReducer 状态机与打字机空闲动画。</p>
+        <div class="tags"><span class="tag">SSE</span><span class="tag">流式</span><span class="tag">Fork</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.15s">
+        <div class="card-icon">⌨️</div>
+        <h4>ChatInput <code>输入</code></h4>
+        <p>多功能输入栏：模型选择、工具预设、Thinking Level、图片拖拽、Steer/FollowUp 模式。</p>
+        <div class="tags"><span class="tag">7级思维</span><span class="tag">3档工具</span><span class="tag">拖拽</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.2s">
+        <div class="card-icon">📝</div>
+        <h4>MessageView <code>渲染</code></h4>
+        <p>单条消息渲染：Markdown + 代码高亮 + Thinking 折叠 + 工具调用内联配对展示。</p>
+        <div class="tags"><span class="tag">Markdown</span><span class="tag">Prism</span><span class="tag">Fork</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.25s">
+        <div class="card-icon">🌳</div>
+        <h4>SessionSidebar <code>导航</code></h4>
+        <p>按 cwd 分组的会话树，支持 Fork 父子关系展示、最近 cwd 快捷入口、内嵌文件浏览器。</p>
+        <div class="tags"><span class="tag">会话树</span><span class="tag">搜索</span><span class="tag">重命名</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.3s">
+        <div class="card-icon">🔀</div>
+        <h4>BranchNavigator <code>分支</code></h4>
+        <p>会话内分支切换器。线性链自动压缩，高亮活跃路径，点击叶节点切换分支。</p>
+        <div class="tags"><span class="tag">navigate_tree</span><span class="tag">压缩</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.35s">
+        <div class="card-icon">📊</div>
+        <h4>ChatMinimap <code>缩略</code></h4>
+        <p>消息列表右侧的滚动缩略导航。用户消息蓝色、助手灰色，拖拽快速定位。</p>
+        <div class="tags"><span class="tag">导航</span><span class="tag">滚动</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.4s">
+        <div class="card-icon">🛠️</div>
+        <h4>ToolPanel <code>工具</code></h4>
+        <p>三档工具预设：Off（无工具）、Low（4个基础工具）、High（7个完整工具）。</p>
+        <div class="tags"><span class="tag">read</span><span class="tag">bash</span><span class="tag">edit</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.45s">
+        <div class="card-icon">⚙️</div>
+        <h4>ModelsConfig <code>模型</code></h4>
+        <p>25+ AI 提供商配置面板。品牌图标、API Key、OAuth 登录、默认模型设置。</p>
+        <div class="tags"><span class="tag">25+图标</span><span class="tag">OAuth</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.5s">
+        <div class="card-icon">🧩</div>
+        <h4>SkillsConfig <code>技能</code></h4>
+        <p>Skills 管理：启用/禁用、搜索远程 Skills、安装。修改 SKILL.md frontmatter。</p>
+        <div class="tags"><span class="tag">搜索</span><span class="tag">安装</span><span class="tag">toggle</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.55s">
+        <div class="card-icon">📂</div>
+        <h4>FileExplorer <code>文件树</code></h4>
+        <p>懒加载目录浏览，20+ 文件类型图标。@ 引用：点击文件在输入框插入路径。</p>
+        <div class="tags"><span class="tag">懒加载</span><span class="tag">@引用</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.6s">
+        <div class="card-icon">👁️</div>
+        <h4>FileViewer <code>查看</code></h4>
+        <p>文件内容查看：代码高亮、图片展示、音频播放、内置 Myers diff 算法。</p>
+        <div class="tags"><span class="tag">diff</span><span class="tag">音频</span><span class="tag">图片</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.65s">
+        <div class="card-icon">📑</div>
+        <h4>TabBar <code>标签</code></h4>
+        <p>顶部标签栏：Chat 标签 + 多文件标签。活跃高亮，文件图标匹配。</p>
+        <div class="tags"><span class="tag">多文件</span><span class="tag">图标</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.7s">
+        <div class="card-icon">🎨</div>
+        <h4>FileIcons <code>图标</code></h4>
+        <p>纯 SVG 单色文件图标，按扩展名匹配 20+ 类型。全部使用 currentColor。</p>
+        <div class="tags"><span class="tag">SVG</span><span class="tag">monochrome</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ TECH STACK ══════════ -->
+<section id="techstack">
+  <div class="section-inner">
+    <div class="section-tag">// Tech Stack</div>
+    <h2 class="section-title">技术栈一览</h2>
+    <p class="section-desc">
+      精选的现代前端技术栈，每个选择都有明确的目的。零外部状态管理库、零 UI 组件库 — 完全掌控每一行代码。
+    </p>
+
+    <div class="tech-grid">
+      <div class="tech-item" style="transition-delay:0.05s">
+        <div class="tech-icon">▲</div>
+        <div><div class="tech-name">Next.js</div><div class="tech-ver">16.2.1 App Router</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.1s">
+        <div class="tech-icon">⚛️</div>
+        <div><div class="tech-name">React</div><div class="tech-ver">^19.2.4</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.15s">
+        <div class="tech-icon">🎨</div>
+        <div><div class="tech-name">Tailwind CSS</div><div class="tech-ver">^4.2.2 + CSS变量</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.2s">
+        <div class="tech-icon">📘</div>
+        <div><div class="tech-name">TypeScript</div><div class="tech-ver">strict mode</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.25s">
+        <div class="tech-icon">📝</div>
+        <div><div class="tech-name">react-markdown</div><div class="tech-ver">^10.1.0 + GFM</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.3s">
+        <div class="tech-icon">🌈</div>
+        <div><div class="tech-name">react-syntax-highlighter</div><div class="tech-ver">Prism ^16.1</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.35s">
+        <div class="tech-icon">🤖</div>
+        <div><div class="tech-name">pi-coding-agent</div><div class="tech-ver">^0.75.5</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.4s">
+        <div class="tech-icon">🧠</div>
+        <div><div class="tech-name">pi-ai</div><div class="tech-ver">^0.75.5</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.45s">
+        <div class="tech-icon">🏷️</div>
+        <div><div class="tech-name">@lobehub/icons</div><div class="tech-ver">^5.6.0 25+提供商</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.5s">
+        <div class="tech-icon">📦</div>
+        <div><div class="tech-name">npm CLI</div><div class="tech-ver">bin/pi-web.js</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ KEY DECISIONS ══════════ -->
+<section id="decisions">
+  <div class="section-inner">
+    <div class="section-tag">// Key Decisions</div>
+    <h2 class="section-title">关键设计决策</h2>
+    <p class="section-desc">
+      每个决策背后都有具体的技术挑战。以下是项目中最关键的 8 个设计决策及其成因。
+    </p>
+
+    <div class="decision-list">
+      <div class="decision-card" style="transition-delay:0.05s">
+        <div class="dec-icon">🌐</div>
+        <div>
+          <h4>globalThis 存储会话注册表</h4>
+          <p>Next.js 热重载会丢弃模块级变量。将 <code>AgentSessionWrapper</code> 注册表存储在 <code>globalThis.__piSessions</code> 中，确保 HMR 后实例不丢失。同理路径缓存 <code>globalThis.__piSessionPathCache</code> 和启动锁 <code>globalThis.__piStartLocks</code>。</p>
+        </div>
+      </div>
+
+      <div class="decision-card" style="transition-delay:0.1s">
+        <div class="dec-icon">💥</div>
+        <div>
+          <h4>Fork 后立即销毁旧 Wrapper</h4>
+          <p><code>AgentSession.fork()</code> 会原地修改 wrapper 内部状态 — fork 后 <code>inner.sessionId</code> 变为新会话 id。若旧 wrapper 仍留在注册表中，后续对原始 session 的请求会拿到已 fork 的错误状态。解决方案：fork 后立即 <code>this.destroy()</code>。</p>
+        </div>
+      </div>
+
+      <div class="decision-card" style="transition-delay:0.15s">
+        <div class="dec-icon">🔄</div>
+        <div>
+          <h4>ToolCall 字段归一化</h4>
+          <p>Pi SDK 存储格式 <code>{id, name, arguments}</code> 与前端类型 <code>{toolCallId, toolName, input}</code> 不一致。<code>normalizeToolCalls()</code> 在文件加载和 SSE 流两个路径都做了转换，确保前端始终使用统一字段名。</p>
+        </div>
+      </div>
+
+      <div class="decision-card" style="transition-delay:0.2s">
+        <div class="dec-icon">⏱️</div>
+        <div>
+          <h4>10 分钟空闲超时</h4>
+          <p>每个 <code>AgentSessionWrapper</code> 启动后开始计时，10 分钟无操作自动销毁，释放内存。每次 <code>send()</code> 或收到事件时重置计时器。当所有工具禁用时，直接设置 <code>inner.agent.state.systemPrompt = ""</code> 清空系统提示词。</p>
+        </div>
+      </div>
+
+      <div class="decision-card" style="transition-delay:0.25s">
+        <div class="dec-icon">📡</div>
+        <div>
+          <h4>SSE 而非 WebSocket</h4>
+          <p>Agent 事件是单向推送（服务端→浏览器），SSE 天然适合。30 秒心跳防止代理超时。页面刷新时若 <code>isStreaming</code> 为 true，自动重连 SSE。网络断连时 <code>onerror</code> 有 1 秒自动重连机制。</p>
+        </div>
+      </div>
+
+      <div class="decision-card" style="transition-delay:0.3s">
+        <div class="dec-icon">🎨</div>
+        <div>
+          <h4>View Transitions 主题动画</h4>
+          <p>使用 View Transitions API 实现圆形擦除主题切换。禁用默认 cross-fade，由 <code>Element.animate()</code> 驱动 <code>clip-path: circle()</code> 从点击位置向外扩散。<code>layout.tsx</code> 内嵌脚本避免 FOUC。</p>
+        </div>
+      </div>
+
+      <div class="decision-card" style="transition-delay:0.35s">
+        <div class="dec-icon">🪟</div>
+        <div>
+          <h4>Windows 兼容层</h4>
+          <p><code>file-paths.ts</code> 统一反斜杠→正斜杠；<code>npx.ts</code> 绕过 <code>npx.cmd</code> 的 shell 限制（CVE-2024-27980）；<code>bin/pi-web.js</code> 直接调用 next JS 入口避免路径空格问题。</p>
+        </div>
+      </div>
+
+      <div class="decision-card" style="transition-delay:0.4s">
+        <div class="dec-icon">🔀</div>
+        <div>
+          <h4>两种分支机制</h4>
+          <p><b>Fork</b>：创建独立 .jsonl 文件，侧边栏显示为子节点。<b>In-session branch</b>：同一文件内 <code>navigate_tree</code>，BranchNavigator 切换。两者互不干扰，分别服务于"另起炉灶"和"探索不同方向"的需求。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ FILE MAP ══════════ -->
+<section id="filemap">
+  <div class="section-inner">
+    <div class="section-tag">// File Map</div>
+    <h2 class="section-title">项目文件地图</h2>
+    <p class="section-desc">
+      完整的目录结构，按颜色区分各模块职责：青色=目录、紫色=API、绿色=库、琥珀=组件、玫红=Hooks。
+    </p>
+
+    <div class="file-tree">
+      <div class="ft-line ft-dir" style="--depth:0"><span class="ft-icon">📁</span><span class="ft-name">pi-web/</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">📦</span><span class="ft-name">package.json</span><span class="ft-comment">@agegr/pi-web v0.6.11</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">⚙️</span><span class="ft-name">next.config.ts</span><span class="ft-comment">版本注入 + 外部包</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">🎨</span><span class="ft-name">tailwind.config.ts</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">📘</span><span class="ft-name">tsconfig.json</span><span class="ft-comment">strict + bundler</span></div>
+      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">bin/</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">🚀</span><span class="ft-name">pi-web.js</span><span class="ft-comment">CLI 入口 → next start</span></div>
+      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">app/</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">layout.tsx</span><span class="ft-comment">主题初始化 + 字体</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">page.tsx</span><span class="ft-comment">AppShell 挂载</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">globals.css</span><span class="ft-comment">CSS变量主题 + View Transitions</span></div>
+      <div class="ft-line ft-dir" style="--depth:2"><span class="ft-icon">📁</span><span class="ft-name">api/</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔌</span><span class="ft-name">agent/[id]/route.ts</span><span class="ft-comment">GET状态 / POST命令</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📡</span><span class="ft-name">agent/[id]/events/route.ts</span><span class="ft-comment">SSE 事件流</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">✨</span><span class="ft-name">agent/new/route.ts</span><span class="ft-comment">创建新会话</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📖</span><span class="ft-name">sessions/route.ts</span><span class="ft-comment">GET 列表</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📋</span><span class="ft-name">sessions/[id]/route.ts</span><span class="ft-comment">GET/PATCH/DELETE</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔍</span><span class="ft-name">sessions/[id]/context/route.ts</span><span class="ft-comment">分支上下文</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📂</span><span class="ft-name">files/[...path]/route.ts</span><span class="ft-comment">文件浏览/内容</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🏷️</span><span class="ft-name">models/route.ts</span><span class="ft-comment">模型列表 + thinking</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">⚙️</span><span class="ft-name">models-config/route.ts</span><span class="ft-comment">配置读写</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🧩</span><span class="ft-name">skills/route.ts</span><span class="ft-comment">Skills 管理</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔐</span><span class="ft-name">auth/*</span><span class="ft-comment">OAuth + API Key (5条路由)</span></div>
+      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">lib/</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🔌</span><span class="ft-name">rpc-manager.ts</span><span class="ft-comment">AgentSession 生命周期</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📖</span><span class="ft-name">session-reader.ts</span><span class="ft-comment">.jsonl 解析 + 路径缓存</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🌐</span><span class="ft-name">agent-client.ts</span><span class="ft-comment">前端 fetch 封装</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🔄</span><span class="ft-name">normalize.ts</span><span class="ft-comment">ToolCall 字段归一化</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">types.ts</span><span class="ft-comment">共享类型定义</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📘</span><span class="ft-name">pi-types.ts</span><span class="ft-comment">SDK 接口封装</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🛤️</span><span class="ft-name">file-paths.ts</span><span class="ft-comment">跨平台路径</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📦</span><span class="ft-name">npx.ts</span><span class="ft-comment">安全 npx 调用</span></div>
+      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">components/</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🏠</span><span class="ft-name">AppShell.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">💬</span><span class="ft-name">ChatWindow.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">⌨️</span><span class="ft-name">ChatInput.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">📝</span><span class="ft-name">MessageView.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🌳</span><span class="ft-name">SessionSidebar.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🔀</span><span class="ft-name">BranchNavigator.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">📊</span><span class="ft-name">ChatMinimap.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🛠️</span><span class="ft-name">ToolPanel.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">⚙️</span><span class="ft-name">ModelsConfig.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🧩</span><span class="ft-name">SkillsConfig.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">📂</span><span class="ft-name">FileExplorer.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">👁️</span><span class="ft-name">FileViewer.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">📑</span><span class="ft-name">TabBar.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🎨</span><span class="ft-name">FileIcons.tsx</span></div>
+      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">hooks/</span></div>
+      <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">🧠</span><span class="ft-name">useAgentSession.ts</span><span class="ft-comment">SSE + 流式状态机</span></div>
+      <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">🌓</span><span class="ft-name">useTheme.ts</span><span class="ft-comment">View Transitions</span></div>
+      <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">🔔</span><span class="ft-name">useAudio.ts</span><span class="ft-comment">完成音效</span></div>
+      <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">🖱️</span><span class="ft-name">useDragDrop.ts</span><span class="ft-comment">图片拖拽</span></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Pi Web 架构深度解析 · 版本 0.6.11 · 2026-05-26 · <a href="https://github.com/earendil-works/pi-coding-agent" style="color:var(--accent3);text-decoration:none;">pi-coding-agent</a></p>
+</footer>
+
+<script>
+// ── Particle Background ──
+(function() {
+  const canvas = document.getElementById('particles');
+  const ctx = canvas.getContext('2d');
+  let w, h, particles = [];
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+
+  class Particle {
+    constructor() {
+      this.reset();
+    }
+    reset() {
+      this.x = Math.random() * w;
+      this.y = Math.random() * h;
+      this.vx = (Math.random() - 0.5) * 0.3;
+      this.vy = (Math.random() - 0.5) * 0.3;
+      this.r = Math.random() * 1.5 + 0.5;
+      this.alpha = Math.random() * 0.3 + 0.1;
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      if (this.x < 0 || this.x > w) this.vx *= -1;
+      if (this.y < 0 || this.y > h) this.vy *= -1;
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(99,102,241,${this.alpha})`;
+      ctx.fill();
+    }
+  }
+
+  function init() {
+    resize();
+    particles = [];
+    const count = Math.min(80, Math.floor(w * h / 15000));
+    for (let i = 0; i < count; i++) particles.push(new Particle());
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, w, h);
+    particles.forEach(p => { p.update(); p.draw(); });
+    // Draw connections
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 150) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(99,102,241,${0.06 * (1 - dist / 150)})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(animate);
+  }
+
+  window.addEventListener('resize', () => { resize(); });
+  init();
+  animate();
+})();
+
+// ── Intersection Observer for scroll animations ──
+(function() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -50px 0px' });
+
+  document.querySelectorAll('section').forEach(s => observer.observe(s));
+})();
+
+// ── Smooth scroll for nav links ──
+document.querySelectorAll('nav a').forEach(a => {
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    const id = a.getAttribute('href');
+    document.querySelector(id)?.scrollIntoView({ behavior: 'smooth' });
+  });
+});
+</script>
+</body>
+</html>
