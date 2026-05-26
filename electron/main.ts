@@ -29,7 +29,7 @@ function findFreePort(startPort: number, maxAttempts = 10): Promise<number> {
       const server = net.createServer();
       server.listen(port, "127.0.0.1", () => {
         const addr = server.address();
-        server.close(() => resolve(typeof addr === "object" ? addr.port : port));
+        server.close(() => resolve(addr && typeof addr === "object" ? addr.port : port));
       });
       server.on("error", () => {
         if (attempts > 0) {
