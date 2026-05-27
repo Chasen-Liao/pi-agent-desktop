@@ -1,6 +1,6 @@
 {
   "name": "@agegr/pi-web",
-  "version": "0.6.11",
+  "version": "0.6.12",
   "description": "Web UI for the pi coding agent",
   "author": "agegr",
   "main": "electron/dist/main.js",
