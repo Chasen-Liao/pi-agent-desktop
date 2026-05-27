@@ -1,6 +1,6 @@
 appId: com.agegr.pi-agent-desktop
 productName: Pi Agent Desktop
-copyright: Copyright © 2026 agegr
+copyright: Copyright © 2026 Chasen
 
 directories:
   output: release
