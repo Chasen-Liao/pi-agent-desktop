@@ -77,7 +77,7 @@ lib/
 ## 致谢
 
 - [pi-mono](https://github.com/badlogic/pi-mono) — Pi 编程智能体核心
-- [pi-web](https://github.com/Chasen-Liao/pi-web) — 上游 Web 界面项目
+- [pi-web](https://github.com/agegr/pi-web) — 上游 Web 界面项目
 
 ## 许可
 
