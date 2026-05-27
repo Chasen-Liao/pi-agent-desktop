@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { resolveCustomPathSelection } from "./custom-path-selection.ts";
+
+test("selected path updates cwd and closes the picker", () => {
+  assert.deepEqual(
+    resolveCustomPathSelection("C:\\old", "  C:\\work  "),
+    { nextCwd: "C:\\work", shouldClose: true }
+  );
+});
+
+test("cancelled selection keeps cwd and closes the picker", () => {
+  assert.deepEqual(
+    resolveCustomPathSelection("C:\\old", null),
+    { nextCwd: "C:\\old", shouldClose: true }
+  );
+});
