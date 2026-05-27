@@ -51,6 +51,7 @@ nsis:
   shortcutName: Pi Agent Desktop
   uninstallDisplayName: Pi Agent Desktop
   artifactName: "${productName}-Setup-${version}.${ext}"
+  include: build/installer.nsh
 
 publish:
   provider: github
