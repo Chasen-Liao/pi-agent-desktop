@@ -1,5 +1,5 @@
-appId: com.agegr.pi-web
-productName: Pi Agent
+appId: com.agegr.pi-agent-desktop
+productName: Pi Agent Desktop
 copyright: Copyright © 2026 agegr
 
 directories:
@@ -48,11 +48,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Pi Agent
-  uninstallDisplayName: Pi Agent
+  shortcutName: Pi Agent Desktop
+  uninstallDisplayName: Pi Agent Desktop
   artifactName: "${productName}-Setup-${version}.${ext}"
 
 publish:
   provider: github
   owner: agegr
-  repo: pi-web
+  repo: pi-agent-desktop

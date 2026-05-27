@@ -32,7 +32,7 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   }
 
   const tray = new Tray(icon);
-  tray.setToolTip("Pi Agent");
+  tray.setToolTip("Pi Agent Desktop");
 
   const contextMenu = Menu.buildFromTemplate([
     {

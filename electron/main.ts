@@ -120,7 +120,7 @@ function createWindow(port: number) {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    title: "Pi Agent",
+    title: "Pi Agent Desktop",
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

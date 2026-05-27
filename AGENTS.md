@@ -3,7 +3,14 @@
 ## Quick Start
 
 ```bash
-npm run dev   # port 3030
+# Web dev server
+npm run dev          # port 30141
+
+# Electron desktop app (dev mode)
+npm run dev:electron # builds electron + opens window
+
+# Production build & package
+npm run dist         # Next.js build + Electron build + NSIS installer
 ```
 
 Typecheck: `node_modules/.bin/tsc --noEmit`  
@@ -13,6 +20,8 @@ Lint: `node node_modules/next/dist/bin/next lint`
 ---
 
 ## Architecture
+
+### Web Mode (browser)
 
 ```
 Browser                Next.js Server              AgentSession (in-process)
@@ -27,6 +36,36 @@ Browser                Next.js Server              AgentSession (in-process)
   ├─ SSE connect ──────────▶ GET /api/agent/[id]/events    │
   │                        │   session.onEvent() ◀─────────│ session.subscribe()
   │◀── data: {...} ─────────│                               │
+```
+
+### Desktop Mode (Electron)
+
+```
+Pi Agent.exe (Electron main)
+  │
+  ├─ spawn( process.execPath, [server.js], { env: ELECTRON_RUN_AS_NODE=1, PORT, HOSTNAME } )
+  │     └─ Next.js standalone server on 127.0.0.1:PORT
+  │
+  ├─ BrowserWindow → loadURL( http://127.0.0.1:PORT )
+  │     └─ Same React UI as web mode
+  │
+  ├─ Tray icon (minimize to tray, right-click → quit)
+  │
+  └─ autoUpdater (checks GitHub Releases for updates)
+       └─ preload.ts exposes electronAPI.onUpdateAvailable / quitAndInstall
+```
+
+**Production layout** (inside NSIS installer):
+```
+resources/
+  standalone/              ← .next/standalone (extraResources)
+    server.js
+    node_modules/next/     ← separate extraResources entry (see Traps below)
+    .next/static/
+    public/
+  app/
+    build/                 ← tray-icon.ico
+  electron.asar            ← compiled electron/dist/
 ```
 
 **Session browsing** (read-only): reads `.jsonl` files directly via `lib/session-reader.ts` — no AgentSession created.  
@@ -55,6 +94,13 @@ lib/
   types.ts            shared TypeScript types
   normalize.ts        normalizeToolCalls() — field name mismatch between file format and our types
   system-prompt-off.ts  minimal system prompt when all tools are disabled
+
+electron/
+  main.ts             Electron main process: port finding, server spawn, BrowserWindow, autoUpdater
+  preload.ts          contextBridge exposes onUpdateAvailable / quitAndInstall
+  tray.ts             System tray: show window / quit
+
+electron-builder.yml  packaging config: files, extraResources, NSIS, publish
 
 components/
   AppShell.tsx        layout + URL state + tab management
@@ -109,6 +155,24 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 
 ### Orphaned sessions
 Sessions whose first line can't be parsed as a valid header are marked `orphaned: true` in the API response — displayed with an "incomplete" badge in the sidebar and not clickable.
+
+### Electron extraResources must include node_modules separately
+electron-builder's `extraResources` with `filter: ["**/*"]` **silently excludes `node_modules` directories**, even from `.next/standalone`. The standalone `server.js` does `require("next")` which fails without `node_modules/next`.
+
+**Fix**: Add a separate `extraResources` entry for `node_modules`:
+```yaml
+extraResources:
+  - from: .next/standalone
+    to: standalone
+    filter:
+      - "**/*"
+      - "!node_modules"          # Exclude to avoid glob conflict
+  - from: .next/standalone/node_modules   # Separate entry to include
+    to: standalone/node_modules
+```
+
+### Electron main process spawns Next.js as a child
+In production, `electron/main.ts` spawns `process.execPath` (the Electron binary itself) with `ELECTRON_RUN_AS_NODE=1` to run `server.js` as a plain Node.js process. The main process then opens a `BrowserWindow` pointing at `http://127.0.0.1:PORT`. The child process is killed on `before-quit`.
 
 ---
 
