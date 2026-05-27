@@ -1,7 +1,7 @@
 {
-  "name": "@agegr/pi-web",
-  "version": "0.6.12",
-  "description": "Web UI for the pi coding agent",
+  "name": "@agegr/pi-agent-desktop",
+  "version": "0.7.0",
+  "description": "Pi Agent Desktop — desktop client for the pi coding agent",
   "license": "MIT",
   "author": "agegr",
   "main": "electron/dist/main.js",
