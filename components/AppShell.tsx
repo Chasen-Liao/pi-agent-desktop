@@ -30,6 +30,23 @@ export function AppShell() {
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
 
+  // Keyboard shortcuts: Ctrl+B toggle left sidebar, Ctrl+Alt+B toggle right panel
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && !e.shiftKey && e.key === "b") {
+        if (e.altKey) {
+          e.preventDefault();
+          setRightPanelOpen((v) => !v);
+        } else {
+          e.preventDefault();
+          setSidebarOpen((v) => !v);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
   const [branchActiveLeafId, setBranchActiveLeafId] = useState<string | null>(null);
