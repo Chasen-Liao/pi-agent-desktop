@@ -151,6 +151,18 @@ function createWindow(port: number) {
 // IPC handlers
 // ---------------------------------------------------------------------------
 function registerIpcHandlers() {
+  ipcMain.handle("select-directory", async () => {
+    const targetWindow = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined;
+    const result = targetWindow
+      ? await dialog.showOpenDialog(targetWindow, {
+          properties: ["openDirectory"],
+        })
+      : await dialog.showOpenDialog({
+          properties: ["openDirectory"],
+        });
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+
   ipcMain.handle("quit-and-install", () => {
     setQuitting(true);
     import("electron-updater").then(({ autoUpdater }) => {

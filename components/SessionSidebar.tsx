@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { resolveCustomPathSelection } from "@/lib/custom-path-selection";
 import type { SessionInfo } from "@/lib/types";
 import { FileExplorer } from "./FileExplorer";
 
@@ -57,6 +58,23 @@ function shortenCwd(cwd: string, homeDir?: string): string {
   return "…/" + parts.slice(-2).join(sep);
 }
 
+type ElectronAPI = {
+  selectDirectory?: () => Promise<string | null>;
+};
+
+async function pickDirectoryFromHost(): Promise<string | null> {
+  const electronAPI = (window as Window & { electronAPI?: ElectronAPI }).electronAPI;
+  if (electronAPI?.selectDirectory) {
+    return electronAPI.selectDirectory();
+  }
+
+  const res = await fetch("/api/select-directory", { method: "POST" });
+  const data = await res.json().catch(() => ({})) as { path?: string | null; error?: string };
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return data.path ?? null;
+}
 
 
 interface SessionTreeNode {
@@ -204,8 +222,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [homeDir, setHomeDir] = useState<string>("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [customPathOpen, setCustomPathOpen] = useState(false);
-  const [customPathValue, setCustomPathValue] = useState("");
-  const customPathInputRef = useRef<HTMLInputElement>(null);
+  const [cwdPickerError, setCwdPickerError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
@@ -279,21 +296,32 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     }
   }, [allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
 
-  const commitCustomPath = useCallback(() => {
-    const path = customPathValue.trim();
-    if (path) {
-      setSelectedCwd(path);
+  const handleCustomPath = useCallback(async () => {
+    setCustomPathOpen(true);
+    setCwdPickerError(null);
+    try {
+      const selectedPath = await pickDirectoryFromHost();
+      const { nextCwd, shouldClose } = resolveCustomPathSelection(selectedCwd, selectedPath);
+      if (nextCwd !== selectedCwd) {
+        setSelectedCwd(nextCwd);
+      }
+      if (shouldClose) {
+        setCustomPathOpen(false);
+        setDropdownOpen(false);
+      }
+    } catch (e) {
+      setCwdPickerError(e instanceof Error ? e.message : String(e));
+      setCustomPathOpen(false);
+      setDropdownOpen(false);
     }
-    setCustomPathOpen(false);
-    setCustomPathValue("");
-    setDropdownOpen(false);
-  }, [customPathValue]);
+  }, [selectedCwd]);
 
   const handleDefaultCwd = useCallback(async () => {
     try {
       const res = await fetch("/api/default-cwd", { method: "POST" });
       const data = await res.json() as { cwd?: string; error?: string };
       if (data.cwd) {
+        setCwdPickerError(null);
         setSelectedCwd(data.cwd);
         setDropdownOpen(false);
       }
@@ -308,7 +336,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
         setCustomPathOpen(false);
-        setCustomPathValue("");
       }
     };
     document.addEventListener("mousedown", handler);
@@ -481,8 +508,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   key={cwd}
                   onClick={() => {
                     setSelectedCwd(cwd);
+                    setCwdPickerError(null);
                     setCustomPathOpen(false);
-                    setCustomPathValue("");
                     setDropdownOpen(false);
                   }}
                   style={{
@@ -546,8 +573,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setCustomPathOpen(true);
-                    setTimeout(() => customPathInputRef.current?.focus(), 0);
+                    void handleCustomPath();
                   }}
                   style={{
                     display: "flex",
@@ -570,70 +596,25 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   <span>Custom path…</span>
                 </button>
               ) : (
-                <div style={{ padding: "6px 8px", borderTop: recentCwds.length > 0 ? "none" : undefined }}>
-                  <input
-                    ref={customPathInputRef}
-                    value={customPathValue}
-                    onChange={(e) => setCustomPathValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitCustomPath();
-                      if (e.key === "Escape") {
-                        setCustomPathOpen(false);
-                        setCustomPathValue("");
-                      }
-                    }}
-                    placeholder="/path/to/project"
-                    style={{
-                      width: "100%",
-                      fontSize: 11,
-                      fontFamily: "var(--font-mono)",
-                      padding: "5px 8px",
-                      border: "1px solid var(--accent)",
-                      borderRadius: 5,
-                      outline: "none",
-                      background: "var(--bg)",
-                      color: "var(--text)",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                  <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
-                    <button
-                      onClick={commitCustomPath}
-                      style={{
-                        flex: 1,
-                        padding: "4px 0",
-                        background: "var(--accent)",
-                        border: "none",
-                        borderRadius: 5,
-                        color: "#fff",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Open
-                    </button>
-                    <button
-                      onClick={() => { setCustomPathOpen(false); setCustomPathValue(""); }}
-                      style={{
-                        flex: 1,
-                        padding: "4px 0",
-                        background: "var(--bg-hover)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 5,
-                        color: "var(--text-muted)",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    color: "var(--text-muted)",
+                    fontSize: 11,
+                    borderTop: recentCwds.length > 0 ? "none" : undefined,
+                  }}
+                >
+                  Opening folder picker...
                 </div>
               )}
             </div>
           )}
         </div>
+        {cwdPickerError && (
+          <div style={{ marginTop: 6, color: "#f87171", fontSize: 11 }}>
+            {cwdPickerError}
+          </div>
+        )}
       </div>
 
       {/* Session list */}
