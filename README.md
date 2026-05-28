@@ -1,5 +1,7 @@
 # Pi Agent Desktop
 
+![show2](image-1.png)
+
 ![show](image.png)
 
 [Pi 编程智能体](https://github.com/badlogic/pi-mono) 的原生桌面客户端。基于 Electron 构建，提供比浏览器更原生的使用体验。
