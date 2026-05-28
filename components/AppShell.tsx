@@ -12,6 +12,13 @@ import { BranchNavigator } from "./BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
+import { clampPanelWidth, getDefaultPanelWidths } from "@/lib/panel-layout";
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return target.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
 
 export function AppShell() {
   const router = useRouter();
@@ -29,23 +36,8 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
-
-  // Keyboard shortcuts: Ctrl+B toggle left sidebar, Ctrl+Alt+B toggle right panel
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && !e.shiftKey && e.key === "b") {
-        if (e.altKey) {
-          e.preventDefault();
-          setRightPanelOpen((v) => !v);
-        } else {
-          e.preventDefault();
-          setSidebarOpen((v) => !v);
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  const [panelWidths, setPanelWidths] = useState(() => getDefaultPanelWidths(typeof window === "undefined" ? 1200 : window.innerWidth));
+  const panelResizeRef = useRef<{ side: "left" | "right"; startX: number; startWidth: number } | null>(null);
 
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
@@ -105,6 +97,58 @@ export function AppShell() {
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+
+  const beginPanelResize = useCallback((side: "left" | "right", e: React.PointerEvent<HTMLDivElement>) => {
+    if (window.innerWidth <= 640) return;
+    e.preventDefault();
+    panelResizeRef.current = {
+      side,
+      startX: e.clientX,
+      startWidth: side === "left" ? panelWidths.left : panelWidths.right,
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [panelWidths.left, panelWidths.right]);
+
+  useEffect(() => {
+    const handlePointerMove = (e: PointerEvent) => {
+      const active = panelResizeRef.current;
+      if (!active) return;
+      const delta = e.clientX - active.startX;
+      const nextWidth = active.side === "left"
+        ? active.startWidth + delta
+        : active.startWidth - delta;
+      setPanelWidths((prev) => ({
+        ...prev,
+        [active.side]: clampPanelWidth(active.side, nextWidth, window.innerWidth),
+      }));
+    };
+    const handlePointerUp = () => {
+      if (!panelResizeRef.current) return;
+      panelResizeRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setPanelWidths((prev) => ({
+        left: clampPanelWidth("left", prev.left, window.innerWidth),
+        right: clampPanelWidth("right", prev.right, window.innerWidth),
+      }));
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const handleAtMention = useCallback((relativePath: string) => {
     chatInputRef.current?.insertText("`" + relativePath + "`");
@@ -235,6 +279,62 @@ export function AppShell() {
     });
   }, [fileTabs]);
 
+  // Keyboard shortcuts: Windows-oriented app commands.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.metaKey || isEditableTarget(e.target)) return;
+      const key = e.key.toLowerCase();
+
+      if (e.altKey && !e.shiftKey && key === "b") {
+        e.preventDefault();
+        setRightPanelOpen((v) => !v);
+        return;
+      }
+      if (e.altKey) return;
+
+      if (!e.shiftKey && key === "b") {
+        e.preventDefault();
+        setSidebarOpen((v) => !v);
+        return;
+      }
+      if (e.shiftKey && key === "b") {
+        e.preventDefault();
+        setRightPanelOpen((v) => !v);
+        return;
+      }
+      if (e.shiftKey && key === "m") {
+        e.preventDefault();
+        setModelsConfigOpen(true);
+        return;
+      }
+      if (e.shiftKey && key === "s") {
+        const cwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
+        if (!cwd) return;
+        e.preventDefault();
+        setSkillsConfigOpen(true);
+        return;
+      }
+      if (e.shiftKey && key === "t") {
+        e.preventDefault();
+        toggleTheme();
+        return;
+      }
+      if (e.shiftKey && key === "f") {
+        e.preventDefault();
+        setRightPanelOpen(true);
+        return;
+      }
+      if (!e.shiftKey && key === "n") {
+        const cwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
+        if (!cwd) return;
+        e.preventDefault();
+        handleNewSession("", cwd);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [activeCwd, handleNewSession, newSessionCwd, selectedSession?.cwd, toggleTheme]);
+
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
@@ -339,9 +439,20 @@ export function AppShell() {
           flexDirection: "column",
           flexShrink: 0,
           zIndex: 200,
+          width: sidebarOpen ? panelWidths.left : 0,
+          minWidth: sidebarOpen ? panelWidths.left : 0,
         }}
       >
         {sidebarContent}
+        {sidebarOpen && (
+          <div
+            className="panel-resize-handle panel-resize-handle-left"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize sidebar"
+            onPointerDown={(e) => beginPanelResize("left", e)}
+          />
+        )}
       </div>
 
       {/* Center: chat */}
@@ -615,8 +726,20 @@ export function AppShell() {
           flexDirection: "column",
           borderLeft: "1px solid var(--border)",
           background: "var(--bg)",
+          position: "relative",
+          width: rightPanelOpen ? panelWidths.right : 0,
+          minWidth: rightPanelOpen ? panelWidths.right : 0,
         }}
       >
+        {rightPanelOpen && (
+          <div
+            className="panel-resize-handle panel-resize-handle-right"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize file panel"
+            onPointerDown={(e) => beginPanelResize("right", e)}
+          />
+        )}
         {/* Right panel tab bar */}
         <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "var(--bg-panel)", borderBottom: "1px solid var(--border)", height: 36 }}>
           <div style={{ flex: 1, overflow: "hidden" }}>

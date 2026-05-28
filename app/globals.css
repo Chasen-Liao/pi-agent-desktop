@@ -244,8 +244,7 @@ span.linenumber {
     transition: width 0.2s ease, min-width 0.2s ease;
   }
   .sidebar-container.sidebar-open {
-    width: 260px;
-    min-width: 260px;
+    min-width: 220px;
   }
   .sidebar-container.sidebar-closed {
     width: 0;
@@ -254,8 +253,44 @@ span.linenumber {
   }
   /* keep inner content at fixed width so it doesn't reflow during animation */
   .sidebar-container > * {
-    width: 260px;
-    min-width: 260px;
+    width: 100%;
+    min-width: 220px;
+  }
+
+  .panel-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 5;
+    width: 9px;
+    min-width: 0;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .panel-resize-handle::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: transparent;
+    transition: background 0.12s;
+  }
+  .panel-resize-handle:hover::after,
+  .panel-resize-handle:active::after {
+    background: var(--accent);
+  }
+  .panel-resize-handle-left {
+    right: -5px;
+  }
+  .panel-resize-handle-left::after {
+    left: 4px;
+  }
+  .panel-resize-handle-right {
+    left: -5px;
+  }
+  .panel-resize-handle-right::after {
+    left: 4px;
   }
 }
 
@@ -268,7 +303,6 @@ span.linenumber {
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
-    width: 42%;
     min-width: 300px;
   }
   .right-panel-container.right-panel-closed {
@@ -278,8 +312,12 @@ span.linenumber {
   }
   /* keep inner content at fixed width so it doesn't reflow during animation */
   .right-panel-container > * {
-    width: 42vw;
+    width: 100%;
     min-width: 300px;
+  }
+  .right-panel-container > .panel-resize-handle {
+    width: 9px;
+    min-width: 0;
   }
 }
 
