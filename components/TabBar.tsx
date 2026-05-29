@@ -44,6 +44,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               paddingLeft: 12,
               paddingRight: 6,
               borderRight: "1px solid var(--border)",
+              borderTop: isActive ? "2px solid var(--accent)" : "2px solid transparent",
               background: isActive ? "var(--bg)" : "var(--bg-panel)",
               cursor: "pointer",
               fontSize: 12,

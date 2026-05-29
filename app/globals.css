@@ -15,41 +15,83 @@
   --color-assistant-bg: var(--assistant-bg);
   --color-tool-bg: var(--tool-bg);
   --color-bg-subtle: var(--bg-subtle);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
   --font-mono-font: var(--font-mono);
 }
 
 :root {
-  --bg: #ffffff;
-  --bg-panel: #f5f5f5;
-  --bg-hover: #eeeeee;
-  --bg-selected: #e8e8e8;
-  --border: #e0e0e0;
-  --text: #1a1a1a;
-  --text-muted: #6b7280;
-  --text-dim: #9ca3af;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --user-bg: #eff6ff;
-  --assistant-bg: #ffffff;
-  --tool-bg: #f9fafb;
-  --bg-subtle: rgba(0,0,0,0.03);
+  --bg: #fafafa;
+  --bg-panel: #f2f3f5;
+  --bg-hover: #eceff3;
+  --bg-selected: #e4e9ef;
+  --border: #d8dde6;
+  --text: #4f5867;
+  --text-muted: #697386;
+  --text-dim: #8a94a5;
+  --accent: #ff8f40;
+  --accent-hover: #f27d2f;
+  --accent-contrast: #ffffff;
+  --user-bg: #fff3e3;
+  --user-border: #ffd6a8;
+  --assistant-bg: #fafafa;
+  --tool-bg: #f6f8fb;
+  --bg-subtle: rgba(89, 105, 129, 0.07);
+  --code-bg: #f8f9fb;
+  --code-header-bg: #eef1f5;
+  --success: #75a743;
+  --success-bg: rgba(117, 167, 67, 0.11);
+  --success-border: rgba(117, 167, 67, 0.32);
+  --danger: #d95757;
+  --danger-bg: rgba(217, 87, 87, 0.1);
+  --danger-border: rgba(217, 87, 87, 0.32);
+  --warning: #e6a23c;
+  --warning-bg: rgba(230, 162, 60, 0.12);
+  --warning-border: rgba(230, 162, 60, 0.34);
+  --info: #55a6d9;
+  --info-bg: rgba(85, 166, 217, 0.11);
+  --info-border: rgba(85, 166, 217, 0.32);
+  --focus-ring: rgba(255, 143, 64, 0.36);
+  --shadow-popover: 0 14px 36px rgba(78, 91, 112, 0.16);
+  --shadow-input: 0 1px 2px rgba(78, 91, 112, 0.06), 0 12px 28px -18px rgba(78, 91, 112, 0.28);
 }
 
 html.dark {
-  --bg: #1a1a1a;
-  --bg-panel: #242424;
-  --bg-hover: #2e2e2e;
-  --bg-selected: #383838;
-  --border: #3a3a3a;
-  --text: #e8e8e8;
-  --text-muted: #9ca3af;
-  --text-dim: #6b7280;
-  --accent: #60a5fa;
-  --accent-hover: #93c5fd;
-  --user-bg: #1e293b;
-  --assistant-bg: #1a1a1a;
-  --tool-bg: #1f2937;
-  --bg-subtle: rgba(255,255,255,0.04);
+  --bg: #0a0e14;
+  --bg-panel: #11151c;
+  --bg-hover: #161b24;
+  --bg-selected: #1f2430;
+  --border: #273340;
+  --text: #e6e1cf;
+  --text-muted: #b3b1ad;
+  --text-dim: #6c7380;
+  --accent: #ffb454;
+  --accent-hover: #ffd173;
+  --accent-contrast: #1b1307;
+  --user-bg: #1c212b;
+  --user-border: rgba(255, 180, 84, 0.34);
+  --assistant-bg: #0a0e14;
+  --tool-bg: #0f141b;
+  --bg-subtle: rgba(230, 225, 207, 0.05);
+  --code-bg: #0d1017;
+  --code-header-bg: #11151c;
+  --success: #bae67e;
+  --success-bg: rgba(186, 230, 126, 0.08);
+  --success-border: rgba(186, 230, 126, 0.26);
+  --danger: #ff8f8f;
+  --danger-bg: rgba(255, 143, 143, 0.08);
+  --danger-border: rgba(255, 143, 143, 0.28);
+  --warning: #ffd173;
+  --warning-bg: rgba(255, 209, 115, 0.1);
+  --warning-border: rgba(255, 209, 115, 0.3);
+  --info: #73d0ff;
+  --info-bg: rgba(115, 208, 255, 0.08);
+  --info-border: rgba(115, 208, 255, 0.28);
+  --focus-ring: rgba(255, 180, 84, 0.42);
+  --shadow-popover: 0 16px 42px rgba(0, 0, 0, 0.42);
+  --shadow-input: 0 1px 2px rgba(0, 0, 0, 0.22), 0 12px 32px -18px rgba(0, 0, 0, 0.72);
 }
 
 /* Theme toggle: circular wipe via View Transitions API.
@@ -159,7 +201,7 @@ pre, code {
 .markdown-file-preview h3 { font-size: 1.15em; }
 .markdown-file-preview p { margin: 0 0 12px; }
 .markdown-file-preview pre {
-  background: var(--bg-panel);
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 12px 16px;
@@ -171,7 +213,7 @@ pre, code {
 .markdown-file-preview code {
   font-family: var(--font-mono);
   font-size: 0.9em;
-  background: var(--bg-panel);
+  background: var(--code-header-bg);
   padding: 1px 5px;
   border-radius: 3px;
 }
@@ -223,9 +265,9 @@ span.linenumber {
 }
 
 @keyframes saved-pop {
-  0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55); }
-  40%  { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.25); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+  0%   { transform: scale(1); box-shadow: 0 0 0 0 var(--success-border); }
+  40%  { transform: scale(1.08); box-shadow: 0 0 0 6px var(--success-bg); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
 }
 
 @keyframes saved-check-draw {
@@ -337,7 +379,7 @@ span.linenumber {
   }
   .sidebar-container.sidebar-open {
     transform: translateX(0);
-    box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+    box-shadow: var(--shadow-popover);
   }
   .sidebar-container.sidebar-closed {
     transform: translateX(-100%);

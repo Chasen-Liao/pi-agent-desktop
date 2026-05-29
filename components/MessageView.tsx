@@ -4,8 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { ayuDarkSyntaxTheme, ayuLightSyntaxTheme } from "@/lib/ayu-syntax-theme";
 import { useTheme } from "@/hooks/useTheme";
 import type {
   AgentMessage,
@@ -128,7 +127,7 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
             flex: 1,
             minWidth: 0,
             background: "var(--user-bg)",
-            border: "1px solid rgba(59,130,246,0.2)",
+            border: "1px solid var(--user-border)",
             borderRadius: 12,
             padding: "8px 12px",
             fontSize: 14,
@@ -157,7 +156,7 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
                     key={i}
                     src={src}
                     alt=""
-                    style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid rgba(59,130,246,0.15)" }}
+                    style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--user-border)" }}
                   />
                 );
               })}
@@ -436,9 +435,9 @@ function AssistantMessageView({
                     {est}
                   </span>
                   {tps !== null && (() => {
-                    const bg = tps >= 50 ? "#53b3cb" : tps >= 30 ? "#9bc53d" : tps >= 15 ? "#f9c22e" : "#e01a4f";
+                    const bg = tps >= 50 ? "var(--info)" : tps >= 30 ? "var(--success)" : tps >= 15 ? "var(--warning)" : "var(--danger)";
                     return (
-                      <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: bg, color: "#fff", fontSize: 11, fontWeight: 400 }}>
+                      <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: bg, color: "var(--accent-contrast)", fontSize: 11, fontWeight: 400 }}>
                         {tps.toFixed(1)} t/s
                       </span>
                     );
@@ -580,7 +579,7 @@ function ThinkingBlock({ block, duration }: { block: ThinkingContent; duration?:
           gap: 6,
           width: "100%",
           padding: "6px 10px",
-          background: "var(--bg-panel)",
+          background: "var(--code-header-bg)",
           border: "none",
           color: "var(--text-muted)",
           cursor: "pointer",
@@ -630,8 +629,8 @@ function ToolCallBlock({ block, result, isRunning, duration }: { block: ToolCall
         borderRadius: 7,
         overflow: "hidden",
         fontSize: 12,
-        border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
-        background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
+        border: isError ? "1px solid var(--danger-border)" : "1px solid var(--success-border)",
+        background: isError ? "var(--danger-bg)" : "var(--success-bg)",
       }}
     >
       {/* ── Tool call header ── */}
@@ -652,7 +651,7 @@ function ToolCallBlock({ block, result, isRunning, duration }: { block: ToolCall
           minWidth: 0,
         }}
       >
-        <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+        <span style={{ color: isError ? "var(--danger)" : "var(--success)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
         </span>
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
@@ -677,7 +676,7 @@ function ToolCallBlock({ block, result, isRunning, duration }: { block: ToolCall
             lineHeight: 1.5,
             overflow: "auto",
             background: "var(--bg-subtle)",
-            borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+            borderTop: isError ? "1px solid var(--danger-border)" : "1px solid var(--success-border)",
             whiteSpace: "pre-wrap",
             wordBreak: "break-all",
           }}
@@ -706,15 +705,15 @@ function PairedResult({ text, isEmpty, isError }: {
   return (
     <div
       style={{
-        borderTop: `1px solid ${isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)"}`,
-        background: isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
+        borderTop: `1px solid ${isError ? "var(--danger-border)" : "var(--success-border)"}`,
+        background: isError ? "var(--danger-bg)" : "var(--bg-subtle)",
       }}
     >
       <pre
         style={{
           margin: 0,
           padding: "8px 10px",
-          color: isError ? "#f87171" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
+          color: isError ? "var(--danger)" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
           fontSize: 12,
           lineHeight: 1.5,
           overflow: "auto",
@@ -817,7 +816,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
       </div>
       <SyntaxHighlighter
         language={lang || "text"}
-        style={isDark ? vscDarkPlus : vs}
+        style={isDark ? ayuDarkSyntaxTheme : ayuLightSyntaxTheme}
         showLineNumbers
         lineNumberStyle={{ color: "var(--text-dim)", fontStyle: "normal" }}
         customStyle={{
@@ -826,7 +825,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
           fontSize: 12.5,
           lineHeight: 1.6,
           borderRadius: 0,
-          background: "var(--bg)",
+          background: "var(--code-bg)",
         }}
         codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
       >
