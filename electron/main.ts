@@ -1,6 +1,7 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import type { UpdateInfo } from "electron-updater";
 import path from "path";
+import { appendFileSync, mkdirSync } from "fs";
 import { spawn, ChildProcess } from "child_process";
 import net from "net";
 import { createTray } from "./tray";
@@ -11,6 +12,7 @@ import { createTray } from "./tray";
 let mainWindow: BrowserWindow | null = null;
 let nextProcess: ChildProcess | null = null;
 let isQuitting = false;
+let logFilePath: string | null = null;
 const DEFAULT_PORT = 30141;
 
 export function setQuitting(val: boolean) {
@@ -18,6 +20,52 @@ export function setQuitting(val: boolean) {
 }
 export function getQuitting(): boolean {
   return isQuitting;
+}
+
+// ---------------------------------------------------------------------------
+// Logging
+// ---------------------------------------------------------------------------
+function getLogFilePath(): string {
+  if (!logFilePath) {
+    const logDir = app.getPath("logs");
+    mkdirSync(logDir, { recursive: true });
+    logFilePath = path.join(logDir, "main.log");
+  }
+  return logFilePath;
+}
+
+function formatLogValue(value: unknown): string {
+  if (value instanceof Error) {
+    return value.stack ?? value.message;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function writeLog(level: "info" | "error", message: string, detail?: unknown) {
+  const suffix = detail === undefined ? "" : ` ${formatLogValue(detail)}`;
+  const line = `[${new Date().toISOString()}] [${level}] ${message}${suffix}\n`;
+  try {
+    appendFileSync(getLogFilePath(), line, "utf8");
+  } catch {
+    // Avoid failing app startup because diagnostics cannot be written.
+  }
+}
+
+function logInfo(message: string, detail?: unknown) {
+  console.log(message, detail ?? "");
+  writeLog("info", message, detail);
+}
+
+function logError(message: string, detail?: unknown) {
+  console.error(message, detail ?? "");
+  writeLog("error", message, detail);
 }
 
 // ---------------------------------------------------------------------------
@@ -57,8 +105,10 @@ function startNextServer(port: number): ChildProcess {
       env: { ...process.env, PORT: String(port) },
       stdio: "pipe",
     });
-    proc.stdout?.on("data", (d: Buffer) => console.log(`[Next] ${d.toString().trim()}`));
-    proc.stderr?.on("data", (d: Buffer) => console.error(`[Next] ${d.toString().trim()}`));
+    proc.stdout?.on("data", (d: Buffer) => logInfo(`[Next] ${d.toString().trim()}`));
+    proc.stderr?.on("data", (d: Buffer) => logError(`[Next] ${d.toString().trim()}`));
+    proc.on("exit", (code, signal) => logInfo("Next.js dev server exited", { code, signal }));
+    proc.on("error", (err) => logError("Next.js dev server process error", err));
     return proc;
   }
 
@@ -75,8 +125,11 @@ function startNextServer(port: number): ChildProcess {
     },
     stdio: "pipe",
   });
-  proc.stdout?.on("data", (d: Buffer) => console.log(`[Next] ${d.toString().trim()}`));
-  proc.stderr?.on("data", (d: Buffer) => console.error(`[Next] ${d.toString().trim()}`));
+  logInfo("Starting packaged Next.js server", { standaloneDir, serverScript, port });
+  proc.stdout?.on("data", (d: Buffer) => logInfo(`[Next] ${d.toString().trim()}`));
+  proc.stderr?.on("data", (d: Buffer) => logError(`[Next] ${d.toString().trim()}`));
+  proc.on("exit", (code, signal) => logInfo("Packaged Next.js server exited", { code, signal }));
+  proc.on("error", (err) => logError("Packaged Next.js server process error", err));
   return proc;
 }
 
@@ -106,6 +159,7 @@ function waitForServer(port: number, timeoutMs = 60_000): Promise<void> {
 
 function cleanup() {
   if (nextProcess && !nextProcess.killed) {
+    logInfo("Killing Next.js server process");
     nextProcess.kill();
     nextProcess = null;
   }
@@ -121,6 +175,7 @@ function createWindow(port: number) {
     minWidth: 800,
     minHeight: 600,
     title: "Pi Agent Desktop",
+    icon: nativeImage.createFromPath(path.join(app.getAppPath(), "build", "icon.ico")),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -163,11 +218,11 @@ function registerIpcHandlers() {
     return result.canceled ? null : (result.filePaths[0] ?? null);
   });
 
-  ipcMain.handle("quit-and-install", () => {
+  ipcMain.handle("quit-and-install", async () => {
+    logInfo("quitAndInstall requested from renderer");
     setQuitting(true);
-    import("electron-updater").then(({ autoUpdater }) => {
-      autoUpdater.quitAndInstall();
-    });
+    const { autoUpdater } = await import("electron-updater");
+    autoUpdater.quitAndInstall();
   });
 }
 
@@ -175,6 +230,7 @@ function registerIpcHandlers() {
 // App lifecycle
 // ---------------------------------------------------------------------------
 app.on("before-quit", () => {
+  logInfo("before-quit");
   isQuitting = true;
   cleanup();
 });
@@ -195,13 +251,13 @@ app.whenReady().then(async () => {
 
   try {
     const port = await findFreePort(DEFAULT_PORT);
-    console.log(`Using port ${port}`);
+    logInfo(`Using port ${port}`);
 
     nextProcess = startNextServer(port);
-    console.log("Waiting for Next.js server...");
+    logInfo("Waiting for Next.js server...");
 
     await waitForServer(port);
-    console.log("Next.js server is ready");
+    logInfo("Next.js server is ready");
 
     createWindow(port);
     createTray(mainWindow!);
@@ -212,13 +268,32 @@ app.whenReady().then(async () => {
         try {
           const { autoUpdater } = await import("electron-updater");
           autoUpdater.autoDownload = true;
+          logInfo("Checking for updates");
 
           // Forward update events to renderer
+          autoUpdater.on("checking-for-update", () => {
+            logInfo("autoUpdater checking-for-update");
+          });
+
           autoUpdater.on("update-available", (info: UpdateInfo) => {
+            logInfo("autoUpdater update-available", info);
             mainWindow?.webContents.send("update-available", { version: info.version });
           });
 
+          autoUpdater.on("update-not-available", (info: UpdateInfo) => {
+            logInfo("autoUpdater update-not-available", info);
+          });
+
+          autoUpdater.on("download-progress", (info) => {
+            logInfo("autoUpdater download-progress", {
+              percent: info.percent,
+              transferred: info.transferred,
+              total: info.total,
+            });
+          });
+
           autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
+            logInfo("autoUpdater update-downloaded", info);
             mainWindow?.webContents.send("update-downloaded", { version: info.version });
             dialog
               .showMessageBox(mainWindow!, {
@@ -229,21 +304,27 @@ app.whenReady().then(async () => {
                 defaultId: 0,
               })
               .then(({ response }) => {
+                logInfo("Update restart dialog response", { response });
                 if (response === 0) {
                   setQuitting(true);
+                  logInfo("Calling autoUpdater.quitAndInstall");
                   autoUpdater.quitAndInstall();
                 }
               });
           });
 
+          autoUpdater.on("error", (err) => {
+            logError("autoUpdater error", err);
+          });
+
           autoUpdater.checkForUpdates();
         } catch (err) {
-          console.error("Auto-update check failed:", err);
+          logError("Auto-update check failed:", err);
         }
       }, 30_000);
     }
   } catch (err) {
-    console.error("Failed to start:", err);
+    logError("Failed to start:", err);
     dialog.showErrorBox("启动失败", String(err));
     app.quit();
   }

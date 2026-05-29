@@ -1,10 +1,10 @@
 # Pi Agent Desktop
 
-![show2](image-1.png)
-
-![show](image.png)
+![show](image-2.png)
 
 [Pi 编程智能体](https://github.com/badlogic/pi-mono) 的原生桌面客户端。基于 Electron 构建，提供比浏览器更原生的使用体验。
+
+# **目标：做出个人极简版 Codex**
 
 > **上游项目**：本项目衍生自 [pi-web](https://github.com/Chasen-Liao/pi-web)，侧重于桌面端体验的优化与功能增强。
 

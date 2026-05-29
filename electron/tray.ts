@@ -4,9 +4,7 @@ import { setQuitting } from "./main";
 
 export function createTray(mainWindow: BrowserWindow): Tray {
   // Use .ico for Windows tray icon (SVG not reliably supported on Win10)
-  const iconPath = app.isPackaged
-    ? path.join(process.resourcesPath, "app", "build", "tray-icon.ico")
-    : path.join(__dirname, "..", "build", "tray-icon.ico");
+  const iconPath = path.join(app.getAppPath(), "build", "icon.ico");
 
   let icon: Electron.NativeImage;
   try {
