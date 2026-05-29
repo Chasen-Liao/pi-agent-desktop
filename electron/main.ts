@@ -5,6 +5,7 @@ import { appendFileSync, mkdirSync } from "fs";
 import { spawn, ChildProcess } from "child_process";
 import net from "net";
 import { createTray } from "./tray";
+import { getStartupFailureDisposition } from "./startup-failure";
 
 // ---------------------------------------------------------------------------
 // State
@@ -17,6 +18,7 @@ const DEFAULT_PORT = 30141;
 type ServerState = "starting" | "ready" | "stopped";
 let serverState: ServerState = "starting";
 let activePort: number | null = null;
+let startupUiReady = false;
 
 export function setQuitting(val: boolean) {
   isQuitting = val;
@@ -284,6 +286,7 @@ function createWindow() {
   });
 
   mainWindow.on("closed", () => {
+    startupUiReady = false;
     mainWindow = null;
   });
 }
@@ -381,6 +384,7 @@ app.whenReady().then(async () => {
 
     createWindow();
     createTray(mainWindow!);
+    startupUiReady = true;
 
     nextProcess = startNextServer(port);
     logInfo("Waiting for Next.js server...");
@@ -451,12 +455,20 @@ app.whenReady().then(async () => {
       }, 30_000);
     }
   } catch (err) {
+    cleanup();
     serverState = "stopped";
     activePort = null;
     const message = err instanceof Error ? err.message : String(err);
+    const disposition = getStartupFailureDisposition({ uiReady: startupUiReady, message });
     logError("Failed to start:", err);
-    showStartupState("error", message);
-    dialog.showErrorBox("启动失败", message);
+
+    if (disposition.shouldShowStartupPage) {
+      showStartupState("error", disposition.message);
+      return;
+    }
+
+    dialog.showErrorBox("启动失败", disposition.message);
+    app.quit();
   }
 });
 
