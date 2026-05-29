@@ -94,24 +94,51 @@ function showStartupState(state: "starting" | "error" | "stopped", message?: str
 // ---------------------------------------------------------------------------
 // Port finding
 // ---------------------------------------------------------------------------
-function findFreePort(startPort: number, maxAttempts = 10): Promise<number> {
-  return new Promise((resolve, reject) => {
-    function tryPort(port: number, attempts: number) {
-      const server = net.createServer();
-      server.listen(port, "127.0.0.1", () => {
-        const addr = server.address();
-        server.close(() => resolve(addr && typeof addr === "object" ? addr.port : port));
-      });
-      server.on("error", () => {
-        if (attempts > 0) {
-          tryPort(port + 1, attempts - 1);
-        } else {
-          reject(new Error(`No free port found after ${maxAttempts} attempts`));
-        }
-      });
-    }
-    tryPort(startPort, maxAttempts);
+async function isPortReachable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect(port, "127.0.0.1", () => {
+      socket.end();
+      resolve(true);
+    });
+
+    socket.on("error", () => {
+      resolve(false);
+    });
+
+    socket.setTimeout(500, () => {
+      socket.destroy();
+      resolve(false);
+    });
   });
+}
+
+function reservePort(port: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(port, "127.0.0.1", () => {
+      const addr = server.address();
+      server.close(() => resolve(addr && typeof addr === "object" ? addr.port : port));
+    });
+    server.on("error", reject);
+  });
+}
+
+async function findFreePort(startPort: number, maxAttempts = 10): Promise<number> {
+  for (let attempt = 0; attempt <= maxAttempts; attempt += 1) {
+    const port = startPort + attempt;
+
+    if (await isPortReachable(port)) {
+      continue;
+    }
+
+    try {
+      return await reservePort(port);
+    } catch {
+      // Try next port.
+    }
+  }
+
+  throw new Error(`No free port found after ${maxAttempts} attempts`);
 }
 
 // ---------------------------------------------------------------------------
