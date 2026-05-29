@@ -24,10 +24,10 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
       style={{
         display: "flex",
         alignItems: "flex-end",
-        background: "var(--bg-panel)",
+        background: "var(--bg-elevated)",
         overflowX: "auto",
         flexShrink: 0,
-        height: 36,
+        height: "var(--toolbar-height)",
       }}
     >
       {tabs.map((tab) => {
@@ -40,12 +40,12 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               display: "flex",
               alignItems: "center",
               gap: 6,
-              height: 36,
+              height: "var(--toolbar-height)",
               paddingLeft: 12,
               paddingRight: 6,
-              borderRight: "1px solid var(--border)",
+              borderRight: "1px solid var(--divider)",
               borderTop: isActive ? "2px solid var(--accent)" : "2px solid transparent",
-              background: isActive ? "var(--bg)" : "var(--bg-panel)",
+              background: isActive ? "var(--bg)" : "var(--bg-elevated)",
               cursor: "pointer",
               fontSize: 12,
               color: isActive ? "var(--text)" : "var(--text-muted)",
@@ -75,12 +75,13 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
               onMouseEnter={() => setHoveredClose(tab.id)}
               onMouseLeave={() => setHoveredClose(null)}
+              aria-label={`Close ${tab.label}`}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
-                width: 16, height: 16,
+                width: 20, height: 20,
                 background: hoveredClose === tab.id ? "var(--bg-hover)" : "transparent",
                 border: "none",
-                borderRadius: 3,
+                borderRadius: "var(--radius-control)",
                 color: hoveredClose === tab.id ? "var(--text)" : "var(--text-dim)",
                 cursor: "pointer",
                 padding: 0,

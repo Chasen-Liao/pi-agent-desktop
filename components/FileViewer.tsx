@@ -324,11 +324,12 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
           display: "flex",
           alignItems: "center",
           gap: 12,
+          minHeight: 32,
           padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
+          borderBottom: "1px solid var(--divider)",
           fontSize: 11,
           color: "var(--text-dim)",
-          background: "var(--bg)",
+          background: "var(--bg-elevated)",
           flexShrink: 0,
         }}
       >
@@ -458,11 +459,12 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
           display: "flex",
           alignItems: "center",
           gap: 12,
+          minHeight: 32,
           padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
+          borderBottom: "1px solid var(--divider)",
           fontSize: 11,
           color: "var(--text-dim)",
-          background: "var(--bg)",
+          background: "var(--bg-elevated)",
           flexShrink: 0,
         }}
       >
@@ -648,11 +650,12 @@ function TextFileViewer({ filePath, cwd }: Props) {
           display: "flex",
           alignItems: "center",
           gap: 12,
+          minHeight: 32,
           padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
+          borderBottom: "1px solid var(--divider)",
           fontSize: 11,
           color: "var(--text-dim)",
-          background: "var(--bg)",
+          background: "var(--bg-elevated)",
           flexShrink: 0,
         }}
       >
@@ -683,9 +686,10 @@ function TextFileViewer({ filePath, cwd }: Props) {
 
         {/* Diff / Source toggle — shown only when there are changes */}
         {hasDiff && (
-          <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", borderRadius: "var(--radius-control)", overflow: "hidden", border: "1px solid var(--border)" }}>
             <button
               onClick={() => setViewMode("source")}
+              aria-label="Show source"
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
                 background: viewMode === "source" ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -697,6 +701,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
             </button>
             <button
               onClick={() => setViewMode("diff")}
+              aria-label="Show diff"
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
                 background: viewMode === "diff" ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -714,11 +719,12 @@ function TextFileViewer({ filePath, cwd }: Props) {
           <button
             onClick={() => setWrapLines((v) => !v)}
             title={wrapLines ? "Disable word wrap" : "Enable word wrap"}
+            aria-label={wrapLines ? "Disable word wrap" : "Enable word wrap"}
             style={{
               padding: "2px 8px", fontSize: 11, cursor: "pointer",
               background: wrapLines ? "var(--bg-selected)" : "var(--bg-hover)",
               color: wrapLines ? "var(--text)" : "var(--text-muted)",
-              border: "1px solid var(--border)", borderRadius: 5,
+              border: "1px solid var(--border)", borderRadius: "var(--radius-control)",
               fontWeight: wrapLines ? 600 : 400,
             }}
           >
@@ -728,9 +734,10 @@ function TextFileViewer({ filePath, cwd }: Props) {
 
         {/* HTML source/preview toggle */}
         {isHtml && viewMode === "source" && (
-          <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", borderRadius: "var(--radius-control)", overflow: "hidden", border: "1px solid var(--border)" }}>
             <button
               onClick={() => setPreviewMode(false)}
+              aria-label="Show HTML code"
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
                 background: !previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -742,6 +749,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
             </button>
             <button
               onClick={() => setPreviewMode(true)}
+              aria-label="Preview HTML"
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
                 background: previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -756,9 +764,10 @@ function TextFileViewer({ filePath, cwd }: Props) {
 
         {/* Markdown preview/raw toggle */}
         {isMarkdown && viewMode === "source" && (
-          <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", borderRadius: "var(--radius-control)", overflow: "hidden", border: "1px solid var(--border)" }}>
             <button
               onClick={() => setPreviewMode(true)}
+              aria-label="Preview markdown"
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
                 background: previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -770,6 +779,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
             </button>
             <button
               onClick={() => setPreviewMode(false)}
+              aria-label="Show raw markdown"
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
                 background: !previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -797,7 +807,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
         ) : isMarkdown && previewMode ? (
           <div
             className="markdown-body markdown-file-preview"
-            style={{ padding: "24px 32px", maxWidth: 800 }}
+            style={{ padding: "28px 40px 48px", maxWidth: 860, margin: "0 auto" }}
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.content}</ReactMarkdown>
           </div>

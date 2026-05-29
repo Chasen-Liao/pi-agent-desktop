@@ -118,10 +118,10 @@ function TreeNode({
           gap: 4,
           paddingLeft: 8 + depth * 14,
           paddingRight: 8,
-          height: 24,
+          height: 26,
           cursor: "pointer",
           background: hovered ? "var(--bg-hover)" : "transparent",
-          borderRadius: 4,
+          borderRadius: "var(--radius-control)",
           userSelect: "none",
         }}
       >
@@ -174,13 +174,14 @@ function TreeNode({
               gap: 4,
               padding: "0 8px",
               height: 20,
-              background: "var(--bg-panel)",
+              background: "var(--bg-elevated)",
               border: "1px solid var(--border)",
-              borderRadius: 4,
+              borderRadius: "var(--radius-control)",
               color: "var(--accent)",
               cursor: "pointer",
               fontSize: 11,
               fontWeight: 600,
+              letterSpacing: 0,
               whiteSpace: "nowrap",
             }}
           >

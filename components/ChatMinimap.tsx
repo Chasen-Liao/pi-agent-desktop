@@ -10,7 +10,7 @@ interface Props {
   messageRefs: RefObject<(HTMLDivElement | null)[]>;
 }
 
-const MINIMAP_WIDTH = 36;
+const MINIMAP_WIDTH = 30;
 
 function getMessagePreview(msg: AgentMessage | Partial<AgentMessage>): string {
   if (msg.role === "user") {
@@ -247,8 +247,8 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         position: "relative",
         cursor: "default",
         userSelect: "none",
-        borderLeft: "1px solid var(--border)",
-        background: "var(--bg-panel)",
+        borderLeft: "1px solid var(--divider)",
+        background: "var(--bg-elevated)",
         overflow: "visible",
       }}
     >
@@ -260,9 +260,9 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
           right: 0,
           top: `${viewportBoxTop}%`,
           height: `${viewportBoxHeight}%`,
-          background: "rgba(100,100,100,0.1)",
-          borderTop: "1px solid rgba(100,100,100,0.2)",
-          borderBottom: "1px solid rgba(100,100,100,0.2)",
+          background: "var(--bg-subtle)",
+          borderTop: "1px solid var(--border-subtle)",
+          borderBottom: "1px solid var(--border-subtle)",
           pointerEvents: "none",
           zIndex: 1,
         }}
@@ -296,8 +296,8 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
             {/* Dot */}
             <div
               style={{
-                width: isUser ? 8 : 6,
-                height: isUser ? 8 : 6,
+                width: isUser ? 7 : 5,
+                height: isUser ? 7 : 5,
                 borderRadius: isUser ? 2 : "50%",
                 background: color.bg,
                 border: `1.5px solid ${color.border}`,
@@ -340,12 +340,12 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
               top: tooltipPositions[i],
               right: "100%",
               marginRight: 6,
-              background: "var(--bg)",
+              background: "var(--bg-elevated)",
               borderTop: `1px solid ${isNearest ? color.border : "var(--border)"}`,
               borderRight: `1px solid ${isNearest ? color.border : "var(--border)"}`,
               borderBottom: `1px solid ${isNearest ? color.border : "var(--border)"}`,
               borderLeft: `2px solid ${color.border}`,
-              borderRadius: 4,
+              borderRadius: "var(--radius-control)",
               padding: "2px 7px",
               width: 200,
               zIndex: 100,

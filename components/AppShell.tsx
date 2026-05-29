@@ -393,10 +393,11 @@ export function AppShell() {
             onClick={onClick}
             disabled={disabled}
             title={label}
+            aria-label={label}
             style={{
               flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              height: 32, padding: 0, background: "none", border: "none",
-              borderRadius: 9, color: "var(--text-muted)", cursor: disabled ? "default" : "pointer",
+              height: "var(--control-height)", padding: 0, background: "none", border: "none",
+              borderRadius: "var(--radius-control)", color: "var(--text-muted)", cursor: disabled ? "default" : "pointer",
               fontSize: 12, opacity: disabled ? 0.35 : 1,
               transition: "background 0.12s, color 0.12s",
             }}
@@ -434,7 +435,7 @@ export function AppShell() {
         className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}`}
         style={{
           background: "var(--bg-panel)",
-          borderRight: "1px solid var(--border)",
+          borderRight: "1px solid var(--divider)",
           display: "flex",
           flexDirection: "column",
           flexShrink: 0,
@@ -458,14 +459,15 @@ export function AppShell() {
       {/* Center: chat */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Top bar with sidebar toggle */}
-        <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: 36, background: "var(--bg-panel)" }}>
+        <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--divider)", height: "var(--toolbar-height)", background: "var(--bg-elevated)" }}>
           <button
             onClick={() => setSidebarOpen((v) => !v)}
             title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--border)",
+              width: 36, height: "100%", padding: 0,
+              background: "none", border: "none", borderRight: "1px solid var(--divider)",
               color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
@@ -491,8 +493,8 @@ export function AppShell() {
             aria-pressed={isDark}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--border)",
+              width: 36, height: "100%", padding: 0,
+              background: "none", border: "none", borderRight: "1px solid var(--divider)",
               color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
@@ -533,7 +535,7 @@ export function AppShell() {
                   background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
                   border: "none",
                   borderTop: activeTopPanel === "system" ? "2px solid var(--accent)" : "2px solid transparent",
-                  borderRight: "1px solid var(--border)",
+                  borderRight: "1px solid var(--divider)",
                   cursor: "pointer",
                   color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
                   fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
@@ -646,8 +648,9 @@ export function AppShell() {
             }}>
               {activeTopPanel === "system" && (
                 <div style={{
-                  background: "var(--bg-panel)",
-                  borderBottom: "1px solid var(--border)",
+                  background: "var(--bg-elevated)",
+                  borderBottom: "1px solid var(--divider)",
+                  boxShadow: "var(--shadow-popover)",
                 }}>
                   {systemPrompt ? (
                     <div style={{
@@ -724,7 +727,7 @@ export function AppShell() {
         style={{
           display: "flex",
           flexDirection: "column",
-          borderLeft: "1px solid var(--border)",
+          borderLeft: "1px solid var(--divider)",
           background: "var(--bg)",
           position: "relative",
           width: rightPanelOpen ? panelWidths.right : 0,
@@ -741,7 +744,7 @@ export function AppShell() {
           />
         )}
         {/* Right panel tab bar */}
-        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "var(--bg-panel)", borderBottom: "1px solid var(--border)", height: 36 }}>
+        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "var(--bg-elevated)", borderBottom: "1px solid var(--divider)", height: "var(--toolbar-height)" }}>
           <div style={{ flex: 1, overflow: "hidden" }}>
             <TabBar
               tabs={fileTabs}
@@ -769,11 +772,12 @@ export function AppShell() {
     <button
       onClick={() => setRightPanelOpen((v) => !v)}
       title={rightPanelOpen ? "Hide file panel" : "Show file panel"}
+      aria-label={rightPanelOpen ? "Hide file panel" : "Show file panel"}
       style={{
         position: "fixed", top: 0, right: 0, zIndex: 300,
         display: "flex", alignItems: "center", justifyContent: "center",
-        width: 36, height: 36, padding: 0,
-        background: "var(--bg-panel)", border: "none", borderLeft: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+        width: 36, height: "var(--toolbar-height)", padding: 0,
+        background: "var(--bg-elevated)", border: "none", borderLeft: "1px solid var(--divider)", borderBottom: "1px solid var(--divider)",
         color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
         cursor: "pointer", transition: "color 0.12s",
       }}

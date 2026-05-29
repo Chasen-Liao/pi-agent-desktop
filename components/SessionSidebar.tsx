@@ -203,8 +203,8 @@ function PiAgentTitle() {
       onClick={handleClick}
       style={{
         background: "none", border: "none", padding: 0, cursor: "default",
-        fontWeight: 700, fontSize: 15, letterSpacing: "-0.01em",
-        color: showVersion ? "var(--accent)" : "var(--text)",
+        fontWeight: 700, fontSize: 15, letterSpacing: 0,
+        color: showVersion ? "var(--accent)" : "var(--text-strong)",
         fontFamily: "var(--font-mono)",
         minWidth: "6ch",
       }}
@@ -366,7 +366,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       <div
         style={{
           padding: "12px 10px 10px",
-          borderBottom: "1px solid var(--border)",
+          borderBottom: "1px solid var(--divider)",
           flexShrink: 0,
         }}
       >
@@ -376,31 +376,32 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             <button
               onClick={handleNewSession}
               disabled={!selectedCwd}
+              aria-label="New session"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                background: "var(--bg-hover)",
+                background: "var(--chrome-button-bg)",
                 border: "1px solid var(--border)",
                 color: selectedCwd ? "var(--text-muted)" : "var(--text-dim)",
                 cursor: selectedCwd ? "pointer" : "not-allowed",
-                height: 32,
+                height: "var(--control-height)",
                 paddingLeft: 10,
                 paddingRight: 12,
-                borderRadius: 7,
+                borderRadius: "var(--radius-control)",
                 fontSize: 12,
                 fontWeight: 500,
-                letterSpacing: "-0.01em",
+                letterSpacing: 0,
                 flexShrink: 0,
                 transition: "background 0.12s, color 0.12s, border-color 0.12s",
               }}
               title={selectedCwd ? `New session in ${selectedCwd}` : "Select a project first"}
               onMouseEnter={(e) => {
                 if (!selectedCwd) return;
-                e.currentTarget.style.background = "var(--bg-selected)";
+                e.currentTarget.style.background = "var(--chrome-button-hover)";
                 e.currentTarget.style.color = "var(--accent)";
                 e.currentTarget.style.borderColor = "var(--focus-ring)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--bg-hover)";
+                e.currentTarget.style.background = "var(--chrome-button-bg)";
                 e.currentTarget.style.color = selectedCwd ? "var(--text-muted)" : "var(--text-dim)";
                 e.currentTarget.style.borderColor = "var(--border)";
               }}
@@ -413,27 +414,28 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             </button>
             <button
               onClick={() => loadSessions(false)}
+              aria-label="Refresh sessions"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
-                background: sessionRefreshDone ? "var(--success-bg)" : "var(--bg-hover)",
+                background: sessionRefreshDone ? "var(--success-bg)" : "var(--chrome-button-bg)",
                 border: `1px solid ${sessionRefreshDone ? "var(--success-border)" : "var(--border)"}`,
                 color: sessionRefreshDone ? "var(--success)" : "var(--text-muted)",
                 cursor: "pointer",
-                width: 32, height: 32,
-                borderRadius: 7,
+                width: 32, height: "var(--control-height)",
+                borderRadius: "var(--radius-control)",
                 padding: 0,
                 flexShrink: 0,
                 transition: "background 0.3s, color 0.3s, border-color 0.3s",
               }}
               onMouseEnter={(e) => {
                 if (sessionRefreshDone) return;
-                e.currentTarget.style.background = "var(--bg-selected)";
+                e.currentTarget.style.background = "var(--chrome-button-hover)";
                 e.currentTarget.style.color = "var(--accent)";
                 e.currentTarget.style.borderColor = "var(--focus-ring)";
               }}
               onMouseLeave={(e) => {
                 if (sessionRefreshDone) return;
-                e.currentTarget.style.background = "var(--bg-hover)";
+                e.currentTarget.style.background = "var(--chrome-button-bg)";
                 e.currentTarget.style.color = "var(--text-muted)";
                 e.currentTarget.style.borderColor = "var(--border)";
               }}
@@ -464,7 +466,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               padding: "6px 10px",
               background: selectedCwd ? "var(--bg-hover)" : "var(--warning-bg)",
               border: selectedCwd ? "1px solid var(--border)" : "1px solid var(--warning-border)",
-              borderRadius: 7,
+              borderRadius: "var(--radius-control)",
               cursor: "pointer",
               fontSize: 12,
               color: "var(--text)",
@@ -498,7 +500,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 zIndex: 100,
                 background: "var(--bg)",
                 border: "1px solid var(--border)",
-                borderRadius: 8,
+                borderRadius: "var(--radius-panel)",
                 boxShadow: "var(--shadow-popover)",
                 overflow: "hidden",
               }}
@@ -654,7 +656,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       {(selectedCwdProp || selectedCwd) && (
         <div
           style={{
-            borderTop: "1px solid var(--border)",
+            borderTop: "1px solid var(--divider)",
             display: "flex",
             flexDirection: "column",
             flex: explorerOpen ? "1 1 0" : "0 0 auto",
@@ -677,7 +679,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 cursor: "pointer",
                 fontSize: 11,
                 fontWeight: 600,
-                letterSpacing: "0.05em",
+                letterSpacing: "0.04em",
                 textTransform: "uppercase",
                 textAlign: "left",
               }}
@@ -699,6 +701,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 explorerRefreshTimerRef.current = setTimeout(() => setExplorerRefreshDone(false), 2000);
               }}
               title="Refresh explorer"
+              aria-label="Refresh explorer"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 26, height: 26, padding: 0, marginRight: 6,
@@ -706,7 +709,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 border: "none",
                 color: explorerRefreshDone ? "var(--success)" : "var(--text-dim)",
                 cursor: "pointer",
-                borderRadius: 5,
+                borderRadius: "var(--radius-control)",
                 flexShrink: 0,
                 transition: "color 0.3s, background 0.3s",
               }}
@@ -826,13 +829,16 @@ function SessionItem({
   onToggleCollapse?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [rowFocused, setRowFocused] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
 
   const title = session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
+  const actionsVisible = hovered || rowFocused;
 
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -880,11 +886,26 @@ function SessionItem({
   }, []);
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
-  const ITEM_HEIGHT = 54;
+  const ITEM_HEIGHT = 52;
 
   return (
     <div
+      ref={rowRef}
+      tabIndex={confirmDelete || renaming ? undefined : 0}
       onClick={confirmDelete || renaming ? undefined : onClick}
+      onKeyDown={(e) => {
+        if (confirmDelete || renaming || e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      onFocus={() => setRowFocused(true)}
+      onBlur={(e) => {
+        const next = e.relatedTarget;
+        if (next instanceof Node && rowRef.current?.contains(next)) return;
+        setRowFocused(false);
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); }}
       style={{
@@ -896,11 +917,11 @@ function SessionItem({
         cursor: confirmDelete || renaming ? "default" : "pointer",
         background: confirmDelete
           ? "var(--danger-bg)"
-          : isSelected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
+          : isSelected ? "var(--bg-selected)" : actionsVisible ? "var(--bg-hover)" : "transparent",
         borderLeft: confirmDelete
           ? "2px solid var(--danger)"
           : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
-        transition: "background 0.1s",
+        transition: "background 0.12s, border-color 0.12s",
         opacity: deleting ? 0.5 : 1,
         gap: 6,
         overflow: "hidden",
@@ -919,7 +940,7 @@ function SessionItem({
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
                 height: 30, padding: "0 11px",
                 background: "var(--danger)", border: "none",
-                borderRadius: 6, color: "var(--accent-contrast)",
+                borderRadius: "var(--radius-control)", color: "var(--accent-contrast)",
                 cursor: "pointer", fontSize: 12, fontWeight: 600,
                 whiteSpace: "nowrap",
               }}
@@ -938,7 +959,7 @@ function SessionItem({
                 display: "flex", alignItems: "center", justifyContent: "center",
                 height: 30, padding: "0 11px",
                 background: "var(--bg)", border: "1px solid var(--border)",
-                borderRadius: 6, color: "var(--text-muted)",
+                borderRadius: "var(--radius-control)", color: "var(--text-muted)",
                 cursor: "pointer", fontSize: 12, fontWeight: 500,
                 whiteSpace: "nowrap",
               }}
@@ -964,7 +985,7 @@ function SessionItem({
             fontSize: 12,
             padding: "5px 8px",
             border: "1px solid var(--accent)",
-            borderRadius: 5,
+            borderRadius: "var(--radius-control)",
             outline: "none",
             background: "var(--bg)",
             color: "var(--text)",
@@ -987,12 +1008,12 @@ function SessionItem({
             <div
               style={{
                 fontSize: 12,
-                fontWeight: isSelected ? 500 : 400,
+                fontWeight: isSelected ? 600 : 500,
                 lineHeight: 1.4,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                color: "var(--text)",
+                color: isSelected ? "var(--text-strong)" : "var(--text)",
               }}
               title={title}
             >
@@ -1009,6 +1030,7 @@ function SessionItem({
             <button
               onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
               title={collapsed ? "Expand forks" : "Collapse forks"}
+              aria-label={collapsed ? "Expand forks" : "Collapse forks"}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 20, height: 20, padding: 0, flexShrink: 0,
@@ -1024,27 +1046,37 @@ function SessionItem({
             </button>
           )}
 
-          {/* Action buttons — shown on hover */}
-          {hovered && (
-            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          {/* Action buttons keep their width reserved so hover does not shift text. */}
+          <div
+            style={{
+              display: "flex",
+              gap: 4,
+              flexShrink: 0,
+              opacity: actionsVisible ? 1 : 0,
+              pointerEvents: actionsVisible ? "auto" : "none",
+              transition: "opacity 0.12s",
+            }}
+          >
               <button
                 onClick={startRename}
                 title="Rename"
+                aria-label="Rename session"
+                tabIndex={actionsVisible ? 0 : -1}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
-                  background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)",
+                  width: 28, height: 28, padding: 0,
+                  background: "var(--chrome-button-bg)", border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-control)", color: "var(--text-muted)",
                   cursor: "pointer", flexShrink: 0,
                   transition: "background 0.12s, color 0.12s, border-color 0.12s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-selected)";
+                  e.currentTarget.style.background = "var(--chrome-button-hover)";
                   e.currentTarget.style.color = "var(--accent)";
                   e.currentTarget.style.borderColor = "var(--focus-ring)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.background = "var(--chrome-button-bg)";
                   e.currentTarget.style.color = "var(--text-muted)";
                   e.currentTarget.style.borderColor = "var(--border)";
                 }}
@@ -1056,11 +1088,13 @@ function SessionItem({
               <button
                 onClick={handleDeleteClick}
                 title="Delete"
+                aria-label="Delete session"
+                tabIndex={actionsVisible ? 0 : -1}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
-                  background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)",
+                  width: 28, height: 28, padding: 0,
+                  background: "var(--chrome-button-bg)", border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-control)", color: "var(--text-muted)",
                   cursor: "pointer", flexShrink: 0,
                   transition: "background 0.12s, color 0.12s, border-color 0.12s",
                 }}
@@ -1070,7 +1104,7 @@ function SessionItem({
                   e.currentTarget.style.borderColor = "var(--danger-border)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.background = "var(--chrome-button-bg)";
                   e.currentTarget.style.color = "var(--text-muted)";
                   e.currentTarget.style.borderColor = "var(--border)";
                 }}
@@ -1083,7 +1117,6 @@ function SessionItem({
                 </svg>
               </button>
             </div>
-          )}
         </>
       )}
     </div>

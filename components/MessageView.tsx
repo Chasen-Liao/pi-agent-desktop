@@ -117,7 +117,7 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
 
   return (
     <div
-      style={{ marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "flex-end" }}
+      style={{ marginBottom: 18, display: "flex", flexDirection: "column", alignItems: "flex-end" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -128,7 +128,7 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
             minWidth: 0,
             background: "var(--user-bg)",
             border: "1px solid var(--user-border)",
-            borderRadius: 12,
+            borderRadius: "var(--radius-panel)",
             padding: "8px 12px",
             fontSize: 14,
             lineHeight: 1.6,
@@ -182,11 +182,12 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
             <button
               onClick={copyContent}
               title="Copy message"
+              aria-label="Copy message"
               style={{
                 display: "flex", alignItems: "center", gap: 4,
                 padding: "3px 8px", height: 22,
                 background: "none", border: "none",
-                borderRadius: 5,
+                borderRadius: "var(--radius-control)",
                 color: copied ? "var(--accent)" : "var(--text-dim)",
                 cursor: "pointer",
                 fontSize: 11, fontWeight: 400,
@@ -220,11 +221,12 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
                 <button
                   onClick={() => { onNavigate!(prevAssistantEntryId!); onEditContent?.(content); }}
                   title="Edit from here — branches within this session"
+                  aria-label="Edit from here"
                   style={{
                     display: "flex", alignItems: "center", gap: 4,
                     padding: "3px 8px", height: 22,
                     background: "none", border: "none",
-                    borderRadius: 5,
+                    borderRadius: "var(--radius-control)",
                     color: "var(--text-dim)",
                     cursor: "pointer",
                     fontSize: 11, fontWeight: 400,
@@ -246,11 +248,12 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
                   onClick={() => { onFork!(entryId!); }}
                   disabled={forking}
                   title={forking ? "Creating new session…" : "New session — creates an independent copy from here"}
+                  aria-label="Create new session from here"
                   style={{
                     display: "flex", alignItems: "center", gap: 4,
                     padding: "3px 8px", height: 22,
                     background: "none", border: "none",
-                    borderRadius: 5,
+                    borderRadius: "var(--radius-control)",
                     color: forking ? "var(--accent)" : "var(--text-dim)",
                     cursor: forking ? "not-allowed" : "pointer",
                     fontSize: 11, fontWeight: 400,
@@ -397,7 +400,7 @@ function AssistantMessageView({
 
   return (
     <div
-      style={{ marginBottom: 16 }}
+      style={{ marginBottom: 18 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -467,11 +470,12 @@ function AssistantMessageView({
           <button
             onClick={copyContent}
             title="Copy message"
+            aria-label="Copy message"
             style={{
               display: "flex", alignItems: "center", gap: 4,
               padding: "3px 8px", height: 22,
               background: "none", border: "none",
-              borderRadius: 5,
+              borderRadius: "var(--radius-control)",
               color: copied ? "var(--accent)" : "var(--text-dim)",
               cursor: "pointer",
               fontSize: 11, fontWeight: 400,
@@ -566,13 +570,14 @@ function ThinkingBlock({ block, duration }: { block: ThinkingContent; duration?:
     <div
       style={{
         border: "1px solid var(--border)",
-        borderRadius: 6,
+        borderRadius: "var(--radius-panel)",
         overflow: "hidden",
         fontSize: 13,
       }}
     >
       <button
         onClick={() => setExpanded((v) => !v)}
+        aria-label={expanded ? "Collapse thinking" : "Expand thinking"}
         style={{
           display: "flex",
           alignItems: "center",
@@ -626,7 +631,7 @@ function ToolCallBlock({ block, result, isRunning, duration }: { block: ToolCall
   return (
     <div
       style={{
-        borderRadius: 7,
+        borderRadius: "var(--radius-panel)",
         overflow: "hidden",
         fontSize: 12,
         border: isError ? "1px solid var(--danger-border)" : "1px solid var(--success-border)",
@@ -636,6 +641,7 @@ function ToolCallBlock({ block, result, isRunning, duration }: { block: ToolCall
       {/* ── Tool call header ── */}
       <button
         onClick={() => setExpanded((v) => !v)}
+        aria-label={expanded ? `Collapse ${block.toolName} tool call` : `Expand ${block.toolName} tool call`}
         style={{
           display: "flex",
           alignItems: "center",
@@ -783,7 +789,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
         position: "relative",
         marginTop: 4,
         marginBottom: 4,
-        borderRadius: 6,
+        borderRadius: "var(--radius-panel)",
         overflow: "hidden",
         border: "1px solid var(--border)",
       }}
@@ -803,12 +809,15 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
         <span>{lang}</span>
         <button
           onClick={copy}
+          aria-label="Copy code"
           style={{
             background: "none",
             border: "none",
             color: "var(--text-muted)",
             cursor: "pointer",
             fontSize: 11,
+            borderRadius: "var(--radius-control)",
+            padding: "2px 6px",
           }}
         >
           {copied ? "copied" : "copy"}
