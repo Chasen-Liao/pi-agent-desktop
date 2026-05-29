@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>正在启动 Pi Agent Desktop…</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b1220;
+        --card: rgba(15, 23, 42, 0.92);
+        --border: rgba(148, 163, 184, 0.16);
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #3b82f6;
+        --accent-soft: rgba(59, 130, 246, 0.2);
+        --danger: #ef4444;
+        --danger-soft: rgba(239, 68, 68, 0.2);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 35%),
+          var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+
+      main {
+        width: min(560px, calc(100vw - 32px));
+        padding: 32px;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        background: var(--card);
+        box-shadow: 0 24px 80px rgba(2, 6, 23, 0.55);
+      }
+
+      .row {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+      }
+
+      .dot {
+        width: 14px;
+        height: 14px;
+        margin-top: 8px;
+        border-radius: 999px;
+        background: var(--accent);
+        box-shadow: 0 0 0 0 var(--accent-soft);
+        animation: pulse 1.8s infinite;
+        flex: 0 0 auto;
+      }
+
+      .error .dot,
+      .stopped .dot {
+        background: var(--danger);
+        box-shadow: 0 0 0 0 var(--danger-soft);
+        animation: none;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 24px;
+        line-height: 1.35;
+        font-weight: 700;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+        font-size: 15px;
+      }
+
+      .state {
+        margin-top: 18px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .error .state,
+      .stopped .state {
+        border-color: rgba(239, 68, 68, 0.22);
+        background: rgba(127, 29, 29, 0.24);
+      }
+
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 var(--accent-soft);
+        }
+        70% {
+          box-shadow: 0 0 0 12px rgba(59, 130, 246, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="panel">
+      <div class="row">
+        <div class="dot" aria-hidden="true"></div>
+        <div>
+          <h1 id="title">正在启动 Pi Agent Desktop…</h1>
+          <p id="description">正在启动本地服务，完成后会自动进入应用。</p>
+          <div class="state" id="stateText">正在准备本地 Next.js 服务</div>
+        </div>
+      </div>
+    </main>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        var state = params.get("state");
+        var message = params.get("message");
+        var title = document.getElementById("title");
+        var description = document.getElementById("description");
+        var stateText = document.getElementById("stateText");
+        var panel = document.getElementById("panel");
+
+        if (state === "error") {
+          document.title = "启动失败";
+          title.textContent = "启动失败";
+          description.textContent = "本地服务没有正常启动。请重启应用；如果问题仍然存在，请查看应用日志。";
+          stateText.textContent = message || "后端服务不可用";
+          panel.classList.add("error");
+        } else if (state === "stopped") {
+          document.title = "后端服务已停止";
+          title.textContent = "后端服务已停止";
+          description.textContent = "Pi Agent Desktop 的本地服务异常退出。请重启应用以恢复使用。";
+          stateText.textContent = message || "服务进程已退出";
+          panel.classList.add("stopped");
+        }
+      })();
+    </script>
+  </body>
+</html>

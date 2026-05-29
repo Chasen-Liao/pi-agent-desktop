@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from "electron";
 import type { UpdateInfo } from "electron-updater";
 import path from "path";
 import { appendFileSync, mkdirSync } from "fs";
@@ -14,6 +14,9 @@ let nextProcess: ChildProcess | null = null;
 let isQuitting = false;
 let logFilePath: string | null = null;
 const DEFAULT_PORT = 30141;
+type ServerState = "starting" | "ready" | "stopped";
+let serverState: ServerState = "starting";
+let activePort: number | null = null;
 
 export function setQuitting(val: boolean) {
   isQuitting = val;
@@ -68,27 +71,74 @@ function logError(message: string, detail?: unknown) {
   writeLog("error", message, detail);
 }
 
+function startupPageUrl(state: "starting" | "error" | "stopped", message?: string): string {
+  const url = new URL(`file://${path.join(__dirname, "startup.html").replace(/\\/g, "/")}`);
+  const hash = new URLSearchParams({ state });
+  if (message) {
+    hash.set("message", message);
+  }
+  url.hash = hash.toString();
+  return url.toString();
+}
+
+function showStartupState(state: "starting" | "error" | "stopped", message?: string) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  void shell;
+  void serverState;
+  void activePort;
+  mainWindow.loadURL(startupPageUrl(state, message));
+}
+
 // ---------------------------------------------------------------------------
 // Port finding
 // ---------------------------------------------------------------------------
-function findFreePort(startPort: number, maxAttempts = 10): Promise<number> {
-  return new Promise((resolve, reject) => {
-    function tryPort(port: number, attempts: number) {
-      const server = net.createServer();
-      server.listen(port, "127.0.0.1", () => {
-        const addr = server.address();
-        server.close(() => resolve(addr && typeof addr === "object" ? addr.port : port));
-      });
-      server.on("error", () => {
-        if (attempts > 0) {
-          tryPort(port + 1, attempts - 1);
-        } else {
-          reject(new Error(`No free port found after ${maxAttempts} attempts`));
-        }
-      });
-    }
-    tryPort(startPort, maxAttempts);
+async function isPortReachable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect(port, "127.0.0.1", () => {
+      socket.end();
+      resolve(true);
+    });
+
+    socket.on("error", () => {
+      resolve(false);
+    });
+
+    socket.setTimeout(500, () => {
+      socket.destroy();
+      resolve(false);
+    });
   });
+}
+
+function reservePort(port: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(port, "127.0.0.1", () => {
+      const addr = server.address();
+      server.close(() => resolve(addr && typeof addr === "object" ? addr.port : port));
+    });
+    server.on("error", reject);
+  });
+}
+
+async function findFreePort(startPort: number, maxAttempts = 10): Promise<number> {
+  for (let attempt = 0; attempt <= maxAttempts; attempt += 1) {
+    const port = startPort + attempt;
+
+    if (await isPortReachable(port)) {
+      continue;
+    }
+
+    try {
+      return await reservePort(port);
+    } catch {
+      // Try next port.
+    }
+  }
+
+  throw new Error(`No free port found after ${maxAttempts} attempts`);
 }
 
 // ---------------------------------------------------------------------------
@@ -107,8 +157,8 @@ function startNextServer(port: number): ChildProcess {
     });
     proc.stdout?.on("data", (d: Buffer) => logInfo(`[Next] ${d.toString().trim()}`));
     proc.stderr?.on("data", (d: Buffer) => logError(`[Next] ${d.toString().trim()}`));
-    proc.on("exit", (code, signal) => logInfo("Next.js dev server exited", { code, signal }));
-    proc.on("error", (err) => logError("Next.js dev server process error", err));
+    proc.on("exit", (code, signal) => handleNextProcessExit("Next.js dev server", code, signal));
+    proc.on("error", (err) => handleNextProcessError("Next.js dev server", err));
     return proc;
   }
 
@@ -128,8 +178,8 @@ function startNextServer(port: number): ChildProcess {
   logInfo("Starting packaged Next.js server", { standaloneDir, serverScript, port });
   proc.stdout?.on("data", (d: Buffer) => logInfo(`[Next] ${d.toString().trim()}`));
   proc.stderr?.on("data", (d: Buffer) => logError(`[Next] ${d.toString().trim()}`));
-  proc.on("exit", (code, signal) => logInfo("Packaged Next.js server exited", { code, signal }));
-  proc.on("error", (err) => logError("Packaged Next.js server process error", err));
+  proc.on("exit", (code, signal) => handleNextProcessExit("Packaged Next.js server", code, signal));
+  proc.on("error", (err) => handleNextProcessError("Packaged Next.js server", err));
   return proc;
 }
 
@@ -157,18 +207,53 @@ function waitForServer(port: number, timeoutMs = 60_000): Promise<void> {
   });
 }
 
+function handleNextProcessExit(label: string, code: number | null, signal: NodeJS.Signals | null) {
+  logInfo(`${label} exited`, { code, signal, serverState, isQuitting });
+
+  if (isQuitting || serverState === "stopped") {
+    return;
+  }
+
+  nextProcess = null;
+
+  if (serverState === "starting") {
+    serverState = "stopped";
+    showStartupState("error", "本地服务启动失败");
+    return;
+  }
+
+  serverState = "stopped";
+  showStartupState("stopped", "本地服务进程已退出");
+}
+
+function handleNextProcessError(label: string, err: Error) {
+  logError(`${label} process error`, err);
+
+  if (isQuitting || serverState === "stopped") {
+    return;
+  }
+
+  nextProcess = null;
+
+  const pageState = serverState === "starting" ? "error" : "stopped";
+  serverState = "stopped";
+  showStartupState(pageState, err.message);
+}
+
 function cleanup() {
-  if (nextProcess && !nextProcess.killed) {
+  const proc = nextProcess;
+  nextProcess = null;
+
+  if (proc && !proc.killed) {
     logInfo("Killing Next.js server process");
-    nextProcess.kill();
-    nextProcess = null;
+    proc.kill();
   }
 }
 
 // ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
-function createWindow(port: number) {
+function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -184,7 +269,8 @@ function createWindow(port: number) {
     },
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${port}`);
+  installNavigationGuards(mainWindow);
+  showStartupState("starting");
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
@@ -199,6 +285,44 @@ function createWindow(port: number) {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+  });
+}
+
+function showApp(port: number) {
+  activePort = port;
+  serverState = "ready";
+  mainWindow?.loadURL(`http://127.0.0.1:${port}`);
+}
+
+function isAllowedAppUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+
+    if (parsed.protocol === "file:") {
+      return parsed.pathname.endsWith("/startup.html");
+    }
+
+    return parsed.protocol === "http:" && parsed.hostname === "127.0.0.1" && parsed.port === String(activePort);
+  } catch {
+    return false;
+  }
+}
+
+function installNavigationGuards(window: BrowserWindow) {
+  window.webContents.on("will-navigate", (event, url) => {
+    if (!isAllowedAppUrl(url)) {
+      event.preventDefault();
+      logError("Blocked navigation", { url });
+    }
+  });
+
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      void shell.openExternal(url).catch((err) => logError("Failed to open external URL", err));
+    } else {
+      logError("Blocked window open", { url });
+    }
+    return { action: "deny" };
   });
 }
 
@@ -251,16 +375,19 @@ app.whenReady().then(async () => {
 
   try {
     const port = await findFreePort(DEFAULT_PORT);
+    serverState = "starting";
+    activePort = port;
     logInfo(`Using port ${port}`);
+
+    createWindow();
+    createTray(mainWindow!);
 
     nextProcess = startNextServer(port);
     logInfo("Waiting for Next.js server...");
 
     await waitForServer(port);
     logInfo("Next.js server is ready");
-
-    createWindow(port);
-    createTray(mainWindow!);
+    showApp(port);
 
     // Auto-update check (production only, delayed 30s)
     if (app.isPackaged) {
@@ -324,9 +451,12 @@ app.whenReady().then(async () => {
       }, 30_000);
     }
   } catch (err) {
+    serverState = "stopped";
+    activePort = null;
+    const message = err instanceof Error ? err.message : String(err);
     logError("Failed to start:", err);
-    dialog.showErrorBox("启动失败", String(err));
-    app.quit();
+    showStartupState("error", message);
+    dialog.showErrorBox("启动失败", message);
   }
 });
 
