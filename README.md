@@ -84,3 +84,7 @@ lib/
 ## 许可
 
 MIT License
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Chasen-Liao/pi-agent-desktop&type=Date)](https://www.star-history.com/#Chasen-Liao/pi-agent-desktop&Date)

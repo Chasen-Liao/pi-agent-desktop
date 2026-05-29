@@ -54,12 +54,24 @@
   ${If} $INSTDIR != ""
     !insertmacro appendInstallerLog "Closing install-dir processes from $INSTDIR"
     !insertmacro logInstallDirProcesses
-    nsExec::Exec '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith(\"$INSTDIR\", [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"'
+    nsExec::Exec '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { ($$_.ExecutablePath -and $$_.ExecutablePath.StartsWith(\"$INSTDIR\", [System.StringComparison]::OrdinalIgnoreCase)) -or ($$_.Name -in @(\"Pi Agent Desktop.exe\", \"Pi Agent.exe\", \"PipeAgent.exe\") -and $$_.CommandLine -and $$_.CommandLine.IndexOf(\"$INSTDIR\", [System.StringComparison]::OrdinalIgnoreCase) -ge 0) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"'
     Pop $R0
     !insertmacro appendInstallerLog "closeInstallDirProcesses returned $R0"
     Sleep 2000
     !insertmacro logInstallDirProcesses
   ${EndIf}
+!macroend
+
+!macro customUnInstallCheck
+  ${If} $R0 != 0
+    !insertmacro appendInstallerLog "Legacy uninstaller failed with $R0; continuing install"
+  ${EndIf}
+  ClearErrors
+  StrCpy $R0 0
+!macroend
+
+!macro customUnInstallCheckCurrentUser
+  !insertmacro customUnInstallCheck
 !macroend
 
 !macro customInit

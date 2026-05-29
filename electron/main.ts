@@ -6,6 +6,8 @@ import { spawn, ChildProcess } from "child_process";
 import net from "net";
 import { createTray } from "./tray";
 import { getStartupFailureDisposition } from "./startup-failure";
+import { waitForHttpServerReady } from "./server-wait";
+import { killProcessTree } from "./process-tree";
 
 // ---------------------------------------------------------------------------
 // State
@@ -91,6 +93,12 @@ function showStartupState(state: "starting" | "error" | "stopped", message?: str
   void serverState;
   void activePort;
   mainWindow.loadURL(startupPageUrl(state, message));
+}
+
+let startupStartedAt = Date.now();
+
+function logStartupTiming(stage: string, detail?: unknown) {
+  logInfo(`Startup timing: ${stage}`, { elapsedMs: Date.now() - startupStartedAt, detail });
 }
 
 // ---------------------------------------------------------------------------
@@ -185,30 +193,6 @@ function startNextServer(port: number): ChildProcess {
   return proc;
 }
 
-function waitForServer(port: number, timeoutMs = 60_000): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now();
-    function tryConnect() {
-      if (Date.now() - startTime > timeoutMs) {
-        reject(new Error(`Server not ready after ${timeoutMs / 1000}s`));
-        return;
-      }
-      const socket = net.connect(port, "127.0.0.1", () => {
-        socket.end();
-        resolve();
-      });
-      socket.on("error", () => {
-        setTimeout(tryConnect, 1000);
-      });
-      socket.setTimeout(2000, () => {
-        socket.destroy();
-        setTimeout(tryConnect, 500);
-      });
-    }
-    tryConnect();
-  });
-}
-
 function handleNextProcessExit(label: string, code: number | null, signal: NodeJS.Signals | null) {
   logInfo(`${label} exited`, { code, signal, serverState, isQuitting });
 
@@ -248,7 +232,10 @@ function cleanup() {
 
   if (proc && !proc.killed) {
     logInfo("Killing Next.js server process");
-    proc.kill();
+    const error = killProcessTree(proc);
+    if (error) {
+      logError("Failed to kill Next.js server process tree", error);
+    }
   }
 }
 
@@ -294,6 +281,7 @@ function createWindow() {
 function showApp(port: number) {
   activePort = port;
   serverState = "ready";
+  logStartupTiming("loading app url", { port });
   mainWindow?.loadURL(`http://127.0.0.1:${port}`);
 }
 
@@ -374,22 +362,28 @@ app.on("activate", () => {
 });
 
 app.whenReady().then(async () => {
+  startupStartedAt = Date.now();
+  logStartupTiming("app ready");
   registerIpcHandlers();
 
   try {
     const port = await findFreePort(DEFAULT_PORT);
+    logStartupTiming("port selected", { port });
     serverState = "starting";
     activePort = port;
     logInfo(`Using port ${port}`);
 
     createWindow();
+    logStartupTiming("window created");
     createTray(mainWindow!);
     startupUiReady = true;
 
     nextProcess = startNextServer(port);
+    logStartupTiming("next process spawned");
     logInfo("Waiting for Next.js server...");
 
-    await waitForServer(port);
+    await waitForHttpServerReady(port);
+    logStartupTiming("next server reachable");
     logInfo("Next.js server is ready");
     showApp(port);
 
