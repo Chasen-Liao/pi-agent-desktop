@@ -267,8 +267,36 @@ function showApp(port: number) {
   mainWindow?.loadURL(`http://127.0.0.1:${port}`);
 }
 
+function isAllowedAppUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+
+    if (parsed.protocol === "file:") {
+      return parsed.pathname.endsWith("/startup.html");
+    }
+
+    return parsed.protocol === "http:" && parsed.hostname === "127.0.0.1" && parsed.port === String(activePort);
+  } catch {
+    return false;
+  }
+}
+
 function installNavigationGuards(window: BrowserWindow) {
-  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event, url) => {
+    if (!isAllowedAppUrl(url)) {
+      event.preventDefault();
+      logError("Blocked navigation", { url });
+    }
+  });
+
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      void shell.openExternal(url).catch((err) => logError("Failed to open external URL", err));
+    } else {
+      logError("Blocked window open", { url });
+    }
+    return { action: "deny" };
+  });
 }
 
 // ---------------------------------------------------------------------------
