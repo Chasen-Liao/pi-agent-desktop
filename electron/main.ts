@@ -130,8 +130,8 @@ function startNextServer(port: number): ChildProcess {
     });
     proc.stdout?.on("data", (d: Buffer) => logInfo(`[Next] ${d.toString().trim()}`));
     proc.stderr?.on("data", (d: Buffer) => logError(`[Next] ${d.toString().trim()}`));
-    proc.on("exit", (code, signal) => logInfo("Next.js dev server exited", { code, signal }));
-    proc.on("error", (err) => logError("Next.js dev server process error", err));
+    proc.on("exit", (code, signal) => handleNextProcessExit("Next.js dev server", code, signal));
+    proc.on("error", (err) => handleNextProcessError("Next.js dev server", err));
     return proc;
   }
 
@@ -151,8 +151,8 @@ function startNextServer(port: number): ChildProcess {
   logInfo("Starting packaged Next.js server", { standaloneDir, serverScript, port });
   proc.stdout?.on("data", (d: Buffer) => logInfo(`[Next] ${d.toString().trim()}`));
   proc.stderr?.on("data", (d: Buffer) => logError(`[Next] ${d.toString().trim()}`));
-  proc.on("exit", (code, signal) => logInfo("Packaged Next.js server exited", { code, signal }));
-  proc.on("error", (err) => logError("Packaged Next.js server process error", err));
+  proc.on("exit", (code, signal) => handleNextProcessExit("Packaged Next.js server", code, signal));
+  proc.on("error", (err) => handleNextProcessError("Packaged Next.js server", err));
   return proc;
 }
 
@@ -180,11 +180,46 @@ function waitForServer(port: number, timeoutMs = 60_000): Promise<void> {
   });
 }
 
+function handleNextProcessExit(label: string, code: number | null, signal: NodeJS.Signals | null) {
+  logInfo(`${label} exited`, { code, signal, serverState, isQuitting });
+
+  if (isQuitting || serverState === "stopped") {
+    return;
+  }
+
+  nextProcess = null;
+
+  if (serverState === "starting") {
+    serverState = "stopped";
+    showStartupState("error", "本地服务启动失败");
+    return;
+  }
+
+  serverState = "stopped";
+  showStartupState("stopped", "本地服务进程已退出");
+}
+
+function handleNextProcessError(label: string, err: Error) {
+  logError(`${label} process error`, err);
+
+  if (isQuitting || serverState === "stopped") {
+    return;
+  }
+
+  nextProcess = null;
+
+  const pageState = serverState === "starting" ? "error" : "stopped";
+  serverState = "stopped";
+  showStartupState(pageState, err.message);
+}
+
 function cleanup() {
-  if (nextProcess && !nextProcess.killed) {
+  const proc = nextProcess;
+  nextProcess = null;
+
+  if (proc && !proc.killed) {
     logInfo("Killing Next.js server process");
-    nextProcess.kill();
-    nextProcess = null;
+    proc.kill();
   }
 }
 
