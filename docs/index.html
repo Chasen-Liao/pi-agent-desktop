@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Pi Agent Desktop 是面向 Pi coding agent 的极简 Codex-style desktop client，复用 Next.js/React UI 并支持 Electron 桌面体验。"
+    />
+    <meta name="theme-color" content="#070a12" />
+    <meta property="og:title" content="Pi Agent Desktop" />
+    <meta
+      property="og:description"
+      content="A minimal Codex-style desktop client for the Pi coding agent."
+    />
+    <meta property="og:type" content="website" />
+    <title>Pi Agent Desktop</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header" aria-label="Project navigation">
+        <a class="brand" href="#top" aria-label="Pi Agent Desktop home">
+          <span class="brand-mark">π</span>
+          <span>Pi Agent Desktop</span>
+        </a>
+        <nav class="nav-links" aria-label="Page sections">
+          <a href="#features">Features</a>
+          <a href="#stack">Stack</a>
+          <a href="#start">Start</a>
+        </nav>
+      </header>
+
+      <main id="top">
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <p class="eyebrow">Codex-style desktop for Pi coding agent</p>
+            <h1 id="hero-title">把 Pi 编程智能体带进一个极简桌面工作台。</h1>
+            <p class="hero-text">
+              Pi Agent Desktop 复用同一套 Next.js / React UI，同时支持浏览器开发模式与 Electron 桌面应用模式，专注于会话、分支、文件与工具调用的清晰呈现。
+            </p>
+            <div class="hero-actions" aria-label="Primary actions">
+              <a class="button primary" href="https://github.com/Chasen-Liao/pi-agent-desktop">View on GitHub</a>
+              <a class="button secondary" href="#start">Quick Start</a>
+            </div>
+            <div class="status-strip" aria-label="Project highlights">
+              <span>agent sessions</span>
+              <span>branch navigation</span>
+              <span>electron desktop</span>
+            </div>
+          </div>
+
+          <div class="terminal-card" aria-label="Preview mockup of the desktop interface">
+            <div class="window-bar">
+              <span class="dot red"></span>
+              <span class="dot yellow"></span>
+              <span class="dot green"></span>
+              <span class="window-title">preview · not a real screenshot</span>
+            </div>
+            <div class="terminal-body">
+              <aside class="mock-sidebar" aria-label="Session tree preview">
+                <p class="panel-label">sessions</p>
+                <div class="tree-item active">main · build landing page</div>
+                <div class="tree-item child">fork · refine copy</div>
+                <div class="tree-item child">fork · inspect files</div>
+              </aside>
+              <section class="mock-chat" aria-label="Agent conversation preview">
+                <div class="message user-message">Create a focused GitHub Pages intro.</div>
+                <div class="message agent-message">
+                  <span class="prompt">pi-agent</span>
+                  <span>Plan: static /docs page, terminal mockup, no build step.</span>
+                </div>
+                <div class="tool-call">
+                  <span>tool</span>
+                  <code>Read docs/index.html</code>
+                </div>
+                <div class="file-tabs">
+                  <span class="tab active">index.html</span>
+                  <span class="tab">styles.css</span>
+                  <span class="tab">script.js</span>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section id="features" class="section" aria-labelledby="features-title">
+          <div class="section-heading">
+            <p class="eyebrow">Features</p>
+            <h2 id="features-title">为 agent 工作流保留最重要的上下文。</h2>
+          </div>
+          <div class="feature-grid">
+            <article class="feature-card">
+              <span class="card-index">01</span>
+              <h3>Session Tree</h3>
+              <p>按工作目录组织历史会话，让浏览、恢复和理解上下文更直接。</p>
+            </article>
+            <article class="feature-card">
+              <span class="card-index">02</span>
+              <h3>Branch Navigation</h3>
+              <p>支持会话内分支与 fork 关系展示，方便比较不同探索路径。</p>
+            </article>
+            <article class="feature-card">
+              <span class="card-index">03</span>
+              <h3>File Viewer</h3>
+              <p>内置文件查看与标签页区域，把对话和代码上下文放在同一个界面。</p>
+            </article>
+            <article class="feature-card">
+              <span class="card-index">04</span>
+              <h3>Electron Desktop</h3>
+              <p>同一套 UI 可在浏览器开发模式与 Electron 桌面模式中运行。</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="stack" class="section split-section" aria-labelledby="stack-title">
+          <div>
+            <p class="eyebrow">Architecture</p>
+            <h2 id="stack-title">Next.js UI，Electron shell，Pi agent runtime。</h2>
+          </div>
+          <div class="stack-panel">
+            <div class="stack-row">
+              <span>Next.js / React</span>
+              <p>提供浏览器开发体验和共享 UI。</p>
+            </div>
+            <div class="stack-row">
+              <span>Electron</span>
+              <p>封装桌面窗口、托盘和更新相关能力。</p>
+            </div>
+            <div class="stack-row">
+              <span>Pi Agent</span>
+              <p>驱动会话、SSE 事件流、工具调用和分支上下文。</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="start" class="section start-section" aria-labelledby="start-title">
+          <div class="section-heading">
+            <p class="eyebrow">Getting Started</p>
+            <h2 id="start-title">从源码启动项目。</h2>
+            <p>以下命令来自当前仓库脚本，适合开发者快速进入项目。</p>
+          </div>
+          <div class="command-list" aria-label="Setup commands">
+            <button class="command" type="button" data-copy="npm install">
+              <span>$ npm install</span>
+              <small>copy</small>
+            </button>
+            <button class="command" type="button" data-copy="npm run dev">
+              <span>$ npm run dev</span>
+              <small>copy</small>
+            </button>
+            <button class="command" type="button" data-copy="npm run dev:electron">
+              <span>$ npm run dev:electron</span>
+              <small>copy</small>
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <span>Pi Agent Desktop · MIT · Chasen</span>
+        <span>© <span id="year">2026</span></span>
+      </footer>
+    </div>
+    <script src="./script.js" defer></script>
+  </body>
+</html>
