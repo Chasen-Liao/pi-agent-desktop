@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from "electron";
 import type { UpdateInfo } from "electron-updater";
 import path from "path";
 import { appendFileSync, mkdirSync } from "fs";
@@ -14,6 +14,9 @@ let nextProcess: ChildProcess | null = null;
 let isQuitting = false;
 let logFilePath: string | null = null;
 const DEFAULT_PORT = 30141;
+type ServerState = "starting" | "ready" | "stopped";
+let serverState: ServerState = "starting";
+let activePort: number | null = null;
 
 export function setQuitting(val: boolean) {
   isQuitting = val;
@@ -66,6 +69,26 @@ function logInfo(message: string, detail?: unknown) {
 function logError(message: string, detail?: unknown) {
   console.error(message, detail ?? "");
   writeLog("error", message, detail);
+}
+
+function startupPageUrl(state: "starting" | "error" | "stopped", message?: string): string {
+  const url = new URL(`file://${path.join(__dirname, "startup.html").replace(/\\/g, "/")}`);
+  const hash = new URLSearchParams({ state });
+  if (message) {
+    hash.set("message", message);
+  }
+  url.hash = hash.toString();
+  return url.toString();
+}
+
+function showStartupState(state: "starting" | "error" | "stopped", message?: string) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  void shell;
+  void serverState;
+  void activePort;
+  mainWindow.loadURL(startupPageUrl(state, message));
 }
 
 // ---------------------------------------------------------------------------
@@ -168,7 +191,7 @@ function cleanup() {
 // ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
-function createWindow(port: number) {
+function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -184,7 +207,8 @@ function createWindow(port: number) {
     },
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${port}`);
+  installNavigationGuards(mainWindow);
+  showStartupState("starting");
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
@@ -200,6 +224,16 @@ function createWindow(port: number) {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+}
+
+function showApp(port: number) {
+  activePort = port;
+  serverState = "ready";
+  mainWindow?.loadURL(`http://127.0.0.1:${port}`);
+}
+
+function installNavigationGuards(window: BrowserWindow) {
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 }
 
 // ---------------------------------------------------------------------------
@@ -251,16 +285,19 @@ app.whenReady().then(async () => {
 
   try {
     const port = await findFreePort(DEFAULT_PORT);
+    serverState = "starting";
+    activePort = port;
     logInfo(`Using port ${port}`);
+
+    createWindow();
+    createTray(mainWindow!);
 
     nextProcess = startNextServer(port);
     logInfo("Waiting for Next.js server...");
 
     await waitForServer(port);
     logInfo("Next.js server is ready");
-
-    createWindow(port);
-    createTray(mainWindow!);
+    showApp(port);
 
     // Auto-update check (production only, delayed 30s)
     if (app.isPackaged) {
@@ -324,9 +361,12 @@ app.whenReady().then(async () => {
       }, 30_000);
     }
   } catch (err) {
+    serverState = "stopped";
+    activePort = null;
+    const message = err instanceof Error ? err.message : String(err);
     logError("Failed to start:", err);
-    dialog.showErrorBox("启动失败", String(err));
-    app.quit();
+    showStartupState("error", message);
+    dialog.showErrorBox("启动失败", message);
   }
 });
 
