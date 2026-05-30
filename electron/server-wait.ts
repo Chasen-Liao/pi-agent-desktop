@@ -10,9 +10,11 @@ export function waitForHttpServerReady(
   port: number,
   {
     timeoutMs = 60_000,
+    requestTimeoutMs = 500,
     getRetryDelayMs = getServerRetryDelayMs,
   }: {
     timeoutMs?: number;
+    requestTimeoutMs?: number;
     getRetryDelayMs?: (elapsedMs: number) => number;
   } = {}
 ): Promise<void> {
@@ -33,12 +35,16 @@ export function waitForHttpServerReady(
         {
           host: "127.0.0.1",
           port,
-          path: "/",
-          timeout: 500,
+          path: "/api/health",
+          timeout: requestTimeoutMs,
         },
         (res) => {
           res.resume();
-          resolve();
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 400) {
+            resolve();
+          } else {
+            retry();
+          }
         }
       );
       req.on("error", retry);

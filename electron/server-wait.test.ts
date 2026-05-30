@@ -14,9 +14,16 @@ test("server readiness polling backs off after early startup window", () => {
   assert.equal(getServerRetryDelayMs(15_000), 500);
 });
 
-test("server readiness waits for an HTTP response instead of an open TCP port", async () => {
+test("server readiness polls a lightweight health path", async () => {
+  const requests: string[] = [];
   const server = net.createServer((socket) => {
-    socket.end();
+    let data = "";
+    socket.on("data", (chunk) => {
+      data += chunk.toString("utf8");
+      if (!data.includes("\r\n\r\n")) return;
+      requests.push(data.split(" ")[1] ?? "");
+      socket.end("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+    });
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -24,11 +31,37 @@ test("server readiness waits for an HTTP response instead of an open TCP port", 
   const address = server.address();
   assert.ok(address && typeof address === "object");
 
-  await assert.rejects(
-    waitForHttpServerReady(address.port, { timeoutMs: 150, getRetryDelayMs: () => 10 }),
-    /Server not ready after 0.15s/
-  );
+  try {
+    await waitForHttpServerReady(address.port, { timeoutMs: 150, requestTimeoutMs: 20, getRetryDelayMs: () => 10 });
+    assert.deepEqual(requests, ["/api/health"]);
+  } finally {
+    server.close();
+    if (server.listening) await once(server, "close");
+  }
+});
 
-  server.close();
-  await once(server, "close");
+test("server readiness retries non-successful health responses", async () => {
+  const server = net.createServer((socket) => {
+    let data = "";
+    socket.on("data", (chunk) => {
+      data += chunk.toString("utf8");
+      if (!data.includes("\r\n\r\n")) return;
+      socket.end("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+
+  try {
+    await assert.rejects(
+      waitForHttpServerReady(address.port, { timeoutMs: 150, requestTimeoutMs: 20, getRetryDelayMs: () => 10 }),
+      /Server not ready after 0.15s/
+    );
+  } finally {
+    server.close();
+    if (server.listening) await once(server, "close");
+  }
 });
