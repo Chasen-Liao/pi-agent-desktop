@@ -6,7 +6,7 @@ import { spawn, ChildProcess } from "child_process";
 import net from "net";
 import { createTray } from "./tray";
 import { getStartupFailureDisposition } from "./startup-failure";
-import { waitForHttpServerReady } from "./server-wait";
+import { waitForNextServerReady } from "./server-wait";
 import { killProcessTree } from "./process-tree";
 
 // ---------------------------------------------------------------------------
@@ -382,8 +382,8 @@ app.whenReady().then(async () => {
     logStartupTiming("next process spawned");
     logInfo("Waiting for Next.js server...");
 
-    await waitForHttpServerReady(port);
-    logStartupTiming("next server reachable");
+    await waitForNextServerReady(port, nextProcess);
+    logStartupTiming("next server ready");
     logInfo("Next.js server is ready");
     showApp(port);
 

@@ -19,6 +19,12 @@ extraResources:
     to: app/node_modules/electron-updater
   - from: node_modules/builder-util-runtime
     to: app/node_modules/builder-util-runtime
+  - from: node_modules/fs-extra
+    to: app/node_modules/fs-extra
+  - from: node_modules/graceful-fs
+    to: app/node_modules/graceful-fs
+  - from: node_modules/jsonfile
+    to: app/node_modules/jsonfile
   - from: node_modules/js-yaml
     to: app/node_modules/js-yaml
   - from: node_modules/lazy-val
@@ -27,8 +33,12 @@ extraResources:
     to: app/node_modules/lodash.escaperegexp
   - from: node_modules/lodash.isequal
     to: app/node_modules/lodash.isequal
+  - from: node_modules/semver
+    to: app/node_modules/semver
   - from: node_modules/tiny-typed-emitter
     to: app/node_modules/tiny-typed-emitter
+  - from: node_modules/universalify
+    to: app/node_modules/universalify
   - from: node_modules/debug
     to: app/node_modules/debug
   - from: node_modules/sax
