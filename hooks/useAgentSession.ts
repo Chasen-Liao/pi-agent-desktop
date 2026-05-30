@@ -5,54 +5,12 @@ import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
 import type { ToolEntry } from "@/components/ToolPanel";
-
-export interface SessionData {
-  sessionId: string;
-  filePath: string;
-  tree: SessionTreeNode[];
-  leafId: string | null;
-  context: {
-    messages: AgentMessage[];
-    entryIds: string[];
-    thinkingLevel: string;
-    model: { provider: string; modelId: string } | null;
-  };
-}
-
-interface StreamingState {
-  isStreaming: boolean;
-  streamingMessage: Partial<AgentMessage> | null;
-}
-
-type StreamAction =
-  | { type: "start" }
-  | { type: "update"; message: Partial<AgentMessage> }
-  | { type: "end" }
-  | { type: "reset" };
-
-function streamReducer(state: StreamingState, action: StreamAction): StreamingState {
-  switch (action.type) {
-    case "start":
-      return { isStreaming: true, streamingMessage: null };
-    case "update":
-      return { isStreaming: true, streamingMessage: action.message };
-    case "end":
-    case "reset":
-      return { isStreaming: false, streamingMessage: null };
-    default:
-      return state;
-  }
-}
-
-interface AgentEvent {
-  type: string;
-  [key: string]: unknown;
-}
-
-export type AgentPhase =
-  | { kind: "waiting_model" }
-  | { kind: "running_tools"; tools: { id: string; name: string }[] }
-  | null;
+import { calculateSessionStats } from "./agent-session/session-stats";
+import { addRunningTool, removeRunningTool, type AgentPhase } from "./agent-session/agent-phase";
+import { initialStreamingState, streamReducer } from "./agent-session/stream-state";
+import { useChatScroll } from "./agent-session/use-chat-scroll";
+import { useAgentEvents, type AgentEvent } from "./agent-session/use-agent-events";
+import { useSessionLoader } from "./agent-session/use-session-loader";
 
 export interface UseAgentSessionOptions {
   session: SessionInfo | null;
@@ -90,13 +48,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const isNew = session === null && newSessionCwd !== null;
 
-  const [data, setData] = useState<SessionData | null>(null);
-  const [loading, setLoading] = useState(!isNew);
-  const [error, setError] = useState<string | null>(null);
-  const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<AgentMessage[]>([]);
-  const [entryIds, setEntryIds] = useState<string[]>([]);
-  const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
+  const {
+    data,
+    setData,
+    loading,
+    error,
+    activeLeafId,
+    setActiveLeafId,
+    messages,
+    setMessages,
+    entryIds,
+    loadSession: loadSessionFromApi,
+    loadContext,
+  } = useSessionLoader(isNew);
+  const [streamState, dispatch] = useReducer(streamReducer, initialStreamingState);
   const [agentRunning, setAgentRunning] = useState(false);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelList, setModelList] = useState<{ id: string; name: string; provider: string }[]>([]);
@@ -114,16 +79,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [isCompacting, setIsCompacting] = useState(false);
   const [compactError, setCompactError] = useState<string | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
+  const {
+    messagesEndRef,
+    scrollContainerRef,
+    lastUserMsgRef,
+    pendingScrollToUserRef,
+    initialScrollDoneRef,
+  } = useChatScroll({ messageCount: messages.length, agentRunning });
 
-  const eventSourceRef = useRef<EventSource | null>(null);
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
-  const agentRunningRef = useRef(false);
-  const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
-  const initialScrollDoneRef = useRef(false);
-  const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
-  const pendingScrollToUserRef = useRef(false);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const {
+    eventSourceRef,
+    handleAgentEventRef,
+    connectEvents,
+  } = useAgentEvents({ agentRunning });
 
   const setNewSessionModel = opts.setNewSessionModel ?? setNewSessionModelState;
   const setToolPresetState = opts.setToolPreset ?? setToolPreset;
@@ -131,74 +100,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const currentModel = currentModelOverride ?? data?.context.model ?? pendingModel ?? null;
   const displayModel = isNew ? newSessionModel : currentModel;
 
-  const sessionStats = (() => {
-    const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-    let cost = 0;
-    for (const msg of messages) {
-      if (msg.role !== "assistant") continue;
-      const u = (msg as import("@/lib/types").AssistantMessage).usage;
-      if (!u) continue;
-      tokens.input += u.input ?? 0;
-      tokens.output += u.output ?? 0;
-      tokens.cacheRead += u.cacheRead ?? 0;
-      tokens.cacheWrite += u.cacheWrite ?? 0;
-      cost += u.cost?.total ?? 0;
-    }
-    const total = tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite;
-    return total > 0 ? { tokens, cost } : null;
-  })();
+  const sessionStats = calculateSessionStats(messages);
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
-    try {
-      if (showLoading) setLoading(true);
-      const url = includeState
-        ? `/api/sessions/${encodeURIComponent(sid)}?includeState`
-        : `/api/sessions/${encodeURIComponent(sid)}`;
-      const res = await fetch(url);
-      if (res.status === 404) {
-        if (showLoading) {
-          setData(null);
-          setActiveLeafId(null);
-          setMessages([]);
-          setError(null);
-        }
-        return null;
-      }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as SessionData & { agentState?: { running: boolean; state?: { isStreaming?: boolean; isCompacting?: boolean; contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null; systemPrompt?: string; thinkingLevel?: string } } };
-      setData(d);
-      setActiveLeafId(d.leafId);
-      setMessages(d.context.messages);
-      setEntryIds(d.context.entryIds ?? []);
-      setCurrentModelOverride(null);
-      setError(null);
-      // If no live agent state, fall back to thinking level from session file
-      if (!d.agentState?.state?.thinkingLevel && d.context.thinkingLevel && d.context.thinkingLevel !== "off") {
-        setThinkingLevel(d.context.thinkingLevel as ThinkingLevelOption);
-      }
-      return d.agentState ?? null;
-    } catch (e) {
-      setError(String(e));
-      return null;
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, []);
-
-  const loadContext = useCallback(async (sid: string, leafId: string | null) => {
-    try {
-      const url = leafId
-        ? `/api/sessions/${encodeURIComponent(sid)}/context?leafId=${encodeURIComponent(leafId)}`
-        : `/api/sessions/${encodeURIComponent(sid)}/context`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[] } };
-      setMessages(d.context.messages);
-      setEntryIds(d.context.entryIds ?? []);
-    } catch (e) {
-      console.error("Failed to load context:", e);
-    }
-  }, []);
+    const loaded = await loadSessionFromApi(sid, showLoading, includeState);
+    if (loaded) setCurrentModelOverride(null);
+    return loaded;
+  }, [loadSessionFromApi]);
 
   const loadTools = useCallback(async (sid: string) => {
     try {
@@ -211,36 +119,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       console.error("Failed to load tools:", e);
     }
   }, [setToolPresetState]);
-
-  const connectEvents = useCallback((sid: string) => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-    const es = new EventSource(`/api/agent/${encodeURIComponent(sid)}/events`);
-    eventSourceRef.current = es;
-    es.onmessage = (e) => {
-      try {
-        const event = JSON.parse(e.data) as AgentEvent;
-        handleAgentEventRef.current?.(event);
-      } catch {
-        // ignore
-      }
-    };
-    es.onerror = () => {
-      if (eventSourceRef.current === es && agentRunningRef.current) {
-        es.close();
-        eventSourceRef.current = null;
-        setTimeout(() => {
-          if (agentRunningRef.current) connectEvents(sid);
-        }, 1000);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    agentRunningRef.current = agentRunning;
-  }, [agentRunning]);
 
   const handleAgentEvent = useCallback((event: AgentEvent) => {
     switch (event.type) {
@@ -287,21 +165,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "tool_execution_start": {
         const id = event.toolCallId as string;
         const name = event.toolName as string;
-        setAgentPhase((prev) => {
-          const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
-          if (!tools.some((t) => t.id === id)) tools.push({ id, name });
-          return { kind: "running_tools", tools };
-        });
+        setAgentPhase((prev) => addRunningTool(prev, id, name));
         break;
       }
       case "tool_execution_end": {
         const id = event.toolCallId as string;
-        setAgentPhase((prev) => {
-          if (prev?.kind !== "running_tools") return prev;
-          const tools = prev.tools.filter((t) => t.id !== id);
-          if (tools.length === 0) return { kind: "waiting_model" };
-          return { kind: "running_tools", tools };
-        });
+        setAgentPhase((prev) => removeRunningTool(prev, id));
         break;
       }
       case "auto_retry_start":
@@ -325,7 +194,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         break;
     }
-  }, [loadSession, onAgentEnd]);
+  }, [loadSession, onAgentEnd, setMessages]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -396,7 +265,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentPhase(null);
       dispatch({ type: "end" });
     }
-  }, [isNew, newSessionCwd, newSessionModel, toolPreset, thinkingLevel, session, agentRunning, connectEvents, onSessionCreated]);
+  }, [isNew, newSessionCwd, newSessionModel, toolPreset, thinkingLevel, session, agentRunning, connectEvents, onSessionCreated, pendingScrollToUserRef, setMessages]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -434,7 +303,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }).catch(() => {});
     setActiveLeafId(entryId);
     await loadContext(sid, entryId);
-  }, [loadContext]);
+  }, [loadContext, setActiveLeafId]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     setActiveLeafId(leafId);
@@ -444,7 +313,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (leafId) {
       sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }).catch(() => {});
     }
-  }, [loadContext]);
+  }, [loadContext, setActiveLeafId]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
@@ -490,7 +359,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to steer:", e);
     }
-  }, []);
+  }, [setMessages]);
 
   const handleFollowUp = useCallback(async (message: string, images?: AttachedImage[]) => {
     const sid = sessionIdRef.current;
@@ -506,7 +375,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to follow up:", e);
     }
-  }, []);
+  }, [setMessages]);
 
   const handleAbortCompaction = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -543,23 +412,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [setToolPresetState]);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
-  }, []);
-
-  const scrollUserMsgToTop = useCallback(() => {
-    const container = scrollContainerRef.current;
-    const el = lastUserMsgRef.current;
-    if (!container || !el) return;
-    const elAbsTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-    container.scrollTo({ top: elAbsTop - 16, behavior: "smooth" });
-  }, []);
-
   // Load session on mount
   useEffect(() => {
     if (session) {
       sessionIdRef.current = session.id;
-      loadSession(session.id, true, true).then((agentState) => {
+      loadSession(session.id, true, true).then((loaded) => {
+        const agentState = loaded?.agentState ?? null;
+        if (!agentState?.state?.thinkingLevel && loaded?.contextThinkingLevel && loaded.contextThinkingLevel !== "off") {
+          setThinkingLevel(loaded.contextThinkingLevel as ThinkingLevelOption);
+        }
         if (agentState?.running) {
           loadTools(session.id);
           if (agentState.state?.isStreaming) {
@@ -576,10 +437,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
       });
     }
-    return () => {
-      eventSourceRef.current?.close();
-      eventSourceRef.current = null;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -591,21 +448,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!onBranchDataChange) return;
     onBranchDataChange(data?.tree ?? [], activeLeafId, handleLeafChange);
   }, [data?.tree, activeLeafId, handleLeafChange, onBranchDataChange]);
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      if (pendingScrollToUserRef.current) {
-        pendingScrollToUserRef.current = false;
-        initialScrollDoneRef.current = true;
-        scrollUserMsgToTop();
-      } else if (!initialScrollDoneRef.current) {
-        initialScrollDoneRef.current = true;
-        scrollToBottom("instant");
-      } else if (!agentRunningRef.current) {
-        scrollToBottom("smooth");
-      }
-    }
-  }, [messages.length, agentRunning, scrollToBottom, scrollUserMsgToTop]);
 
   // Load model list
   useEffect(() => {
