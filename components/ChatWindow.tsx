@@ -175,6 +175,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onSteer={agentRunning ? handleSteer : undefined}
       onFollowUp={agentRunning ? handleFollowUp : undefined}
       isStreaming={agentRunning}
+      currentCwd={session?.cwd ?? newSessionCwd}
       model={displayModelValue}
       modelNames={modelNames}
       modelList={modelList}
