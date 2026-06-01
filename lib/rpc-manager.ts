@@ -1,5 +1,5 @@
 import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
-import { cacheSessionPath } from "./session-reader";
+import { cacheSessionPath } from "./session-reader.ts";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 
 // ============================================================================
@@ -25,7 +25,11 @@ export class AgentSessionWrapper {
   private onDestroyCallback: (() => void) | null = null;
   private _alive = true;
 
-  constructor(public readonly inner: AgentSessionLike) {}
+  readonly inner: AgentSessionLike;
+
+  constructor(inner: AgentSessionLike) {
+    this.inner = inner;
+  }
 
   get sessionId(): string {
     return this.inner.sessionId;
@@ -62,6 +66,14 @@ export class AgentSessionWrapper {
 
   onDestroy(cb: () => void): void {
     this.onDestroyCallback = cb;
+  }
+
+  /**
+   * Signal that this wrapper is still in use (e.g., SSE heartbeat).
+   * Resets the idle timer without emitting any events.
+   */
+  keepAlive(): void {
+    this.resetIdleTimer();
   }
 
   async send(command: Record<string, unknown>): Promise<unknown> {
