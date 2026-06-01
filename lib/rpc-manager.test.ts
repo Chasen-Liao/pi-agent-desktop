@@ -4,7 +4,10 @@ import { AgentSessionWrapper } from "./rpc-manager.ts";
 
 type SubscribeFn = (cb: (event: unknown) => void) => () => void;
 
-function makeStubInner(overrides: { subscribe?: SubscribeFn } = {}) {
+function makeStubInner(overrides: {
+  subscribe?: SubscribeFn;
+  sessionManager?: unknown;
+} = {}) {
   return {
     sessionId: "stub",
     sessionFile: "stub.jsonl",
@@ -15,7 +18,7 @@ function makeStubInner(overrides: { subscribe?: SubscribeFn } = {}) {
     model: null,
     getContextUsage: () => null,
     agent: { state: { systemPrompt: "", thinkingLevel: "off" } },
-    sessionManager: null,
+    sessionManager: overrides.sessionManager ?? null,
     modelRegistry: null,
     subscribe: overrides.subscribe ?? ((cb: (event: unknown) => void) => { void cb; return () => {}; }),
   } as never;
@@ -112,4 +115,14 @@ test("keepAlive is a no-op on a destroyed wrapper", () => {
   } finally {
     mock.timers.reset();
   }
+});
+
+test("fork returns {cancelled: true} for non-persisted session", async () => {
+  const inner = makeStubInner({
+    sessionManager: { isPersisted: () => false },
+  });
+  const w = new AgentSessionWrapper(inner);
+  w.start();
+  const result = await w.send({ type: "fork", entryId: "x" });
+  assert.deepEqual(result, { cancelled: true });
 });
