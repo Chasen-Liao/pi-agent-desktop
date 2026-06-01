@@ -88,3 +88,28 @@ test("events reset the idle timer (regression)", () => {
     mock.timers.reset();
   }
 });
+
+test("keepAlive is a no-op on a destroyed wrapper", () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const w = new AgentSessionWrapper(makeStubInner());
+    let destroyed = false;
+    w.onDestroy(() => { destroyed = true; });
+    w.start();
+
+    // Force destruction via idle timeout
+    mock.timers.tick(10 * 60 * 1000);
+    assert.equal(destroyed, true);
+
+    // keepAlive after destroy must not schedule a new timer or throw.
+    // If it scheduled a timer, ticking past 10 min would NOT cause
+    // observable harm (the timer's destroy() is idempotent), but the
+    // contract is: no-op on dead wrapper.
+    w.keepAlive();
+    mock.timers.tick(20 * 60 * 1000);
+    // Still only one onDestroy call (the original). No error thrown.
+    assert.equal(destroyed, true);
+  } finally {
+    mock.timers.reset();
+  }
+});

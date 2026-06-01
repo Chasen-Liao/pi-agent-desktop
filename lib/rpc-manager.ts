@@ -71,8 +71,10 @@ export class AgentSessionWrapper {
   /**
    * Signal that this wrapper is still in use (e.g., SSE heartbeat).
    * Resets the idle timer without emitting any events.
+   * No-op if the wrapper is already destroyed.
    */
   keepAlive(): void {
+    if (!this._alive) return;
     this.resetIdleTimer();
   }
 
