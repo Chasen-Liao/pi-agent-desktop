@@ -153,6 +153,14 @@ export class AgentSessionWrapper {
 
         const newSessionId = SessionManager.open(newSessionFile, sessionDir).getSessionId();
         cacheSessionPath(newSessionId, newSessionFile);
+
+        // Pre-register the new wrapper BEFORE destroying the old.
+        // Contract: by the time send() returns, newSessionId is in the registry.
+        // If startRpcSession throws, do NOT destroy — old wrapper stays usable,
+        // new file remains on disk (acceptable; next fork overwrites).
+        const newCwd = sessionManager.getHeader()?.cwd ?? process.cwd();
+        await startRpcSession(newSessionId, newSessionFile, newCwd);
+
         this.destroy();
         return { cancelled: false, newSessionId };
       }
