@@ -25,22 +25,29 @@ export function rewriteChildHeader(
   const firstLineRaw = newlineIdx === -1 ? content : content.slice(0, newlineIdx);
   const rest = newlineIdx === -1 ? "" : content.slice(newlineIdx);
 
-  let header: Record<string, unknown>;
+  let header: unknown;
   try {
-    header = JSON.parse(firstLineRaw) as Record<string, unknown>;
+    header = JSON.parse(firstLineRaw);
   } catch {
     return { newContent: content, changed: false };
   }
 
-  if (header.type !== "session" || header.parentSession !== oldParent) {
+  // JSON.parse can succeed on primitives (null, "foo", 123) and arrays;
+  // guard before any property access to avoid TypeError.
+  if (header === null || typeof header !== "object" || Array.isArray(header)) {
+    return { newContent: content, changed: false };
+  }
+  const objHeader = header as Record<string, unknown>;
+
+  if (objHeader.type !== "session" || objHeader.parentSession !== oldParent) {
     return { newContent: content, changed: false };
   }
 
   if (newParent === null) {
-    delete header.parentSession;
+    delete objHeader.parentSession;
   } else {
-    header.parentSession = newParent;
+    objHeader.parentSession = newParent;
   }
 
-  return { newContent: JSON.stringify(header) + rest, changed: true };
+  return { newContent: JSON.stringify(objHeader) + rest, changed: true };
 }

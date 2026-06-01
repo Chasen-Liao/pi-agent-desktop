@@ -61,8 +61,9 @@ test("releases lock when fn throws", async () => {
 test("cleans up map entry after release", async () => {
   const target = path.resolve("/tmp/lock-test-E");
   await withFileLock(target, async () => {});
-  const map = globalThis.__piWriteLocks;
-  if (map !== undefined) {
-    assert.equal(map.has(target), false, "map should not contain entry after release");
-  }
+  assert.equal(
+    globalThis.__piWriteLocks?.has(target),
+    false,
+    "map should not contain entry after release",
+  );
 });

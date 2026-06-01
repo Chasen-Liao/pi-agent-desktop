@@ -59,6 +59,28 @@ test("leaves child unchanged when type is not 'session'", () => {
   assert.equal(newContent, content);
 });
 
+test("leaves child unchanged when header is valid JSON null", () => {
+  const content = "null\n" + JSON.stringify({ type: "message", id: "m1" });
+  const { newContent, changed } = rewriteChildHeader(
+    content,
+    "/sessions/parent.jsonl",
+    "/sessions/grandparent.jsonl",
+  );
+  assert.equal(changed, false);
+  assert.equal(newContent, content);
+});
+
+test("leaves child unchanged when header is a JSON array", () => {
+  const content = "[1, 2, 3]\n";
+  const { newContent, changed } = rewriteChildHeader(
+    content,
+    "/sessions/parent.jsonl",
+    "/sessions/grandparent.jsonl",
+  );
+  assert.equal(changed, false);
+  assert.equal(newContent, content);
+});
+
 test("removes parentSession when newParent is null", () => {
   const oldParent = "/sessions/parent.jsonl";
   const content = format(sampleChild(oldParent));
