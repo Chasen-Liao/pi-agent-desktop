@@ -428,23 +428,36 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [onSessionForked]);
 
-  const handleNavigate = useCallback(async (entryId: string) => {
+  const navigateToLeaf = useCallback(async (leafId: string | null) => {
+    if (!leafId) {
+      setActiveLeafId(null);
+      return;
+    }
     const sid = sessionIdRef.current;
     if (!sid) return;
-    sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }).catch(() => {});
-    setActiveLeafId(entryId);
-    await loadContext(sid, entryId);
-  }, [loadContext]);
-
-  const handleLeafChange = useCallback(async (leafId: string | null) => {
-    setActiveLeafId(leafId);
-    const sid = sessionIdRef.current;
-    if (!sid) return;
-    await loadContext(sid, leafId);
-    if (leafId) {
-      sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }).catch(() => {});
+    try {
+      const result = await sendAgentCommand<{ cancelled?: boolean }>(sid, {
+        type: "navigate_tree",
+        targetId: leafId,
+      });
+      if (result?.cancelled) {
+        console.warn("navigate_tree cancelled:", leafId);
+        return;
+      }
+      setActiveLeafId(leafId);
+      await loadContext(sid, leafId);
+    } catch (e) {
+      console.error("navigate_tree failed:", e);
     }
   }, [loadContext]);
+
+  const handleNavigate = useCallback((entryId: string) => {
+    return navigateToLeaf(entryId);
+  }, [navigateToLeaf]);
+
+  const handleLeafChange = useCallback((leafId: string | null) => {
+    return navigateToLeaf(leafId);
+  }, [navigateToLeaf]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
