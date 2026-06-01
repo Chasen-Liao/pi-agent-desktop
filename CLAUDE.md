@@ -24,8 +24,8 @@ npx tsc --noEmit
 # Lint
 npm run lint
 
-# 运行当前已有的 Node test 测试
-node --test lib/custom-path-selection.test.ts
+# 运行 Node test（项目内全部测试文件，跨 lib/、electron/、app/）
+node --test lib/*.test.ts electron/*.test.ts app/**/*.test.ts
 
 # 构建 Next.js standalone 输出
 npm run build
@@ -49,7 +49,11 @@ npm run dist
 - `lib/session-reader.ts` 封装 pi `SessionManager`，负责列出会话、缓存 session id 到文件路径、构建会话树和把 pi 的 session context 转成 UI 类型。
 - `lib/rpc-manager.ts` 包装 `@earendil-works/pi-coding-agent` 的 `AgentSession`，用 `globalThis.__piSessions` 和 `globalThis.__piStartLocks` 跨 Next.js 热更新保存活跃 session 与并发启动锁。
 - `lib/normalize.ts` 统一 tool call 字段。pi 文件格式使用 `{ id, name, arguments }`，UI 类型使用 `{ toolCallId, toolName, input }`。
-- `app/api/auth/*`、`app/api/models*`、`app/api/skills*` 分别处理认证提供商、模型配置和技能列表/搜索/安装。
+- `app/api/auth/*`、`app/api/models*`、`app/api/skills*` 分别处理认证提供商、模型配置和技能列表/搜索/安装。`app/api/health` 提供桌面端启动健康探测（`server-wait.ts` 调用）。
+- `hooks/` 下 `useAgentSession` 承载 agent 交互，`useAudio` / `useDragDrop` / `useTheme` 是 UI 外围 hooks。
+- `lib/agent-client.ts` 是浏览器到 `/api/agent/[id]` 的 SSE 客户端封装；`lib/slash-commands.ts` 解析 `/` 开头的斜杠命令菜单（与 `components/SkillsConfig.tsx` 联动）。
+- `bin/pi-web.js` 是通过 `npm install -g` 或 `npx` 启动开发服务器的命令行入口（`package.json#bin`）。
+- `electron/server-wait.ts` 通过端口探测和 Next.js 子进程输出嗅探提前检测服务器就绪；`process-tree.ts` / `startup-failure.ts` 处理进程树与启动失败诊断。
 - `electron/main.ts` 是 Electron 主进程：寻找端口、以 `ELECTRON_RUN_AS_NODE=1` 启动 Next.js standalone `server.js` 子进程、创建 `BrowserWindow`、托盘和自动更新。`electron/preload.ts` 通过 context bridge 暴露更新相关 API。
 
 ## 会话与分支模型
@@ -66,4 +70,5 @@ npm run dist
 - 发送新消息走 `/api/agent/[id]` 和 SSE；只浏览历史走 `lib/session-reader.ts`，不要为只读浏览创建 `AgentSession`。
 - `electron-builder.yml` 需要把 `.next/standalone/node_modules` 作为单独 `extraResources` 项复制；单纯复制 standalone 会漏掉 `node_modules/next`。
 - `next.config.ts` 使用 `output: "standalone"`，并把 `@earendil-works/pi-coding-agent` 与 `@earendil-works/pi-ai` 设为 server external packages。
-- ESLint 配置位于 `eslint.config.mjs`，忽略 `.next/`、`electron/dist/`、`release/`、`out/`、`coverage/`，并关闭部分 React Hooks 规则。
+- 桌面端启动时 `electron/main.ts` 通过 `server-wait.ts` 同时做端口探测和 Next.js 子进程 stdout 嗅探（匹配 "Ready"/"started server"），避免冷启动 race。
+- ESLint 配置位于 `eslint.config.mjs`，忽略 `.next/`、`electron/dist/`、`release/`、`out/`、`coverage/`，并显式关闭 `react-hooks/immutability` / `react-hooks/refs` / `react-hooks/set-state-in-effect` 三条规则。
