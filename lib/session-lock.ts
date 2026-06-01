@@ -1,7 +1,6 @@
 import path from "node:path";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __piWriteLocks: Map<string, Promise<unknown>> | undefined;
 }
 

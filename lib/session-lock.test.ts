@@ -4,7 +4,6 @@ import path from "node:path";
 import { withFileLock } from "./session-lock.ts";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __piWriteLocks: Map<string, Promise<unknown>> | undefined;
 }
 
