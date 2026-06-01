@@ -40,12 +40,16 @@ export async function GET(
         encode(event);
       });
 
-      // Heartbeat every 30s to prevent server/proxy timeout (Next.js default ~120-150s)
+      // Heartbeat every 30s to prevent server/proxy timeout (Next.js default ~120-150s).
+      // keepAlive() is called only after a successful enqueue so that when the client
+      // silently disappears, the idle timer eventually fires and destroys the wrapper.
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(new TextEncoder().encode(":\n\n"));
+          session.keepAlive();
         } catch {
-          // controller already closed
+          // controller already closed; do not call keepAlive so the idle
+          // timer can eventually destroy the wrapper (no orphan).
         }
       }, 30_000);
 

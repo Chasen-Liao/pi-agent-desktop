@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/types";
-import { MessageView } from "./MessageView";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
+import { MessageList } from "./MessageList";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { useAgentSession } from "@/hooks/useAgentSession";
@@ -158,6 +158,37 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const visibleMessages = messages.filter((m) => m.role === "user" || m.role === "assistant");
   const messageRefs = useMessageRefs(visibleMessages.length);
 
+  const toolResultsMap = useMemo(() => {
+    const m = new Map<string, ToolResultMessage>();
+    for (const msg of messages) {
+      if (msg.role === "toolResult") {
+        m.set((msg as ToolResultMessage).toolCallId, msg as ToolResultMessage);
+      }
+    }
+    return m;
+  }, [messages]);
+
+  const { nextUserIdx, nextAssistantIdx } = useMemo(() => {
+    const nextUserIdx: number[] = new Array(messages.length).fill(-1);
+    const nextAssistantIdx: number[] = new Array(messages.length).fill(-1);
+    let lastUser = -1;
+    let lastAssistant = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        nextUserIdx[i] = lastUser;
+        lastUser = i;
+      } else if (messages[i].role === "assistant") {
+        nextAssistantIdx[i] = lastAssistant;
+        lastAssistant = i;
+      }
+    }
+    return { nextUserIdx, nextAssistantIdx };
+  }, [messages]);
+
+  const handleEditContent = useCallback((content: string) => {
+    chatInputRef?.current?.insertIfEmpty(content);
+  }, [chatInputRef]);
+
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !agentRunning;
 
   const availableThinkingLevels = displayModelValue
@@ -293,69 +324,24 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pt-4 [scrollbar-width:none]">
           <div className="mx-auto max-w-[820px] px-4">
 
-            {(() => {
-              const toolResultsMap = new Map<string, import("@/lib/types").ToolResultMessage>();
-              for (const msg of messages) {
-                if (msg.role === "toolResult") {
-                  toolResultsMap.set((msg as import("@/lib/types").ToolResultMessage).toolCallId, msg as import("@/lib/types").ToolResultMessage);
-                }
-              }
-              let lastUserIdx = -1;
-              for (let i = messages.length - 1; i >= 0; i--) {
-                if (messages[i].role === "user") { lastUserIdx = i; break; }
-              }
-              let refIdx = 0;
-              return messages.map((msg, idx) => {
-                const prevAssistantEntryId =
-                  msg.role === "user" && idx > 0 && messages[idx - 1].role === "assistant"
-                    ? entryIds[idx - 1]
-                    : undefined;
-                const isVisible = msg.role === "user" || msg.role === "assistant";
-                const currentRefIdx = isVisible ? refIdx++ : -1;
-                let showTimestamp = false;
-                if (msg.role === "assistant") {
-                  showTimestamp = true;
-                  for (let j = idx + 1; j < messages.length; j++) {
-                    const r = messages[j].role;
-                    if (r === "user") break;
-                    if (r === "assistant") { showTimestamp = false; break; }
-                  }
-                  // Hide on the currently-streaming tail (the streaming bubble owns the live timestamp)
-                  if (showTimestamp && streamState.isStreaming && idx === messages.length - 1) {
-                    showTimestamp = false;
-                  }
-                }
-                const view = (
-                  <MessageView
-                    key={idx}
-                    message={msg}
-                    toolResults={toolResultsMap}
-                    modelNames={modelNames}
-                    entryId={entryIds[idx]}
-                    onFork={agentRunning || isNew || (idx === 0 && msg.role === "user") ? undefined : handleFork}
-                    forking={forkingEntryId === entryIds[idx]}
-                    onNavigate={agentRunning ? undefined : handleNavigate}
-                    prevAssistantEntryId={agentRunning ? undefined : prevAssistantEntryId}
-                    onEditContent={(content) => chatInputRef?.current?.insertIfEmpty(content)}
-                    showTimestamp={showTimestamp}
-                    prevTimestamp={idx > 0 ? (messages[idx - 1] as import("@/lib/types").AgentMessage & { timestamp?: number }).timestamp : undefined}
-                  />
-                );
-                if (!isVisible) return view;
-                return (
-                  <div key={idx} ref={(el) => {
-                    messageRefs.current[currentRefIdx] = el;
-                    if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
-                  }}>
-                    {view}
-                  </div>
-                );
-              });
-            })()}
-
-            {streamState.isStreaming && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} />
-            )}
+            <MessageList
+              messages={messages}
+              entryIds={entryIds}
+              toolResultsMap={toolResultsMap}
+              nextUserIdx={nextUserIdx}
+              nextAssistantIdx={nextAssistantIdx}
+              isStreaming={streamState.isStreaming}
+              streamingMessage={streamState.streamingMessage}
+              isNew={isNew}
+              agentRunning={agentRunning}
+              forkingEntryId={forkingEntryId}
+              onFork={handleFork}
+              onNavigate={handleNavigate}
+              onEditContent={handleEditContent}
+              messageRefs={messageRefs}
+              lastUserMsgRef={lastUserMsgRef}
+              modelNames={modelNames}
+            />
 
             {agentRunning && !streamState.streamingMessage && (
               <div className="py-2 text-[13px] text-text-muted">

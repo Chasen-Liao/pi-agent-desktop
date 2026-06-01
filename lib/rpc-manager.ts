@@ -1,5 +1,5 @@
 import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
-import { cacheSessionPath } from "./session-reader";
+import { cacheSessionPath } from "./session-reader.ts";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 
 // ============================================================================
@@ -25,7 +25,11 @@ export class AgentSessionWrapper {
   private onDestroyCallback: (() => void) | null = null;
   private _alive = true;
 
-  constructor(public readonly inner: AgentSessionLike) {}
+  readonly inner: AgentSessionLike;
+
+  constructor(inner: AgentSessionLike) {
+    this.inner = inner;
+  }
 
   get sessionId(): string {
     return this.inner.sessionId;
@@ -62,6 +66,16 @@ export class AgentSessionWrapper {
 
   onDestroy(cb: () => void): void {
     this.onDestroyCallback = cb;
+  }
+
+  /**
+   * Signal that this wrapper is still in use (e.g., SSE heartbeat).
+   * Resets the idle timer without emitting any events.
+   * No-op if the wrapper is already destroyed.
+   */
+  keepAlive(): void {
+    if (!this._alive) return;
+    this.resetIdleTimer();
   }
 
   async send(command: Record<string, unknown>): Promise<unknown> {
@@ -139,6 +153,14 @@ export class AgentSessionWrapper {
 
         const newSessionId = SessionManager.open(newSessionFile, sessionDir).getSessionId();
         cacheSessionPath(newSessionId, newSessionFile);
+
+        // Pre-register the new wrapper BEFORE destroying the old.
+        // Contract: by the time send() returns, newSessionId is in the registry.
+        // If startRpcSession throws, do NOT destroy — old wrapper stays usable,
+        // new file remains on disk (acceptable; next fork overwrites).
+        const newCwd = sessionManager.getHeader()?.cwd ?? process.cwd();
+        await startRpcSession(newSessionId, newSessionFile, newCwd);
+
         this.destroy();
         return { cancelled: false, newSessionId };
       }
