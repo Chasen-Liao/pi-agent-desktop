@@ -17,7 +17,7 @@ function makeStubInner(overrides: { subscribe?: SubscribeFn } = {}) {
     agent: { state: { systemPrompt: "", thinkingLevel: "off" } },
     sessionManager: null,
     modelRegistry: null,
-    subscribe: overrides.subscribe ?? ((cb) => { void cb; return () => {}; }),
+    subscribe: overrides.subscribe ?? ((cb: (event: unknown) => void) => { void cb; return () => {}; }),
   } as never;
 }
 
