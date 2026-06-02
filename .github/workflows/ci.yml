@@ -33,8 +33,9 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Test
+        timeout-minutes: 5
         run: |
-          node --test \
+          node --test --test-force-exit \
             app/api/health/route.test.ts \
             lib/api-error.test.ts \
             lib/custom-path-selection.test.ts \
@@ -93,9 +94,10 @@ jobs:
         run: npm ci
 
       - name: Test (Windows)
+        timeout-minutes: 10
         shell: bash
         run: |
-          node --test \
+          node --test --test-force-exit \
             app/api/health/route.test.ts \
             lib/api-error.test.ts \
             lib/custom-path-selection.test.ts \
