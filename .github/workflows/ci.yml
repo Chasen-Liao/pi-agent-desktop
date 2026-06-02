@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-typecheck-test:
+    name: lint · typecheck · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        timeout-minutes: 5
+        run: |
+          node --test --test-force-exit \
+            app/api/health/route.test.ts \
+            lib/api-error.test.ts \
+            lib/custom-path-selection.test.ts \
+            lib/normalize.test.ts \
+            lib/rpc-manager.test.ts \
+            lib/session-cascade.test.ts \
+            lib/session-lock.test.ts \
+            lib/slash-commands.test.ts \
+            hooks/agent-session/agent-phase.test.ts \
+            hooks/agent-session/session-stats.test.ts \
+            hooks/agent-session/stream-state.test.ts
+
+  build:
+    name: build (next.js)
+    runs-on: ubuntu-latest
+    needs: lint-typecheck-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js standalone
+        run: npm run build
+
+      - name: Upload standalone output
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-standalone
+          path: |
+            .next/standalone
+            .next/static
+            public
+          if-no-files-found: error
+          retention-days: 7
+
+  test-windows:
+    name: test (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test (Windows)
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          node --test --test-force-exit \
+            app/api/health/route.test.ts \
+            lib/api-error.test.ts \
+            lib/custom-path-selection.test.ts \
+            lib/normalize.test.ts \
+            lib/rpc-manager.test.ts \
+            lib/session-cascade.test.ts \
+            lib/session-lock.test.ts \
+            lib/slash-commands.test.ts \
+            hooks/agent-session/agent-phase.test.ts \
+            hooks/agent-session/session-stats.test.ts \
+            hooks/agent-session/stream-state.test.ts \
+            electron/process-tree.test.ts \
+            electron/server-wait.test.ts \
+            electron/startup-failure.test.ts
