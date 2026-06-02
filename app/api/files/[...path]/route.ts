@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { listAllSessions } from "@/lib/session-reader";
+import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -248,6 +249,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  const requestId = getRequestId(request);
   try {
     const { path: segments } = await params;
     const filePath = filePathFromSegments(segments);
@@ -255,24 +257,24 @@ export async function GET(
 
     const allowedRoots = await getAllowedRoots();
     if (!isPathAllowed(filePath, allowedRoots)) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      return NextResponse.json({ error: "Access denied" }, { status: 403, headers: { "x-request-id": requestId } });
     }
 
     let stat: fs.Stats;
     try {
       stat = fs.statSync(filePath);
     } catch {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: "Not found" }, { status: 404, headers: { "x-request-id": requestId } });
     }
 
     if (type === "read") {
       if (!stat.isFile()) {
-        return NextResponse.json({ error: "Not a file" }, { status: 400 });
+        return NextResponse.json({ error: "Not a file" }, { status: 400, headers: { "x-request-id": requestId } });
       }
       const imageMime = getImageMime(filePath);
       if (imageMime) {
         if (stat.size > IMAGE_PREVIEW_MAX_BYTES) {
-          return NextResponse.json({ error: "Image too large (>10MB)" }, { status: 413 });
+          return NextResponse.json({ error: "Image too large (>10MB)" }, { status: 413, headers: { "x-request-id": requestId } });
         }
         return streamFile(filePath, stat, imageMime, request.headers.get("range"));
       }
@@ -281,7 +283,7 @@ export async function GET(
         return streamFile(filePath, stat, audioMime, request.headers.get("range"));
       }
       if (stat.size > TEXT_PREVIEW_MAX_BYTES) {
-        return NextResponse.json({ error: "File too large for preview (>256KB)" }, { status: 413 });
+        return NextResponse.json({ error: "File too large for preview (>256KB)" }, { status: 413, headers: { "x-request-id": requestId } });
       }
       const content = fs.readFileSync(filePath, "utf-8");
       const language = getLanguage(filePath);
@@ -290,7 +292,7 @@ export async function GET(
 
     if (type === "watch") {
       if (!stat.isFile()) {
-        return NextResponse.json({ error: "Not a file" }, { status: 400 });
+        return NextResponse.json({ error: "Not a file" }, { status: 400, headers: { "x-request-id": requestId } });
       }
       let watcher: fs.FSWatcher | null = null;
       const stream = new ReadableStream({
@@ -338,7 +340,7 @@ export async function GET(
 
     // type === "list"
     if (!stat.isDirectory()) {
-      return NextResponse.json({ error: "Not a directory" }, { status: 400 });
+      return NextResponse.json({ error: "Not a directory" }, { status: 400, headers: { "x-request-id": requestId } });
     }
 
     const names = fs.readdirSync(filePath);
@@ -367,6 +369,10 @@ export async function GET(
 
     return NextResponse.json({ entries, path: filePath });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    logApiError({ route: "/api/files/[...path]", method: "GET", requestId, error });
+    return NextResponse.json(
+      { error: errorMessage(error) },
+      { status: 500, headers: { "x-request-id": requestId } }
+    );
   }
 }

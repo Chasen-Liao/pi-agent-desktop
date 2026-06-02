@@ -1,6 +1,7 @@
 import { resolveSessionPath } from "@/lib/session-reader";
 import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -10,19 +11,27 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const requestId = getRequestId(req);
 
   // Fast path: already-running session
   let session = getRpcSession(id);
   if (!session || !session.isAlive()) {
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
-      return new Response("Session not found", { status: 404 });
+      return new Response("Session not found", {
+        status: 404,
+        headers: { "x-request-id": requestId },
+      });
     }
     const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
     try {
       ({ session } = await startRpcSession(id, filePath, cwd));
     } catch (error) {
-      return new Response(`Failed to start agent: ${error}`, { status: 500 });
+      logApiError({ route: "/api/agent/[id]/events", method: "GET", requestId, error, params: { id } });
+      return new Response(`Failed to start agent: ${errorMessage(error)}`, {
+        status: 500,
+        headers: { "x-request-id": requestId },
+      });
     }
   }
 

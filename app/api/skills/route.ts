@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { DefaultResourceLoader, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
+import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -8,27 +9,33 @@ export const dynamic = "force-dynamic";
 // Uses DefaultResourceLoader (same logic as AgentSession startup) so settings.json
 // skill paths, package skills, and .agents/skills directories are all included.
 export async function GET(req: Request) {
+  const requestId = getRequestId(req);
   const { searchParams } = new URL(req.url);
   const cwd = searchParams.get("cwd");
-  if (!cwd) return NextResponse.json({ error: "cwd required" }, { status: 400 });
+  if (!cwd) return NextResponse.json({ error: "cwd required" }, { status: 400, headers: { "x-request-id": requestId } });
 
   try {
     const loader = new DefaultResourceLoader({ cwd, agentDir: getAgentDir() });
     await loader.reload();
     const { skills, diagnostics } = loader.getSkills();
     return NextResponse.json({ skills, diagnostics });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+  } catch (error) {
+    logApiError({ route: "/api/skills", method: "GET", requestId, error, params: { cwd } });
+    return NextResponse.json(
+      { error: errorMessage(error) },
+      { status: 500, headers: { "x-request-id": requestId } }
+    );
   }
 }
 
 // PATCH /api/skills — toggle disable-model-invocation on a SKILL.md file
 export async function PATCH(req: Request) {
+  const requestId = getRequestId(req);
   try {
     const body = await req.json() as { filePath: string; disableModelInvocation: boolean };
     const { filePath, disableModelInvocation } = body;
-    if (!filePath) return NextResponse.json({ error: "filePath required" }, { status: 400 });
-    if (!existsSync(filePath)) return NextResponse.json({ error: "file not found" }, { status: 404 });
+    if (!filePath) return NextResponse.json({ error: "filePath required" }, { status: 400, headers: { "x-request-id": requestId } });
+    if (!existsSync(filePath)) return NextResponse.json({ error: "file not found" }, { status: 404, headers: { "x-request-id": requestId } });
 
     const content = readFileSync(filePath, "utf8");
     const key = "disable-model-invocation";
@@ -51,7 +58,11 @@ export async function PATCH(req: Request) {
 
     writeFileSync(filePath, updated, "utf8");
     return NextResponse.json({ success: true });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+  } catch (error) {
+    logApiError({ route: "/api/skills", method: "PATCH", requestId, error });
+    return NextResponse.json(
+      { error: errorMessage(error) },
+      { status: 500, headers: { "x-request-id": requestId } }
+    );
   }
 }
