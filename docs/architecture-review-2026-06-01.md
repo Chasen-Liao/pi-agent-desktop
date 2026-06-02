@@ -1,9 +1,9 @@
 # Pi Agent Desktop 架构优化评审
 
-> 分支：`analysis/architecture-optimization-review` · 初评日期：2026-06-01 · 基准提交：`1a33476`
+> 分支：`analysis/architecture-optimization-review` · 初评日期：2026-06-01 · P0 基准提交：`1a33476`（P0 实施后合入 main：`36af38c`，v0.7.6）
 > 最新更新：2026-06-02 · 评审负责人：chasen
 >
-> 本文档是对当前架构的深度扫描结果，按"必改 / 应该改 / 锦上添花"分级。每条发现都给出位置、问题、修复方向、严重性。所有行号以基准提交为准，文件后续修改后会漂移。
+> 本文档是对当前架构的深度扫描结果，按"必改 / 应该改 / 锦上添花"分级。每条发现都给出位置、问题、修复方向、严重性。所有行号以 P0 基准提交为准，文件后续修改后会漂移。
 >
 > **使用方式**：从 P0 开始逐条消化；改动 P0 时同步补齐对应测试。修复示例仅给出形状，不要照抄——结合实际上下文再定。
 >
@@ -16,7 +16,7 @@
 | 严重性 | 数量 | 完成情况 |
 |---|---|---|
 | 🔴 P0 必改 | 6 | 5 ✅ 完成 + 1 ⏭️ 跳过（见 §1） |
-| 🟡 P1 应该改 | 10 | 0 ✅ · 1 ⏳ 进行中（P1-1） |
+| 🟡 P1 应该改 | 10 | 1 ✅ · 0 ⏳ 进行中 · 9 ⏳ 待办 |
 | 🟢 P2 锦上添花 | 6 | 0 ✅ · 待办 |
 | 📋 建议重构项 | 3 | 0 ✅ · 待办 |
 
@@ -237,7 +237,7 @@ useEffect(() => {
 
 ## 2. P1 — 应该改
 
-### P1-1. `lib/normalize.ts` 用了 `as` 断言 + API catch 返回 `String(error)`
+### P1-1. `lib/normalize.ts` 用了 `as` 断言 + API catch 返回 `String(error)` ✅ 已修
 
 **位置**：`lib/normalize.ts:23, 29`、`app/api/agent/[id]/route.ts:34-35`、`app/api/sessions/[id]/route.ts:74-75, 97-98, 147-148`
 
@@ -251,6 +251,14 @@ useEffect(() => {
 - 引入 `requestId` middleware（`x-request-id` header），日志和响应贯穿。
 
 **严重性说明**：单独看每个都是 🟡，但叠加效果是"pi 包输出意外格式 → UI 静默错乱 + 调试无门"，应一起修。
+
+**实施结果**（2026-06-02）：
+- ✅ `lib/api-error.ts`（新）— 三个 helper：`errorMessage(err)` 提取 `Error.message`（或 JSON.stringify 对象）替代 `String(error)`；`getRequestId(req)` 读 `x-request-id` 头或生成 UUID；`logApiError({ route, method, requestId, error, params, status })` 写单行 JSON 到 `console.error`（Electron 主进程 `main.log` 捕获，跨进程诊断）。
+- ✅ `lib/normalize.ts` 移除两处冗余 `as` 断言（role check 后 TS 自动 narrow 为 `AssistantMessage`；`{ ...msg, content }` 结构上是 `AgentMessage` 不需要 cast）。**保留** `normalizeToolCallBlock` 内 `block.input as Record<string, unknown>` —— 该 `as` 在 typeof / null / Array 三重守卫之后仍有必要（TS 不会自动 narrow `object` 排除 array）。
+- ✅ 14 个 API route 迁移：`agent/[id]/{route,events}`、`agent/new`、`sessions/{route,[id]/{route,context}}`、`default-cwd`、`select-directory`、`files/[...path]`、`models-config{,/test}`、`auth/api-key/[provider]`、`skills/{route,search,install}`。每处 5xx catch 走 `logApiError`；`getRequestId(req)` 生成 ID 写回 `x-request-id` 响应头供客户端 correlation。
+- ✅ Response 形态 `{ error: string }` 保持不变（兼容 `lib/agent-client.ts`），requestId 走 header 穿透。
+- ✅ 测试：`lib/api-error.test.ts`（15 项：errorMessage 各类型 / getRequestId 校验 / logApiError 输出格式）、`lib/normalize.test.ts`（13 项：role 守卫 / content 守卫 / type≠toolCall 透传 / 字段映射 / 缺字段兜底）。
+- 📌 提交：`cd609fe` → `3e5f292` → `7e97e2a`（PR #2 合入 main）。
 
 ---
 
@@ -442,7 +450,9 @@ const allCodingToolNames = ["read", "bash", "edit", "write", "grep", "find", "ls
 | `app/api/agent/[id]/events/route.ts` SSE | 0 测试 | 🟡 仅 keepAlive 单元测试 | SSE route 集成测试缺 |
 | `electron/process-tree.ts` | 0 测试 | ✅ 已补 | `process-tree.test.ts` |
 | `hooks/useAgentSession.ts` SSE 重连 | 0 测试 | ✅ 已补 3 个子模块测试 | `agent-phase` / `session-stats` / `stream-state` 共 10 项；**glob 缺 `hooks/**`（follow-up #2）** |
-| `lib/normalize.ts` | 缺边界 | ⏳ 仍未补 | P1-1 合并修 |
+| `lib/normalize.ts` | 缺边界 | ✅ 已补 13 项 | `normalize.test.ts`（role 守卫 / content 守卫 / type 守卫 / 字段映射 / 缺字段兜底） |
+| `lib/api-error.ts` | 0 测试 | ✅ 已补 15 项 | `api-error.test.ts`（errorMessage 各类型 / getRequestId UUID 校验 / logApiError 单行 JSON 输出） |
+| `app/api/*/route.ts` 5xx catch | 无结构化日志 | ✅ 已修 | 14 个 route 迁移到 `logApiError` + `x-request-id` header（PR #2） |
 
 ---
 
@@ -453,7 +463,7 @@ const allCodingToolNames = ["read", "bash", "edit", "write", "grep", "find", "ls
 | **P0 周一** | P0-1 JSONL 写锁 + P0-2 idle timer | ✅ 2026-06-01 完成 |
 | **P0 周二** | P0-3 fork 时序契约 | ✅ 2026-06-01 完成 |
 | **P0 周三-四** | P0-5 ChatWindow 渲染 + P0-6 hooks mount effect | ✅ 2026-06-01 至 06-02 完成 |
-| **P0 周五** | P1-1 normalize + API catch（一个 PR 拿到类型安全 + 可观测性） | ⏳ 待办 |
+| **P0 周五** | P1-1 normalize + API catch（一个 PR 拿到类型安全 + 可观测性） | ✅ 2026-06-02 完成（PR #2） |
 | **跳过** | P0-4 dev env 透传 | ⏭️ 按计划跳过（合并入 P1-4 批次） |
 | **P1 同步** | 补 P0 涉及的测试（参考第 4 节） | ✅ 大部分完成 · 🟡 `hooks/**` 缺 glob（follow-up #2） |
 | **P1 第二周** | P1-4 URL 状态 + P1-7 extraResources + P1-6 启动恢复 | ⏳ 待办 |
@@ -470,6 +480,7 @@ const allCodingToolNames = ["read", "bash", "edit", "write", "grep", "find", "ls
 | 3 | Windows .exe 启动需要手工拷贝 `.next/static/` 到 `resources/standalone/.next/static/` | electron-packager 不复制 Next.js standalone 产物的 static chunks | 改回 `electron-builder` 并配置 `extraResources: [{from: .next/static, to: standalone/.next/static}]`（见 P1-7），或加 `scripts/build-resources.sh` 自动化 |
 | 4 | P0-5 性能回归测试未补 | 优化效果未量化 | P2-2 阶段加 React Profiler 快照测试（n=1000 消息，render < 16ms） |
 | 5 | P0-4 dev env 透传 | 按计划跳过 | 与 P1-4 合并单 PR，处理 5 处 env 透传点 |
+| 6 | P1-1 客户端未消费 `x-request-id` | API 响应已带 header，但 `lib/agent-client.ts` SSE 错误处理未读 | `agent-client.ts` 在 catch 时取 `response.headers.get("x-request-id")` 拼到 `console.error` / 后续 Sentry 上报，方便用户报 issue 时给一个可追踪的 ID |
 
 ---
 
@@ -502,5 +513,11 @@ const allCodingToolNames = ["read", "bash", "edit", "write", "grep", "find", "ls
   - 合并 main 重构（`c1d68cd` + `eaaf875` + `8353b08`）
 - **2026-06-02** 通过 PR #1 合并到 `main`（`36af38c`），并 bump 版本到 0.7.6（`bd9d176`）。
 - **2026-06-02** 尝试 Windows .exe 打包并验证 v0.7.6：发现并临时修复 2 个打包问题（`follow-up #1`、`#3`），新增 `/statusline` slash 命令（`3cc51f4`）后合入 main。
+- **2026-06-02** 实施 P1-1（normalize + API catch），在 `feature/p1-1-api-error-handling` 分支上 2 个提交：
+  - `cd609fe` — `lib/api-error.ts` 新模块 + 移除 normalize 冗余断言 + 15/13 个单测。
+  - `3e5f292` — 14 个 API route 迁移到 `errorMessage` / `logApiError` / `x-request-id`。
+  - 通过 PR #2 合入 `main`（`7e97e2a`），response 形态保持 `{ error: string }` 兼容 `lib/agent-client.ts`，requestId 走 header 穿透。
+  - 遗留 follow-up #6：客户端未消费 `x-request-id` 响应头。
+- **2026-06-02** 更新本评审文档，记录 P1-1 实施结果（修改见本文件 §0 / §2 P1-1 / §4 / §5 / §5.1 / §8）。
 
-**当前分支**：`main` · **HEAD**：`3cc51f4`。**下一阶段**候选：P1-1（normalize + API catch） / P1-4（URL 状态去 `suppressCwdBumpRef`）/ P1-7（electron-builder 自动化静态拷贝）。
+**当前分支**：`main` · **HEAD**：`7e97e2a`。**下一阶段**候选：P1-4（URL 状态去 `suppressCwdBumpRef`）/ P1-6（Next.js 启动失败自动恢复）/ P1-7（electron-builder extraResources 自动化）。
