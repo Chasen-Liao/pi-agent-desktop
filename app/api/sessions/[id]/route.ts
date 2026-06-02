@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
+import { readdirSync, readFileSync, statSync, unlinkSync } from "fs";
+import { writeFile, rename, unlink } from "fs/promises";
 import { join } from "path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import {
@@ -9,6 +10,8 @@ import {
   listAllSessions,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
+import { rewriteChildHeader } from "@/lib/session-cascade";
+import { withFileLock } from "@/lib/session-lock";
 
 export async function GET(
   req: Request,
@@ -111,40 +114,59 @@ export async function DELETE(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Read header before deleting to get parentSession path
-    const firstLine = readFileSync(filePath, "utf8").split("\n")[0];
-    let parentSessionPath: string | undefined;
+    // 1. Read parent's first line to get grandparent path
+    let parentSessionPath: string | null = null;
     try {
+      const firstLine = readFileSync(filePath, "utf8").split("\n")[0];
       const header = JSON.parse(firstLine) as { type?: string; parentSession?: string };
-      if (header.type === "session") parentSessionPath = header.parentSession;
-    } catch { /* ignore */ }
+      if (header.type === "session") parentSessionPath = header.parentSession ?? null;
+    } catch { /* malformed parent — grandparent remains null */ }
 
-    // Re-attach all direct children to this session's parent (cascade re-parent)
-    // Scan sibling files in the same directory
+    // 2. Enumerate siblings
     const dir = filePath.replace(/\\/g, "/").split("/").slice(0, -1).join("/");
+    const siblingFiles: string[] = [];
     try {
-      const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl") && join(dir, f) !== filePath);
-      for (const file of files) {
-        const childPath = join(dir, file);
-        try {
-          const content = readFileSync(childPath, "utf8");
-          const lines = content.split("\n");
-          const header = JSON.parse(lines[0]) as { type?: string; parentSession?: string };
-          if (header.type === "session" && header.parentSession === filePath) {
-            // Rewrite header with new parentSession
-            header.parentSession = parentSessionPath;
-            lines[0] = JSON.stringify(header);
-            writeFileSync(childPath, lines.join("\n"));
-          }
-        } catch { /* skip malformed */ }
-      }
-    } catch { /* skip if dir unreadable */ }
+      siblingFiles.push(
+        ...readdirSync(dir)
+          .filter((f) => f.endsWith(".jsonl"))
+          .map((f) => join(dir, f))
+          .filter((p) => p !== filePath)
+      );
+    } catch { /* dir unreadable — no cascade possible */ }
 
+    // 3. Identify and rewrite children (under per-file lock, atomic write)
+    for (const childPath of siblingFiles) {
+      let content: string;
+      try { content = readFileSync(childPath, "utf8"); }
+      catch { continue; /* race: child deleted between readdir and read */ }
+
+      const { newContent, changed } = rewriteChildHeader(content, filePath, parentSessionPath);
+      if (!changed) continue;
+
+      await withFileLock(childPath, () => atomicWriteFile(childPath, newContent));
+    }
+
+    // 4. Destroy any active RPC wrapper for this session
     getRpcSession(id)?.destroy();
-    unlinkSync(filePath);
+
+    // 5. Unlink parent (under lock, swallow race-condition unlink failure)
+    await withFileLock(filePath, async () => {
+      try { unlinkSync(filePath); } catch { /* race: already deleted */ }
+    });
     invalidateSessionPathCache(id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
+}
+
+async function atomicWriteFile(p: string, content: string): Promise<void> {
+  const tmp = `${p}.tmp`;
+  await writeFile(tmp, content, "utf8");
+  try {
+    await rename(tmp, p);
+  } catch (e) {
+    try { await unlink(tmp); } catch { /* best effort */ }
+    throw e;
   }
 }

@@ -58,6 +58,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     messages,
     setMessages,
     entryIds,
+    setEntryIds,
     loadSession: loadSessionFromApi,
     loadContext,
   } = useSessionLoader(isNew);
@@ -111,7 +112,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const loadTools = useCallback(async (sid: string) => {
     try {
       const tools = await sendAgentCommand<ToolEntry[]>(sid, { type: "get_tools" });
-      if (tools) {
+      if (tools && sessionIdRef.current === sid) {
         const { getPresetFromTools } = await import("@/components/ToolPanel");
         setToolPresetState(getPresetFromTools(tools));
       }
@@ -297,23 +298,36 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [onSessionForked]);
 
-  const handleNavigate = useCallback(async (entryId: string) => {
+  const navigateToLeaf = useCallback(async (leafId: string | null) => {
+    if (!leafId) {
+      setActiveLeafId(null);
+      return;
+    }
     const sid = sessionIdRef.current;
     if (!sid) return;
-    sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }).catch(() => {});
-    setActiveLeafId(entryId);
-    await loadContext(sid, entryId);
-  }, [loadContext, setActiveLeafId]);
-
-  const handleLeafChange = useCallback(async (leafId: string | null) => {
-    setActiveLeafId(leafId);
-    const sid = sessionIdRef.current;
-    if (!sid) return;
-    await loadContext(sid, leafId);
-    if (leafId) {
-      sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }).catch(() => {});
+    try {
+      const result = await sendAgentCommand<{ cancelled?: boolean }>(sid, {
+        type: "navigate_tree",
+        targetId: leafId,
+      });
+      if (result?.cancelled) {
+        console.warn("navigate_tree cancelled:", leafId);
+        return;
+      }
+      setActiveLeafId(leafId);
+      await loadContext(sid, leafId);
+    } catch (e) {
+      console.error("navigate_tree failed:", e);
     }
   }, [loadContext, setActiveLeafId]);
+
+  const handleNavigate = useCallback((entryId: string) => {
+    return navigateToLeaf(entryId);
+  }, [navigateToLeaf]);
+
+  const handleLeafChange = useCallback((leafId: string | null) => {
+    return navigateToLeaf(leafId);
+  }, [navigateToLeaf]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
@@ -412,33 +426,74 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [setToolPresetState]);
 
-  // Load session on mount
+  // Load session on mount AND on session change.
+  //
+  // On session change, reset all session-scoped state to avoid bleed
+  // from a previous session. AppShell's sessionKey remount is kept
+  // as defense-in-depth (covers state in sub-hooks like
+  // useChatScroll / useAgentEvents that we can't reset from here).
+  //
+  // The cancelled flag is a closure guard: when session A→B, the
+  // effect's cleanup runs before the next effect call. Cleanup
+  // sets cancelled=true on the OLD closure; the OLD .then (still
+  // in flight) sees the flag and bails. Makes the effect
+  // self-sufficient even if AppShell's remount is later removed.
   useEffect(() => {
-    if (session) {
-      sessionIdRef.current = session.id;
-      loadSession(session.id, true, true).then((loaded) => {
-        const agentState = loaded?.agentState ?? null;
-        if (!agentState?.state?.thinkingLevel && loaded?.contextThinkingLevel && loaded.contextThinkingLevel !== "off") {
-          setThinkingLevel(loaded.contextThinkingLevel as ThinkingLevelOption);
+    if (!session) return;
+    const sid = session.id;
+    sessionIdRef.current = sid;
+    let cancelled = false;
+
+    // Reset session-scoped state. Roughly follows useState
+    // declaration order above for legibility; the exact order
+    // has no functional impact since React batches these and
+    // none depend on each other.
+    setData(null);
+    setActiveLeafId(null);
+    setMessages([]);
+    setEntryIds([]);
+    setToolPreset("default");
+    setThinkingLevel("auto");
+    setAgentRunning(false);
+    setAgentPhase(null);
+    dispatch({ type: "reset" });   // streamState → {isStreaming:false, streamingMessage:null}
+    setRetryInfo(null);
+    setContextUsage(null);
+    setSystemPrompt(null);
+    setForkingEntryId(null);
+    setIsCompacting(false);
+    setCompactError(null);
+    setCurrentModelOverride(null);
+    setPendingModel(null);
+
+    loadSessionFromApi(sid, true, true).then((loaded) => {
+      if (cancelled) return;  // ignore stale results from a previous session
+      const agentState = loaded?.agentState ?? null;
+      if (!agentState?.state?.thinkingLevel && loaded?.contextThinkingLevel && loaded.contextThinkingLevel !== "off") {
+        setThinkingLevel(loaded.contextThinkingLevel as ThinkingLevelOption);
+      }
+      if (agentState?.running) {
+        loadTools(sid);
+        if (agentState.state?.isStreaming) {
+          setAgentRunning(true);
+          setAgentPhase({ kind: "waiting_model" });
+          connectEvents(sid);
         }
-        if (agentState?.running) {
-          loadTools(session.id);
-          if (agentState.state?.isStreaming) {
-            setAgentRunning(true);
-            setAgentPhase({ kind: "waiting_model" });
-            connectEvents(session.id);
-          }
-        }
-        if (agentState?.state) {
-          if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
-          if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
-          if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
-          if (agentState.state.thinkingLevel !== undefined) setThinkingLevel((agentState.state.thinkingLevel as ThinkingLevelOption) ?? "auto");
-        }
-      });
-    }
+      }
+      if (agentState?.state) {
+        if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
+        if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
+        if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
+        if (agentState.state.thinkingLevel !== undefined) setThinkingLevel((agentState.state.thinkingLevel as ThinkingLevelOption) ?? "auto");
+      }
+    });
+
+    return () => { cancelled = true; };
+    // useState setters are reference-stable but exhaustive-deps
+    // doesn't recognize them as such; deps is intentionally
+    // [session?.id] only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session?.id]);
 
   useEffect(() => {
     onSystemPromptChange?.(systemPrompt);
