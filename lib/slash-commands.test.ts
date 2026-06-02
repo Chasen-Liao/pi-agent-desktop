@@ -30,3 +30,18 @@ test("slash command items include built-ins and enabled skills", () => {
   assert.ok(items.some((item) => item.label === "/frontend-design" && item.kind === "skill"));
   assert.ok(!items.some((item) => item.label === "/hidden-skill"));
 });
+
+test("/statusline is registered as a built-in command and is selectable from the menu", () => {
+  const items = buildSlashCommandItems("", []);
+  const statusline = items.find((item) => item.label === "/statusline");
+  assert.ok(statusline, "/statusline should appear in the list");
+  assert.equal(statusline.kind, "command");
+  // Insertion text is a complete command, no trailing space — pressing Enter
+  // sends it as-is, so the input must be intercepted client-side.
+  assert.equal(statusline.insertText, "/statusline");
+  assert.ok(!statusline.insertText.endsWith(" "));
+
+  // Also filterable by partial query like `/stat`
+  const filtered = buildSlashCommandItems("stat", []);
+  assert.ok(filtered.some((item) => item.label === "/statusline"));
+});

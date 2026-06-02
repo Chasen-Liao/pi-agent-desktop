@@ -4,6 +4,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { completeSimple, type AssistantMessage } from "@earendil-works/pi-ai";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +12,6 @@ const TEST_TIMEOUT_MS = 20_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function getAssistantText(message: AssistantMessage): string {
@@ -25,17 +22,18 @@ function getAssistantText(message: AssistantMessage): string {
 }
 
 export async function POST(req: Request) {
+  const requestId = getRequestId(req);
   let tempDir: string | undefined;
 
   try {
     const body = await req.json() as { providerName?: unknown; provider?: unknown; model?: unknown };
     const providerName = typeof body.providerName === "string" ? body.providerName.trim() : "";
-    if (!providerName) return NextResponse.json({ ok: false, error: "providerName is required" }, { status: 400 });
-    if (!isRecord(body.provider)) return NextResponse.json({ ok: false, error: "provider is required" }, { status: 400 });
-    if (!isRecord(body.model)) return NextResponse.json({ ok: false, error: "model is required" }, { status: 400 });
+    if (!providerName) return NextResponse.json({ ok: false, error: "providerName is required" }, { status: 400, headers: { "x-request-id": requestId } });
+    if (!isRecord(body.provider)) return NextResponse.json({ ok: false, error: "provider is required" }, { status: 400, headers: { "x-request-id": requestId } });
+    if (!isRecord(body.model)) return NextResponse.json({ ok: false, error: "model is required" }, { status: 400, headers: { "x-request-id": requestId } });
 
     const modelId = typeof body.model.id === "string" ? body.model.id.trim() : "";
-    if (!modelId) return NextResponse.json({ ok: false, error: "Model ID is required" }, { status: 400 });
+    if (!modelId) return NextResponse.json({ ok: false, error: "Model ID is required" }, { status: 400, headers: { "x-request-id": requestId } });
 
     tempDir = mkdtempSync(join(tmpdir(), "pi-web-model-test-"));
     const modelsPath = join(tempDir, "models.json");
@@ -102,7 +100,11 @@ export async function POST(req: Request) {
       clearTimeout(timeout);
     }
   } catch (error) {
-    return NextResponse.json({ ok: false, error: errorMessage(error) }, { status: 500 });
+    logApiError({ route: "/api/models-config/test", method: "POST", requestId, error });
+    return NextResponse.json(
+      { ok: false, error: errorMessage(error) },
+      { status: 500, headers: { "x-request-id": requestId } }
+    );
   } finally {
     if (tempDir) rmSync(tempDir, { recursive: true, force: true });
   }

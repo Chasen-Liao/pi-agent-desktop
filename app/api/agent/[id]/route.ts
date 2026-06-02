@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { startRpcSession, getRpcSession } from "@/lib/rpc-manager";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 // POST /api/agent/[id] - Send a command to an existing session
 export async function POST(
@@ -9,6 +10,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const requestId = getRequestId(req);
 
   try {
     const body = await req.json() as { type: string; [key: string]: unknown };
@@ -22,7 +24,7 @@ export async function POST(
 
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return NextResponse.json({ error: "Session not found" }, { status: 404, headers: { "x-request-id": requestId } });
     }
 
     const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
@@ -32,7 +34,11 @@ export async function POST(
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    logApiError({ route: "/api/agent/[id]", method: "POST", requestId, error, params: { id } });
+    return NextResponse.json(
+      { error: errorMessage(error) },
+      { status: 500, headers: { "x-request-id": requestId } }
+    );
   }
 }
 
@@ -42,6 +48,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const requestId = getRequestId(_req);
 
   try {
     const session = getRpcSession(id);
@@ -52,6 +59,10 @@ export async function GET(
     const state = await session.send({ type: "get_state" });
     return NextResponse.json({ running: true, state });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    logApiError({ route: "/api/agent/[id]", method: "GET", requestId, error, params: { id } });
+    return NextResponse.json(
+      { error: errorMessage(error) },
+      { status: 500, headers: { "x-request-id": requestId } }
+    );
   }
 }

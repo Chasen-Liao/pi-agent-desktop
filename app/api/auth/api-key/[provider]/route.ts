@@ -1,5 +1,6 @@
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { NextResponse } from "next/server";
+import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -19,27 +20,37 @@ export async function GET(_req: Request, { params }: Params) {
 // POST /api/auth/api-key/[provider]  body: { apiKey: string }
 export async function POST(req: Request, { params }: Params) {
   const { provider } = await params;
+  const requestId = getRequestId(req);
   try {
     const { apiKey } = await req.json() as { apiKey?: string };
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
-      return NextResponse.json({ error: "apiKey is required" }, { status: 400 });
+      return NextResponse.json({ error: "apiKey is required" }, { status: 400, headers: { "x-request-id": requestId } });
     }
     const authStorage = AuthStorage.create();
     authStorage.set(provider, { type: "api_key", key: apiKey.trim() });
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    logApiError({ route: "/api/auth/api-key/[provider]", method: "POST", requestId, error, params: { provider } });
+    return NextResponse.json(
+      { error: errorMessage(error) },
+      { status: 500, headers: { "x-request-id": requestId } }
+    );
   }
 }
 
 // DELETE /api/auth/api-key/[provider] — removes stored API key
-export async function DELETE(_req: Request, { params }: Params) {
+export async function DELETE(req: Request, { params }: Params) {
   const { provider } = await params;
+  const requestId = getRequestId(req);
   try {
     const authStorage = AuthStorage.create();
     authStorage.remove(provider);
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    logApiError({ route: "/api/auth/api-key/[provider]", method: "DELETE", requestId, error, params: { provider } });
+    return NextResponse.json(
+      { error: errorMessage(error) },
+      { status: 500, headers: { "x-request-id": requestId } }
+    );
   }
 }

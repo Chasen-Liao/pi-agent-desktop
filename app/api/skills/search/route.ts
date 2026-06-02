@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runNpx } from "@/lib/npx";
+import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -94,10 +95,13 @@ function parseInstallCount(installs: string): number {
 
 // POST /api/skills/search  body: { query: string, limit?: number }
 export async function POST(req: Request) {
+  const requestId = getRequestId(req);
+  let query: string | undefined;
   try {
-    const { query, limit: rawLimit } = await req.json() as { query?: string; limit?: unknown };
-    if (!query?.trim()) return NextResponse.json({ error: "query required" }, { status: 400 });
-    const limit = parseLimit(rawLimit);
+    const body = await req.json() as { query?: string; limit?: unknown };
+    query = body.query;
+    if (!query?.trim()) return NextResponse.json({ error: "query required" }, { status: 400, headers: { "x-request-id": requestId } });
+    const limit = parseLimit(body.limit);
 
     try {
       const results = await searchSkillsApi(query.trim(), limit);
@@ -116,6 +120,10 @@ export async function POST(req: Request) {
     const raw = (err.stdout ?? "") + (err.stderr ?? "");
     const results = raw ? parseSearchOutput(raw) : [];
     if (results.length > 0) return NextResponse.json({ results });
-    return NextResponse.json({ error: err.message ?? String(e) }, { status: 500 });
+    logApiError({ route: "/api/skills/search", method: "POST", requestId, error: e, params: { query } });
+    return NextResponse.json(
+      { error: errorMessage(e) },
+      { status: 500, headers: { "x-request-id": requestId } }
+    );
   }
 }
