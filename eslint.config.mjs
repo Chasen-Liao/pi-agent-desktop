@@ -4,6 +4,7 @@ import typescript from "eslint-config-next/typescript";
 const eslintConfig = [
   {
     ignores: [
+      ".claude/worktrees/**",
       ".next/**",
       "electron/dist/**",
       "release/**",

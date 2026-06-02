@@ -5,7 +5,8 @@ import type { SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/type
 import { MessageList } from "./MessageList";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
-import { useAgentSession, type AgentPhase } from "@/hooks/useAgentSession";
+import { useAgentSession } from "@/hooks/useAgentSession";
+import type { AgentPhase } from "@/hooks/agent-session/agent-phase";
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
 
