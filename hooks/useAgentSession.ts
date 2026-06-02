@@ -58,6 +58,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     messages,
     setMessages,
     entryIds,
+    setEntryIds,
     loadSession: loadSessionFromApi,
     loadContext,
   } = useSessionLoader(isNew);
@@ -425,33 +426,69 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [setToolPresetState]);
 
-  // Load session on mount
+  // Load session on mount AND on session change.
+  //
+  // On session change, reset all session-scoped state to avoid bleed
+  // from a previous session. AppShell's sessionKey remount is kept
+  // as defense-in-depth (covers state in sub-hooks like
+  // useChatScroll / useAgentEvents that we can't reset from here).
+  //
+  // The cancelled flag is a closure guard: when session A→B, the
+  // effect's cleanup runs before the next effect call. Cleanup
+  // sets cancelled=true on the OLD closure; the OLD .then (still
+  // in flight) sees the flag and bails. Makes the effect
+  // self-sufficient even if AppShell's remount is later removed.
   useEffect(() => {
-    if (session) {
-      sessionIdRef.current = session.id;
-      loadSession(session.id, true, true).then((loaded) => {
-        const agentState = loaded?.agentState ?? null;
-        if (!agentState?.state?.thinkingLevel && loaded?.contextThinkingLevel && loaded.contextThinkingLevel !== "off") {
-          setThinkingLevel(loaded.contextThinkingLevel as ThinkingLevelOption);
+    if (!session) return;
+    const sid = session.id;
+    sessionIdRef.current = sid;
+    let cancelled = false;
+
+    // Reset session-scoped state. Ordered to mirror useState
+    // declarations above for readability.
+    setData(null);
+    setActiveLeafId(null);
+    setMessages([]);
+    setEntryIds([]);
+    setToolPreset("default");
+    setThinkingLevel("auto");
+    setAgentRunning(false);
+    setAgentPhase(null);
+    dispatch({ type: "reset" });   // streamState → {isStreaming:false, streamingMessage:null}
+    setRetryInfo(null);
+    setContextUsage(null);
+    setSystemPrompt(null);
+    setForkingEntryId(null);
+    setIsCompacting(false);
+    setCompactError(null);
+    setCurrentModelOverride(null);
+    setPendingModel(null);
+
+    loadSessionFromApi(sid, true, true).then((loaded) => {
+      if (cancelled) return;  // ignore stale results from a previous session
+      const agentState = loaded?.agentState ?? null;
+      if (!agentState?.state?.thinkingLevel && loaded?.contextThinkingLevel && loaded.contextThinkingLevel !== "off") {
+        setThinkingLevel(loaded.contextThinkingLevel as ThinkingLevelOption);
+      }
+      if (agentState?.running) {
+        loadTools(sid);
+        if (agentState.state?.isStreaming) {
+          setAgentRunning(true);
+          setAgentPhase({ kind: "waiting_model" });
+          connectEvents(sid);
         }
-        if (agentState?.running) {
-          loadTools(session.id);
-          if (agentState.state?.isStreaming) {
-            setAgentRunning(true);
-            setAgentPhase({ kind: "waiting_model" });
-            connectEvents(session.id);
-          }
-        }
-        if (agentState?.state) {
-          if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
-          if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
-          if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
-          if (agentState.state.thinkingLevel !== undefined) setThinkingLevel((agentState.state.thinkingLevel as ThinkingLevelOption) ?? "auto");
-        }
-      });
-    }
+      }
+      if (agentState?.state) {
+        if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
+        if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
+        if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
+        if (agentState.state.thinkingLevel !== undefined) setThinkingLevel((agentState.state.thinkingLevel as ThinkingLevelOption) ?? "auto");
+      }
+    });
+
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session?.id]);
 
   useEffect(() => {
     onSystemPromptChange?.(systemPrompt);
