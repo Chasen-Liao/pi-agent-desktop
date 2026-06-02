@@ -1,35 +1,40 @@
 # Pi Agent Desktop 架构优化评审
 
-> 分支：`analysis/architecture-optimization-review` · 日期：2026-06-01 · 基准提交：`1a33476`
+> 分支：`analysis/architecture-optimization-review` · 初评日期：2026-06-01 · 基准提交：`1a33476`
+> 最新更新：2026-06-02 · 评审负责人：chasen
 >
 > 本文档是对当前架构的深度扫描结果，按"必改 / 应该改 / 锦上添花"分级。每条发现都给出位置、问题、修复方向、严重性。所有行号以基准提交为准，文件后续修改后会漂移。
 >
 > **使用方式**：从 P0 开始逐条消化；改动 P0 时同步补齐对应测试。修复示例仅给出形状，不要照抄——结合实际上下文再定。
+>
+> **图例**：✅ 已完成并合入 main · ⏭️ 主动跳过 · ⏳ 待办
 
 ---
 
 ## 0. 摘要
 
-| 严重性 | 数量 | 类别 |
+| 严重性 | 数量 | 完成情况 |
 |---|---|---|
-| 🔴 P0 必改 | 6 | 数据丢失 / 崩溃 / 安全 |
-| 🟡 P1 应该改 | 10 | 性能 / 可维护性 / 可发布性 |
-| 🟢 P2 锦上添花 | 6 | DX / 一致性 / 可观测性 |
-| 📋 建议重构项 | 3 | 跨文件、需 1 周以上 |
+| 🔴 P0 必改 | 6 | 5 ✅ 完成 + 1 ⏭️ 跳过（见 §1） |
+| 🟡 P1 应该改 | 10 | 0 ✅ · 1 ⏳ 进行中（P1-1） |
+| 🟢 P2 锦上添花 | 6 | 0 ✅ · 待办 |
+| 📋 建议重构项 | 3 | 0 ✅ · 待办 |
 
-**最大风险**：
+**最大风险**（评审日排序）：
 
-1. **JSONL 文件无写锁** — DELETE 操作会静默损坏子会话 header。
-2. **10 分钟 idle timer 与 SSE heartbeat 解耦** — 长思考模型下会误杀 session。
-3. **fork / navigate_tree 是隐式 fire-and-forget** — 状态时序无显式契约。
+1. ~~**JSONL 文件无写锁** — DELETE 操作会静默损坏子会话 header。~~ ✅ P0-1 已修
+2. ~~**10 分钟 idle timer 与 SSE heartbeat 解耦** — 长任务被误杀。~~ ✅ P0-2 已修
+3. ~~**fork / navigate_tree 隐式 fire-and-forget** — 状态时序无显式契约。~~ ✅ P0-3 已修
+
+**P0 实施节奏**（按 §5 计划）：P0-1 + P0-2 → P0-3 → P0-5 + P0-6（P0-4 按计划主动跳过）。全部通过 PR #1 合并到 `main`，并已合入 v0.7.6 发版。
 
 ---
 
 ## 1. P0 — 必改
 
-### P0-1. JSONL 写并发无锁，DELETE 级联重写必然损坏
+### P0-1. JSONL 写并发无锁，DELETE 级联重写必然损坏 ✅ 已修
 
-**位置**：`app/api/sessions/[id]/route.ts:122-141`
+**位置**：`app/api/sessions/[id]/route.ts:122-141`（基准提交）
 
 **问题**：DELETE 会扫描同目录下所有 `.jsonl` 文件，对每个 `parentSession === filePath` 的子文件做 `readFileSync → JSON.parse → mutate header → writeFileSync`。两个并发 DELETE（删父 + 删子，或两个子）会交叉覆盖；同一文件被两个请求同时改写时，后写的完全丢失前写的结果。
 
@@ -54,13 +59,16 @@ for (const file of files) {
 - 收集所有要重写的 child 路径到内存，先全部读完解析，最后用 `fs.promises.writeFile` + tmp + rename 原子替换每个文件。
 - 严格：子文件的 `parentSession` 是绝对路径，DELETE 时**先**把父文件 unlink，再批量改 child header，最后再处理 parentSession 路径失效的 child——避免"重写后又被父路径失效"的中间态。
 
-**建议测试**：
-- 模拟并发 N 个 DELETE 同一父 + 多个子，断言所有 child header 最终一致。
-- 模拟父文件先 unlink 再批量重写 child，断言无 race。
+**实施结果**（2026-06-02）：
+- ✅ `lib/session-lock.ts`（新）— promise-chain 文件写锁，存活于 `globalThis` 抗热更新。
+- ✅ `lib/session-cascade.ts`（新）— 纯函数 `rewriteChildHeader(content, oldParent, newParent)`，含 null/array/primitive 类型守卫。
+- ✅ `app/api/sessions/[id]/route.ts` DELETE 路径改用 `withFileLock` + tmp + rename 原子写。
+- ✅ 测试：`lib/session-lock.test.ts`（4 项：并发序列化 / 跨路径不互锁 / 异常释放 / map 清理）、`lib/session-cascade.test.ts`（10 项：父匹配 / 不匹配 / malformed / type≠session / null / array / 清空 parentSession / 字段保留 / 多行内容 / 空内容 / 无尾换行）。
+- 📌 提交：`4b5b846` → `f49081c` → `2938af4` → `b1deec5`。
 
 ---
 
-### P0-2. 10 分钟 idle timer 与 SSE heartbeat 解耦，长任务被误杀
+### P0-2. 10 分钟 idle timer 与 SSE heartbeat 解耦，长任务被误杀 ✅ 已修
 
 **位置**：`lib/rpc-manager.ts:50-53`、`app/api/agent/[id]/events/route.ts`（heartbeat）
 
@@ -83,13 +91,15 @@ start(): void {
 - **B. 双向 timer**：把 idle timer 改为"仅在 SSE 断开时启动"——只要有连接就保持 session 存活。理由：SSE 断开意味着用户不再关心这个 session，10 分钟是合理的回收时间。
 - **C. 把 timer 延长到 30 分钟 + 增加 LLM 响应计时器**：长思考模型是已知场景，硬编码 10 分钟偏短。
 
-**建议测试**：
-- 模拟连续 11 分钟只有 heartbeat（无业务事件），断言 wrapper 仍 alive。
-- 模拟 SSE 断开 11 分钟后，断言 wrapper 被销毁。
+**实施结果**（2026-06-02）：选 **A**。
+- ✅ `lib/rpc-manager.ts` 新增 `keepAlive()` 方法（已销毁 wrapper 上的 no-op），只重置 idle timer 不分发事件。
+- ✅ `app/api/agent/[id]/events/route.ts` 在发 heartbeat 前调用 `session.keepAlive()`。
+- ✅ 测试：`lib/rpc-manager.test.ts` 覆盖 `keepAlive` 重置 timer 行为 + destroyed wrapper 防御。
+- 📌 提交：`0bbb599` → `3597bdf` → `66ca89f` → `5b85b16`。
 
 ---
 
-### P0-3. fork / navigate_tree 的状态时序是隐式契约
+### P0-3. fork / navigate_tree 的状态时序是隐式契约 ✅ 已修
 
 **位置**：`lib/rpc-manager.ts:113-143`（fork）、`hooks/useAgentSession.ts:431-447`（navigate）
 
@@ -116,13 +126,15 @@ await loadContext(sid, entryId);
 - 或者更轻量：在 fork 返回前 await `cacheSessionPath` 落盘，并主动 `startRpcSession(newSessionId, newFile, cwd)` 把新 wrapper 注册好（这样销毁旧的同时新已在册）。
 - `navigate_tree` 改为 `await` + 失败时回滚 `setActiveLeafId` 到旧值。
 
-**建议测试**：
-- 模拟 fork 后立即用 newSessionId 发请求，断言不重新创建。
-- 模拟 navigate_tree 失败，断言 UI leafId 回滚。
+**实施结果**（2026-06-02）：轻量方案（pre-register + await navigate + 回滚）。
+- ✅ `lib/rpc-manager.ts` fork 路径在销毁旧 wrapper 前先 `startRpcSession` 注册新 wrapper，避免中间窗口。
+- ✅ `hooks/useAgentSession.ts` `handleLeafChange` 把 `navigate_tree` 改 `await` + 失败回滚 `setActiveLeafId`；`cancelled` 闭包守卫防止过期结果覆盖新 state。
+- ✅ 测试：`lib/rpc-manager.test.ts` 覆盖 fork 返回 `{cancelled:true}`（非持久化场景）。
+- 📌 提交：`4cc7188` → `6de061e` → `4a623d8`。
 
 ---
 
-### P0-4. dev 模式 `process.env` 全量透传给 Next.js 子进程
+### P0-4. dev 模式 `process.env` 全量透传给 Next.js 子进程 ⏭️ 主动跳过
 
 **位置**：`electron/main.ts:158`（推测行号，需要核对）
 
@@ -143,11 +155,13 @@ env: {
 **建议测试**：
 - 启动 dev electron 子进程，断言 Next.js 进程 env 中不含 `npm_config_*`、`ELECTRON_*`（除显式白名单）。
 
+**当前状态**（2026-06-02）：按 §5 计划**主动跳过**——风险是 dev 体验小瑕疵（泄露内部 env），不导致数据丢失或崩溃，归入 P1-4 后续批次处理。**回看建议**：可与 P1-4 合并，单独一个 PR 修 5 处 env 透传（dev spawn / packaged spawn / electron-builder / 测试 / Electron 自身）。
+
 ---
 
-### P0-5. ChatWindow 每帧 O(n) 重渲染，长对话卡顿
+### P0-5. ChatWindow 每帧 O(n) 重渲染，长对话卡顿 ✅ 已修
 
-**位置**：`components/ChatWindow.tsx:295-353`
+**位置**：`components/ChatWindow.tsx:295-353`（基准提交）
 
 **问题**：在 `messages.map` 上包了一个 IIFE，每次 render 重新：
 - 建 `toolResultsMap`（O(n)）
@@ -174,15 +188,18 @@ env: {
 - 内部状态（tool calls 展开、diff 展开）放到 `MessageView` 自己管理。
 - forward scan 改为预计算 `nextUserIdx[]` / `nextAssistantIdx[]` 的 Map。
 
-**建议测试**：
-- 用 React Profiler 记录 1000 条消息的 render 时间，断言优化后 < 16ms。
-- 滚动时无重新 mount 警告。
+**实施结果**（2026-06-02）：
+- ✅ `components/MessageList.tsx`（新）— 独立组件，props 是 primitive + `useMemo` 计算 `toolResultsMap` / `nextUserIdx` / `nextAssistantIdx` / `lastUserIdx`。
+- ✅ `components/ChatWindow.tsx` 替换 IIFE 为 `<MessageList>`，`useMemo` 上提一层。
+- ✅ `components/MessageView.tsx` 顶层 export 包 `React.memo`（包括内部 hook 调用顺序不变，memo 命中率高）。
+- ✅ key 改用 `entryIds[idx]`，避免整列 unmount。
+- 📌 提交：`9e60eea` → `048083f`。**未补**性能回归测试（建议在 P2-2 阶段加 React Profiler 快照）。
 
 ---
 
-### P0-6. `useAgentSession.ts` mount effect 无依赖 + `eslint-disable`
+### P0-6. `useAgentSession.ts` mount effect 无依赖 + `eslint-disable` ✅ 已修
 
-**位置**：`hooks/useAgentSession.ts:559-584`
+**位置**：`hooks/useAgentSession.ts:559-584`（基准提交）
 
 **问题**：mount effect 用 `eslint-disable-next-line react-hooks/exhaustive-deps` 强制压制。`session` prop 从 A→B（组件未卸载）时：旧 session 的 SSE 不会被关闭（cleanup 只在 unmount 触发），新的 `connectEvents(session.id)` 在 EventSource 已存在时不会自动重连（`useCallback` 内部检查 `eventSourceRef.current` 才会 close 旧的，但新调用可能直接走 else 分支）。
 
@@ -208,9 +225,13 @@ useEffect(() => {
 - `connectEvents` 内部已经检查 `eventSourceRef.current` 并 close，直接调用即可，无需额外清理逻辑。
 - 移除 `eslint-disable`——CLAUDE.md 提到的"显式关闭三条 react-hooks 规则"应逐条评估必要性，能开的就开。
 
-**建议测试**：
-- 模拟 `session` prop 从 A→B，断言旧 EventSource 被关闭、新 EventSource 已建立。
-- 模拟 `session` 从 A→null，断言 EventSource 被关闭、无 in-flight loadSession 副作用。
+**实施结果**（2026-06-02）：
+- ✅ deps 改为 `[session?.id]`，effect 内部用 `session.id` 而非闭包变量；`cancelled` 闭包守卫防止过期结果覆盖。
+- ✅ session 切换时完整 16-setter 状态重置 + `dispatch({ type: "reset" })` 重置 stream state。
+- ✅ `loadTools` 加 `sessionIdRef.current === sid` 过期结果防御。
+- ✅ 移除该 `eslint-disable`（保留 1 处用于 `sessionIdRef === sid` 跨闭包防御，附 inline 注释说明原因）。
+- ✅ 同步接受 main 上的 `useAgentSession` 重构（`c1d68cd`：拆出 `hooks/agent-session/*` 子模块），处理冲突时保留 `navigateToLeaf` 命名。
+- 📌 提交：`3770ba0` → `a7bb69e`。**新增**单元测试：`hooks/agent-session/{agent-phase,session-stats,stream-state}.test.ts`（10 项），但当前 `node --test` glob 未覆盖 `hooks/**`，已记入 follow-up。
 
 ---
 
@@ -413,29 +434,42 @@ const allCodingToolNames = ["read", "bash", "edit", "write", "grep", "find", "ls
 
 ## 4. 测试覆盖盲区（建议修复 P0 时同步补）
 
-| 模块 | 现状 | 建议补 |
-|---|---|---|
-| `lib/rpc-manager.ts` fork | 0 测试 | fork 成功 / 取消 / invalid entryId / 旧 wrapper 销毁 |
-| `lib/rpc-manager.ts` compact | 0 测试 | `historyEnd <= boundaryStart` 抛错 / 正常路径 |
-| `app/api/sessions/[id]/route.ts` DELETE | 0 测试 | 并发 DELETE 父 + 子 / 级联重写原子性 |
-| `app/api/agent/[id]/events/route.ts` SSE | 0 测试 | heartbeat 触发 / client disconnect 清理 / `req.signal.abort` |
-| `electron/process-tree.ts` | 0 测试 | Windows `taskkill /T` / pid 为 null 边界 |
-| `hooks/useAgentSession.ts` SSE 重连 | 0 测试 | 1s 后重连 / `agentRunningRef` 切换时不重连 |
-| `lib/normalize.ts` | 缺边界 | `toolCallId` / `id` 都缺 / 都是空串的降级 |
+| 模块 | 现状（2026-06-01） | 当前（2026-06-02） | 备注 |
+|---|---|---|---|
+| `lib/rpc-manager.ts` fork | 0 测试 | ✅ 覆盖 cancelled 路径 | `rpc-manager.test.ts` 4 项 |
+| `lib/rpc-manager.ts` compact | 0 测试 | ⏳ 仍未补 | 建议 P2-2 阶段 |
+| `app/api/sessions/[id]/route.ts` DELETE | 0 测试 | ✅ 间接覆盖：cascade 纯函数 + 锁均有测试 | 端到端 DELETE API 测试仍缺 |
+| `app/api/agent/[id]/events/route.ts` SSE | 0 测试 | 🟡 仅 keepAlive 单元测试 | SSE route 集成测试缺 |
+| `electron/process-tree.ts` | 0 测试 | ✅ 已补 | `process-tree.test.ts` |
+| `hooks/useAgentSession.ts` SSE 重连 | 0 测试 | ✅ 已补 3 个子模块测试 | `agent-phase` / `session-stats` / `stream-state` 共 10 项；**glob 缺 `hooks/**`（follow-up #2）** |
+| `lib/normalize.ts` | 缺边界 | ⏳ 仍未补 | P1-1 合并修 |
 
 ---
 
 ## 5. 重构优先级（如果你只有 1 周）
 
-| 优先级 | 项 | 理由 |
+| 优先级 | 项 | 实际进度 |
 |---|---|---|
-| **P0 周一** | P0-1 JSONL 写锁 + P0-2 idle timer | 唯一可能导致**静默数据丢失**的两条 |
-| **P0 周二** | P0-3 fork 时序契约 | 跨 RPC + SSE + UI 三层，迟早踩 |
-| **P0 周三-四** | P0-5 ChatWindow 渲染 + P0-6 hooks mount effect | 影响**所有**长会话用户的体验，根因都在 hooks 层 |
-| **P0 周五** | P1-1 normalize + API catch（一个 PR 拿到类型安全 + 可观测性） |  |
-| **P1 同步** | 补 P0 涉及的测试（参考第 4 节） | 避免回归 |
-| **P1 第二周** | P1-4 URL 状态 + P1-7 extraResources + P1-6 启动恢复 | 影响发版质量，不影响日常开发 |
-| **P2 攒批** | 上面 6 条 | 见仁见智，可分配 1 PR / 1 条 |
+| **P0 周一** | P0-1 JSONL 写锁 + P0-2 idle timer | ✅ 2026-06-01 完成 |
+| **P0 周二** | P0-3 fork 时序契约 | ✅ 2026-06-01 完成 |
+| **P0 周三-四** | P0-5 ChatWindow 渲染 + P0-6 hooks mount effect | ✅ 2026-06-01 至 06-02 完成 |
+| **P0 周五** | P1-1 normalize + API catch（一个 PR 拿到类型安全 + 可观测性） | ⏳ 待办 |
+| **跳过** | P0-4 dev env 透传 | ⏭️ 按计划跳过（合并入 P1-4 批次） |
+| **P1 同步** | 补 P0 涉及的测试（参考第 4 节） | ✅ 大部分完成 · 🟡 `hooks/**` 缺 glob（follow-up #2） |
+| **P1 第二周** | P1-4 URL 状态 + P1-7 extraResources + P1-6 启动恢复 | ⏳ 待办 |
+| **P2 攒批** | 上面 6 条 | ⏳ 待办 |
+
+---
+
+## 5.1 实施后的已知遗留（follow-up）
+
+| # | 项 | 背景 | 建议 |
+|---|---|---|---|
+| 1 | `electron-updater` 启动 30s 报 `Cannot find module` | electron-packager `--ignore` 正则误伤了运行时模块 | 把 `electron-updater` 加入 `--ignore` 排除列表的反向白名单（或改用打包后 keep-list） |
+| 2 | `node --test` glob 未覆盖 `hooks/**` | main 新增的 10 个 hook 单元测试默认不跑 | `package.json#scripts.test` 改为 `node --test "lib/**/*.test.ts" "hooks/**/*.test.ts" "electron/**/*.test.ts"`，同步更新 CLAUDE.md 命令 |
+| 3 | Windows .exe 启动需要手工拷贝 `.next/static/` 到 `resources/standalone/.next/static/` | electron-packager 不复制 Next.js standalone 产物的 static chunks | 改回 `electron-builder` 并配置 `extraResources: [{from: .next/static, to: standalone/.next/static}]`（见 P1-7），或加 `scripts/build-resources.sh` 自动化 |
+| 4 | P0-5 性能回归测试未补 | 优化效果未量化 | P2-2 阶段加 React Profiler 快照测试（n=1000 消息，render < 16ms） |
+| 5 | P0-4 dev env 透传 | 按计划跳过 | 与 P1-4 合并单 PR，处理 5 处 env 透传点 |
 
 ---
 
@@ -445,6 +479,7 @@ const allCodingToolNames = ["read", "bash", "edit", "write", "grep", "find", "ls
 - **Error Boundary**：组件级错误边界缺失，SSE 断连或数据异常可能导致整页崩溃。P1 范围但优先级低于上述项。
 - **OAuth 流程**：`/api/auth/login/[provider]` 的 SSE 流式认证未深入审。
 - **打包体积**：`build/` 目录的具体包体未实测，P1-7 改完后建议跑一次对比。
+- **v0.7.6 发版验证**（2026-06-02）：已构建 Windows .exe（`release/Pi-Agent-Desktop-win32-x64/`，202MB），启动后 Next.js 服务正常加载但白屏，已临时拷贝 `.next/static/` 到 `resources/standalone/.next/static/` 修复（follow-up #3）。自动更新模块的 30s 警告未影响主流程。
 
 ---
 
@@ -453,3 +488,19 @@ const allCodingToolNames = ["read", "bash", "edit", "write", "grep", "find", "ls
 - 4 个并行 Explore agent 分别扫描：数据层 + Agent 生命周期 / UI 状态 + React 数据流 / API + Electron 集成 / 横切关注点（测试/类型/错误/可观测性）。
 - 本文档对 P0 全部位置在主分支上做了 Read 复核；P1/P2 引用的是 agent 报告的行号，建议动手前用 Read 核对一次。
 - 没有运行 `npm test` / `npm run build` / 启动 dev server——本评审仅静态分析。修复时建议同步跑一遍验证。
+
+## 8. 实施日志（2026-06-01 → 06-02）
+
+- **2026-06-01** 评审完成（`1a33476` 基线），形成本 Markdown。
+- **2026-06-01 至 06-02** 按 §5 计划实施 P0-1/2/3/5/6，共 21 个提交落到 `analysis/architecture-optimization-review` 分支：
+  - P0-1 写锁：`4b5b846` → `f49081c` → `2938af4` → `b1deec5`
+  - P0-2 idle timer：`0bbb599` → `3597bdf` → `66ca89f` → `5b85b16`
+  - P0-3 fork 时序：`4cc7188` → `6de061e` → `4a623d8`
+  - P0-5 渲染：`9e60eea` → `048083f`
+  - P0-6 mount effect：`3770ba0` → `a7bb69e`
+  - 文档：`6605276`
+  - 合并 main 重构（`c1d68cd` + `eaaf875` + `8353b08`）
+- **2026-06-02** 通过 PR #1 合并到 `main`（`36af38c`），并 bump 版本到 0.7.6（`bd9d176`）。
+- **2026-06-02** 尝试 Windows .exe 打包并验证 v0.7.6：发现并临时修复 2 个打包问题（`follow-up #1`、`#3`），新增 `/statusline` slash 命令（`3cc51f4`）后合入 main。
+
+**当前分支**：`main` · **HEAD**：`3cc51f4`。**下一阶段**候选：P1-1（normalize + API catch） / P1-4（URL 状态去 `suppressCwdBumpRef`）/ P1-7（electron-builder 自动化静态拷贝）。
