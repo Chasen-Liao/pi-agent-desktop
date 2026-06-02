@@ -18,6 +18,8 @@ import XAIIcon from "@lobehub/icons/es/XAI/components/Mono";
 import CloudflareColorIcon from "@lobehub/icons/es/Cloudflare/components/Color";
 import VercelIcon from "@lobehub/icons/es/Vercel/components/Mono";
 import GithubCopilotIcon from "@lobehub/icons/es/GithubCopilot/components/Mono";
+import OpenCodeIcon from "@lobehub/icons/es/OpenCode/components/Mono";
+import XiaomiMiMoIcon from "@lobehub/icons/es/XiaomiMiMo/components/Mono";
 import AwsColorIcon from "@lobehub/icons/es/Aws/components/Color";
 import AzureColorIcon from "@lobehub/icons/es/Azure/components/Color";
 import KimiColorIcon from "@lobehub/icons/es/Kimi/components/Color";
@@ -55,6 +57,10 @@ const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boolean }>
   "cloudflare-workers-ai":  { Icon: CloudflareColorIcon,  hasColor: true },
   "vercel-ai-gateway":      { Icon: VercelIcon,           hasColor: false },
   "github-copilot":         { Icon: GithubCopilotIcon,    hasColor: false },
+  "opencode-go":            { Icon: OpenCodeIcon,         hasColor: false },
+  "xiaomi-token-plan-ams":  { Icon: XiaomiMiMoIcon,        hasColor: false },
+  "xiaomi-token-plan-cn":   { Icon: XiaomiMiMoIcon,        hasColor: false },
+  "xiaomi-token-plan-sgp":  { Icon: XiaomiMiMoIcon,        hasColor: false },
   "amazon-bedrock":         { Icon: AwsColorIcon,         hasColor: true },
   "azure-openai-responses": { Icon: AzureColorIcon,       hasColor: true },
   "kimi-coding":            { Icon: KimiColorIcon,        hasColor: true },
