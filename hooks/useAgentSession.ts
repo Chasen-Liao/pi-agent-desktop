@@ -112,7 +112,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const loadTools = useCallback(async (sid: string) => {
     try {
       const tools = await sendAgentCommand<ToolEntry[]>(sid, { type: "get_tools" });
-      if (tools) {
+      if (tools && sessionIdRef.current === sid) {
         const { getPresetFromTools } = await import("@/components/ToolPanel");
         setToolPresetState(getPresetFromTools(tools));
       }
@@ -444,8 +444,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sessionIdRef.current = sid;
     let cancelled = false;
 
-    // Reset session-scoped state. Ordered to mirror useState
-    // declarations above for readability.
+    // Reset session-scoped state. Roughly follows useState
+    // declaration order above for legibility; the exact order
+    // has no functional impact since React batches these and
+    // none depend on each other.
     setData(null);
     setActiveLeafId(null);
     setMessages([]);
@@ -487,6 +489,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     });
 
     return () => { cancelled = true; };
+    // useState setters are reference-stable but exhaustive-deps
+    // doesn't recognize them as such; deps is intentionally
+    // [session?.id] only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id]);
 
