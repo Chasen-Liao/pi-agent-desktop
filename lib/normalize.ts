@@ -1,4 +1,4 @@
-import type { AgentMessage, AssistantMessage, ToolCallContent } from "./types.ts";
+import type { AgentMessage, ToolCallContent } from "./types.ts";
 
 function isObject(val: unknown): val is Record<string, unknown> {
   return typeof val === "object" && val !== null && !Array.isArray(val);
@@ -20,11 +20,11 @@ function normalizeToolCallBlock(block: unknown): ToolCallContent | null {
 
 export function normalizeToolCalls(msg: AgentMessage): AgentMessage {
   if (msg.role !== "assistant") return msg;
-  const content = (msg as AssistantMessage).content;
+  const content = msg.content;
   if (!Array.isArray(content)) return msg;
   const normalized = content.map((block) => {
     const result = normalizeToolCallBlock(block);
     return result ?? block;
   });
-  return { ...msg, content: normalized } as AgentMessage;
+  return { ...msg, content: normalized };
 }

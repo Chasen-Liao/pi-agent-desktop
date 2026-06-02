@@ -1,6 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { NextResponse } from "next/server";
+import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 const execFileAsync = promisify(execFile);
 
@@ -31,11 +32,12 @@ async function selectDirectoryOnWindows(): Promise<string | null> {
   return selectedPath || null;
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  const requestId = getRequestId(req);
   if (process.platform !== "win32") {
     return NextResponse.json(
       { error: "Directory picker is only supported on Windows." },
-      { status: 400 }
+      { status: 400, headers: { "x-request-id": requestId } }
     );
   }
 
@@ -43,10 +45,10 @@ export async function POST() {
     const selectedPath = await selectDirectoryOnWindows();
     return NextResponse.json({ path: selectedPath });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    logApiError({ route: "/api/select-directory", method: "POST", requestId, error });
     return NextResponse.json(
-      { error: `Failed to open directory picker: ${message}` },
-      { status: 500 }
+      { error: `Failed to open directory picker: ${errorMessage(error)}` },
+      { status: 500, headers: { "x-request-id": requestId } }
     );
   }
 }
