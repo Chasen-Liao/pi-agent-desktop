@@ -47,3 +47,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .factory
+
+# local Claude Code worktrees
+/.claude/worktrees/
