@@ -218,7 +218,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
+  const selectedCwd = selectedCwdProp ?? null;
   const [homeDir, setHomeDir] = useState<string>("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [customPathOpen, setCustomPathOpen] = useState(false);
@@ -270,10 +270,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   const restoredRef = useRef(false);
 
-  useEffect(() => {
-    onCwdChange?.(selectedCwd);
-  }, [selectedCwd, onCwdChange]);
-
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
     if (allSessions.length === 0) return;
@@ -284,7 +280,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         restoredRef.current = true;
         const target = allSessions.find((s) => s.id === initialSessionId);
         if (target) {
-          setSelectedCwd(target.cwd);
           onSelectSession(target, true);
           return;
         }
@@ -292,9 +287,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         onInitialRestoreDone?.();
       }
       const cwds = getRecentCwds(allSessions);
-      if (cwds.length > 0) setSelectedCwd(cwds[0]);
+      if (cwds.length > 0) onCwdChange?.(cwds[0]);
     }
-  }, [allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
+  }, [allSessions, selectedCwd, initialSessionId, onCwdChange, onSelectSession, onInitialRestoreDone]);
 
   const handleCustomPath = useCallback(async () => {
     setCustomPathOpen(true);
@@ -303,7 +298,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       const selectedPath = await pickDirectoryFromHost();
       const { nextCwd, shouldClose } = resolveCustomPathSelection(selectedCwd, selectedPath);
       if (nextCwd !== selectedCwd) {
-        setSelectedCwd(nextCwd);
+        onCwdChange?.(nextCwd);
       }
       if (shouldClose) {
         setCustomPathOpen(false);
@@ -314,7 +309,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       setCustomPathOpen(false);
       setDropdownOpen(false);
     }
-  }, [selectedCwd]);
+  }, [selectedCwd, onCwdChange]);
 
   const handleDefaultCwd = useCallback(async () => {
     try {
@@ -322,13 +317,15 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       const data = await res.json() as { cwd?: string; error?: string };
       if (data.cwd) {
         setCwdPickerError(null);
-        setSelectedCwd(data.cwd);
+        if (data.cwd !== selectedCwd) {
+          onCwdChange?.(data.cwd);
+        }
         setDropdownOpen(false);
       }
     } catch {
       // ignore
     }
-  }, []);
+  }, [selectedCwd, onCwdChange]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -509,7 +506,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 <button
                   key={cwd}
                   onClick={() => {
-                    setSelectedCwd(cwd);
+                    if (cwd !== selectedCwd) {
+                      onCwdChange?.(cwd);
+                    }
                     setCwdPickerError(null);
                     setCustomPathOpen(false);
                     setDropdownOpen(false);
