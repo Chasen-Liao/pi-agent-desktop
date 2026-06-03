@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runNpx } from "@/lib/npx";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { buildSkillUrl, buildSkillsSearchUrl, getAllowedSkillsApiBase } from "./skills-api-url";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,6 @@ const ANSI_RE = /\x1B\[[0-9;]*m/g;
 const DEFAULT_LIMIT = 50;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 50;
-const SEARCH_API_BASE = process.env.SKILLS_API_URL || "https://skills.sh";
 
 export interface SkillSearchResult {
   package: string;
@@ -61,7 +61,8 @@ function parseSearchOutput(raw: string): SkillSearchResult[] {
 }
 
 async function searchSkillsApi(query: string, limit: number): Promise<SkillSearchResult[]> {
-  const url = `${SEARCH_API_BASE}/api/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+  const base = getAllowedSkillsApiBase();
+  const url = buildSkillsSearchUrl(base, query, limit);
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`skills.sh search failed: HTTP ${res.status}`);
 
@@ -77,7 +78,7 @@ async function searchSkillsApi(query: string, limit: number): Promise<SkillSearc
       return {
         package: pkg,
         installs: formatInstalls(skill.installs),
-        url: slug ? `${SEARCH_API_BASE}/${slug}` : "",
+        url: slug ? buildSkillUrl(base, slug) : "",
       };
     })
     .filter((skill): skill is SkillSearchResult => skill !== null)

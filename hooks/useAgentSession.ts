@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useReducer } from "react";
+import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
 import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
@@ -98,10 +98,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const setNewSessionModel = opts.setNewSessionModel ?? setNewSessionModelState;
   const setToolPresetState = opts.setToolPreset ?? setToolPreset;
 
-  const currentModel = currentModelOverride ?? data?.context.model ?? pendingModel ?? null;
-  const displayModel = isNew ? newSessionModel : currentModel;
-
-  const sessionStats = calculateSessionStats(messages);
+  const currentModel = useMemo(
+    () => currentModelOverride ?? data?.context.model ?? pendingModel ?? null,
+    [currentModelOverride, data?.context.model, pendingModel]
+  );
+  const displayModel = useMemo(
+    () => isNew ? newSessionModel : currentModel,
+    [isNew, newSessionModel, currentModel]
+  );
+  const sessionStats = useMemo(() => calculateSessionStats(messages), [messages]);
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
     const loaded = await loadSessionFromApi(sid, showLoading, includeState);

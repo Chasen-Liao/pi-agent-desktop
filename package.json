@@ -24,7 +24,7 @@
     "start": "next start -p 30141",
     "lint": "eslint .",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public",
-    "build:electron": "tsc -p electron/tsconfig.json && node -e \"require('fs').copyFileSync('electron/startup.html', 'electron/dist/startup.html')\"",
+    "build:electron": "tsc -p electron/tsconfig.json && node -e \"const fs=require('fs'); fs.copyFileSync('electron/startup.html', 'electron/dist/startup.html'); fs.copyFileSync('electron/startup.js', 'electron/dist/startup.js')\"",
     "dev:electron": "npm run build:electron && npx electron .",
     "pack": "npm run build && npm run build:electron && npx @electron/rebuild && npx electron-builder --dir",
     "dist": "npm run build && npm run build:electron && npx @electron/rebuild && npx electron-builder"
