@@ -1,7 +1,7 @@
 # Pi Agent Desktop 架构优化评审
 
 > 分支：`analysis/architecture-optimization-review` · 初评日期：2026-06-01 · P0 基准提交：`1a33476`（P0 实施后合入 main：`36af38c`，v0.7.6）
-> 最新更新：2026-06-02 · 评审负责人：chasen
+> 最新更新：2026-06-03 · 评审负责人：chasen
 >
 > 本文档是对当前架构的深度扫描结果，按"必改 / 应该改 / 锦上添花"分级。每条发现都给出位置、问题、修复方向、严重性。所有行号以 P0 基准提交为准，文件后续修改后会漂移。
 >
@@ -520,4 +520,4 @@ const allCodingToolNames = ["read", "bash", "edit", "write", "grep", "find", "ls
   - 遗留 follow-up #6：客户端未消费 `x-request-id` 响应头。
 - **2026-06-02** 更新本评审文档，记录 P1-1 实施结果（修改见本文件 §0 / §2 P1-1 / §4 / §5 / §5.1 / §8）。
 
-**当前分支**：`main` · **HEAD**：`7e97e2a`。**下一阶段**候选：P1-4（URL 状态去 `suppressCwdBumpRef`）/ P1-6（Next.js 启动失败自动恢复）/ P1-7（electron-builder extraResources 自动化）。
+**当前分支**：`main` · **HEAD**：`ca1ef17`。**下一阶段**候选：P1-4（URL 状态去 `suppressCwdBumpRef`）/ P1-6（Next.js 启动失败自动恢复）/ P1-7（electron-builder extraResources 自动化）。
