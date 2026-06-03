@@ -8,6 +8,7 @@ import { createTray } from "./tray";
 import { getStartupFailureDisposition } from "./startup-failure";
 import { waitForNextServerReady } from "./server-wait";
 import { killProcessTree } from "./process-tree";
+import { pickApiKeys } from "./env-filter";
 
 // ---------------------------------------------------------------------------
 // State
@@ -162,7 +163,12 @@ function startNextServer(port: number): ChildProcess {
     const nextBin = require.resolve("next/dist/bin/next", { paths: [app.getAppPath()] });
     const proc = spawn("node", [nextBin, "dev", "-p", String(port)], {
       cwd: app.getAppPath(),
-      env: { ...process.env, PORT: String(port) },
+      env: {
+        ...pickApiKeys(process.env),
+        NODE_ENV: process.env.NODE_ENV ?? "development",
+        PORT: String(port),
+        NEXT_TELEMETRY_DISABLED: "1",
+      },
       stdio: "pipe",
     });
     proc.stdout?.on("data", (d: Buffer) => logInfo(`[Next] ${d.toString().trim()}`));
@@ -178,7 +184,8 @@ function startNextServer(port: number): ChildProcess {
   const proc = spawn(process.execPath, [serverScript], {
     cwd: standaloneDir,
     env: {
-      ...process.env,
+      ...pickApiKeys(process.env),
+      NODE_ENV: process.env.NODE_ENV ?? "production",
       ELECTRON_RUN_AS_NODE: "1",
       PORT: String(port),
       HOSTNAME: "127.0.0.1",

@@ -24,7 +24,7 @@
 
 ## 下载安装
 
-前往 [Releases](https://github.com/agegr/pi-agent-desktop/releases) 页面下载最新版安装程序。
+前往 [Releases](https://github.com/Chasen-Liao/pi-agent-desktop/releases) 页面下载最新版安装程序。
 
 Windows 用户下载 `Pi-Agent-Desktop-Setup-x.x.x.exe`，运行即可安装。
 
