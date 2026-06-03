@@ -36,8 +36,8 @@ export function useAgentEvents({ agentRunning }: UseAgentEventsOptions) {
       try {
         const event = JSON.parse(e.data) as AgentEvent;
         handleAgentEventRef.current?.(event);
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error("Failed to parse agent event", { data: e.data, error: err });
       }
     };
     es.onerror = () => {

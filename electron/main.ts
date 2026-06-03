@@ -9,6 +9,7 @@ import { getStartupFailureDisposition } from "./startup-failure";
 import { waitForNextServerReady } from "./server-wait";
 import { killProcessTree } from "./process-tree";
 import { pickApiKeys } from "./env-filter";
+import { getNextRestartState, type ServerState } from "./restart-policy";
 
 // ---------------------------------------------------------------------------
 // State
@@ -18,10 +19,10 @@ let nextProcess: ChildProcess | null = null;
 let isQuitting = false;
 let logFilePath: string | null = null;
 const DEFAULT_PORT = 30141;
-type ServerState = "starting" | "ready" | "stopped";
 let serverState: ServerState = "starting";
 let activePort: number | null = null;
 let startupUiReady = false;
+let restartAttempts: number[] = [];
 
 export function setQuitting(val: boolean) {
   isQuitting = val;
@@ -105,24 +106,6 @@ function logStartupTiming(stage: string, detail?: unknown) {
 // ---------------------------------------------------------------------------
 // Port finding
 // ---------------------------------------------------------------------------
-async function isPortReachable(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = net.connect(port, "127.0.0.1", () => {
-      socket.end();
-      resolve(true);
-    });
-
-    socket.on("error", () => {
-      resolve(false);
-    });
-
-    socket.setTimeout(500, () => {
-      socket.destroy();
-      resolve(false);
-    });
-  });
-}
-
 function reservePort(port: number): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -135,13 +118,8 @@ function reservePort(port: number): Promise<number> {
 }
 
 async function findFreePort(startPort: number, maxAttempts = 10): Promise<number> {
-  for (let attempt = 0; attempt <= maxAttempts; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const port = startPort + attempt;
-
-    if (await isPortReachable(port)) {
-      continue;
-    }
-
     try {
       return await reservePort(port);
     } catch {
@@ -200,6 +178,33 @@ function startNextServer(port: number): ChildProcess {
   return proc;
 }
 
+async function restartNextServer(label: string) {
+  const nextRestart = getNextRestartState({ now: Date.now(), attempts: restartAttempts, serverState, isQuitting });
+  restartAttempts = nextRestart.attempts;
+
+  if (!nextRestart.shouldRestart) {
+    serverState = "stopped";
+    showStartupState("stopped", `${label} 已退出`);
+    return;
+  }
+
+  try {
+    serverState = "starting";
+    activePort = null;
+    showStartupState("starting", "正在重新启动本地服务");
+    const port = await findFreePort(DEFAULT_PORT);
+    activePort = port;
+    nextProcess = startNextServer(port);
+    await waitForNextServerReady(port, nextProcess);
+    showApp(port);
+  } catch (err) {
+    logError("Failed to restart Next.js server", err);
+    serverState = "stopped";
+    activePort = null;
+    showStartupState("stopped", "本地服务重启失败");
+  }
+}
+
 function handleNextProcessExit(label: string, code: number | null, signal: NodeJS.Signals | null) {
   logInfo(`${label} exited`, { code, signal, serverState, isQuitting });
 
@@ -215,8 +220,7 @@ function handleNextProcessExit(label: string, code: number | null, signal: NodeJ
     return;
   }
 
-  serverState = "stopped";
-  showStartupState("stopped", "本地服务进程已退出");
+  void restartNextServer(label);
 }
 
 function handleNextProcessError(label: string, err: Error) {
@@ -228,9 +232,13 @@ function handleNextProcessError(label: string, err: Error) {
 
   nextProcess = null;
 
-  const pageState = serverState === "starting" ? "error" : "stopped";
-  serverState = "stopped";
-  showStartupState(pageState, err.message);
+  if (serverState === "starting") {
+    serverState = "stopped";
+    showStartupState("error", err.message);
+    return;
+  }
+
+  void restartNextServer(label);
 }
 
 function cleanup() {

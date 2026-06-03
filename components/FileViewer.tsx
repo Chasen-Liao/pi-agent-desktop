@@ -21,6 +21,8 @@ interface FileData {
 
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif"]);
 const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "weba", "webm"]);
+const LARGE_SOURCE_BYTES = 200_000;
+const LARGE_SOURCE_LINES = 5_000;
 
 function isImagePath(filePath: string): boolean {
   const base = getFileName(filePath);
@@ -640,6 +642,9 @@ function TextFileViewer({ filePath, cwd }: Props) {
   const isHtml = data.language === "html";
   const isMarkdown = data.language === "markdown";
   const lines = data.content.split("\n");
+  const isLargeSource = viewMode === "source"
+    && !previewMode
+    && (data.content.length > LARGE_SOURCE_BYTES || lines.length > LARGE_SOURCE_LINES);
   const hasDiff = prevContent !== null && prevContent !== data.content;
 
   return (
@@ -810,6 +815,23 @@ function TextFileViewer({ filePath, cwd }: Props) {
             style={{ padding: "28px 40px 48px", maxWidth: 860, margin: "0 auto" }}
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.content}</ReactMarkdown>
+          </div>
+        ) : isLargeSource ? (
+          <div style={{ minHeight: "100%", background: "var(--code-bg)", fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6 }}>
+            <div style={{ padding: "8px 12px", color: "var(--text-dim)", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
+              Large file: syntax highlighting is disabled to keep the viewer responsive.
+            </div>
+            <pre
+              style={{
+                margin: 0,
+                padding: "12px 16px",
+                whiteSpace: wrapLines ? "pre-wrap" : "pre",
+                overflowWrap: wrapLines ? "anywhere" : "normal",
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              {data.content}
+            </pre>
           </div>
         ) : (
           <SyntaxHighlighter
