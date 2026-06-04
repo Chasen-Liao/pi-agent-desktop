@@ -11,7 +11,7 @@ import { killProcessTree } from "./process-tree";
 import { pickApiKeys } from "./env-filter";
 import { choosePort } from "./port-selection";
 import { getNextRestartState, type ServerState } from "./restart-policy";
-import { formatElectronLogLine, type ElectronLogLevel } from "./log-format";
+import { formatElectronLogLine, deriveScope, type ElectronLogLevel } from "./log-format";
 
 // ---------------------------------------------------------------------------
 // State
@@ -47,7 +47,11 @@ function getLogFilePath(): string {
 
 function writeLog(level: ElectronLogLevel, message: string, detail?: unknown) {
   try {
-    appendFileSync(getLogFilePath(), formatElectronLogLine({ level, source: "electron-main", message, detail }), "utf8");
+    appendFileSync(
+      getLogFilePath(),
+      formatElectronLogLine({ level, source: "electron-main", scope: deriveScope(message), message, detail }),
+      "utf8",
+    );
   } catch {
     // Avoid failing app startup because diagnostics cannot be written.
   }

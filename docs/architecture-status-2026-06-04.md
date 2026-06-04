@@ -54,13 +54,13 @@ P0、P1 和已列出的 P2 工程化/性能/可观测性收敛项已经基本落
 - Electron 主进程日志写入改为结构化 JSON 行，统一包含 `time`、`level`、`source`、`message` 和可选 `detail`，并对 Error detail 做摘要。
 - 新增 `build:standalone` 明确表示 Next.js standalone 构建；`build` 保留为兼容别名，发布和打包脚本改为调用 `build:standalone`。
 
+### P2-4 日志 scope 字段落地
+
+- `electron/log-format.ts` 的 `ElectronLogEntryInput` 增加 `scope: string` 必填字段，并引入 `ElectronLogSource = "electron-main" | "electron-renderer" | "next-api"`，便于后续在渲染进程和 Next API 沿用同一格式。
+- `electron/main.ts` 增补 `deriveScope` 辅助函数，从消息首词派生稳定 scope（默认 `"main"`），所有现有 `writeLog` 调用统一通过它传入。
+- `electron/log-format.test.ts` 增补 scope 字段相关断言（主进程、渲染进程、Next API 三类 source 均可解析回原 scope），保证后续推广时格式契约不退化。
+
 ## 仍需处理
 
-后续剩余 follow-up 集中在更完整的诊断体系产品化，以及是否引入 husky / lint-staged 等本地提交前检查。
-
-### 构建与命名 follow-up
-
-`npm run build` 仍直接表示 Next standalone build。由于 AGENTS.md 明确提醒“不要直接运行 `next build`”，后续可以考虑新增 `build:standalone` 并让打包脚本调用该名称，以降低脚本语义歧义。是否保留 `build` 作为别名应结合 npm 包发布和现有开发习惯单独决定。
-
-本文替代旧架构分析和 P0/P1 实施文档；后续完成剩余项时，直接更新本文，不再新增零散 follow-up 文档。
+后续剩余 follow-up 集中在是否引入 husky / lint-staged 等本地提交前检查，以及把 scope 字段实际推广到 Electron 渲染进程和新增模块的调用点。
 
