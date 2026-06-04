@@ -42,7 +42,8 @@
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@electron/packager": "^20.0.0",
@@ -53,7 +54,6 @@
     "@types/react-dom": "^19",
     "electron": "^36.9.5",
     "electron-builder": "^26.8.1",
-    "electron-updater": "^6.8.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "postcss": "^8",

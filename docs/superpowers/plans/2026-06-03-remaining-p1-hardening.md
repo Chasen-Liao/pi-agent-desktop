@@ -196,10 +196,10 @@ Do not run `next build` directly. If production build validation is required, us
 - If manual copy remains necessary: group only direct runtime dependencies, remove transitive dependency list, and document why.
 
 **Implementation:**
-- [ ] 运行或检查当前 `npm run pack` 输出，确认哪些包确实需要在 `app/node_modules` 下。
-- [ ] 尽量删除 `builder-util-runtime`、`fs-extra`、`graceful-fs` 等 transitive 手写项。
-- [ ] 保留 `.next/standalone/node_modules` 的复制项，因为项目说明明确这是必要项。
-- [ ] 打包后启动目录版 Electron，确认 updater import 不报 module not found。
+- [x] 运行或检查当前 `npm run pack` 输出，确认哪些包确实需要在 `app/node_modules` 下。
+- [x] 尽量删除 `builder-util-runtime`、`fs-extra`、`graceful-fs` 等 transitive 手写项。
+- [x] 保留 `.next/standalone/node_modules` 的复制项，因为项目说明明确这是必要项。
+- [x] 打包后启动目录版 Electron，确认 updater import 不报 module not found。
 
 **Success criteria:**
 - `electron-builder.yml` 不再维护长 transitive dependency 列表。
@@ -207,8 +207,8 @@ Do not run `next build` directly. If production build validation is required, us
 - 打包目录版 Electron 可启动。
 
 **Validation:**
-- [ ] `npm run pack`
-- [ ] 手动启动 release 目录版应用，确认无 module resolution 错误。
+- [ ] `npm run pack`（当前 Windows 用户缺少创建符号链接权限，electron-builder 解压 winCodeSign 时失败）
+- [x] 手动启动 release 目录版应用，确认无 module resolution 错误。
 
 ---
 

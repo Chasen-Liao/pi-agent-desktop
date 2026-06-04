@@ -12,28 +12,8 @@ files:
   - electron/dist/**/*
   - "!electron/**/*.ts"
   - "!electron/tsconfig.json"
-  - "!node_modules/**/*"
 
 extraResources:
-  - from: node_modules
-    to: app/node_modules
-    filter:
-      - electron-updater/**/*
-      - builder-util-runtime/**/*
-      - debug/**/*
-      - ms/**/*
-      - sax/**/*
-      - fs-extra/**/*
-      - graceful-fs/**/*
-      - jsonfile/**/*
-      - universalify/**/*
-      - js-yaml/**/*
-      - argparse/**/*
-      - lazy-val/**/*
-      - lodash.escaperegexp/**/*
-      - lodash.isequal/**/*
-      - semver/**/*
-      - tiny-typed-emitter/**/*
   - from: .next/standalone
     to: standalone
     filter:
