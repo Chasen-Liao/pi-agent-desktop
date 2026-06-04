@@ -8,7 +8,7 @@
 
 P0、P1 和已列出的 P2 工程化/性能/可观测性收敛项已经基本落地。旧文档中的不少行号和状态已经过期，因此以后以本文为当前架构清理入口。
 
-后续仍可继续推进的 follow-up 主要集中在更完整的诊断体系产品化，以及是否引入本地提交前检查。
+后续仍可继续推进的 follow-up 主要集中在把 scope 字段实际推广到渲染进程与 Next API 的日志入口，以及是否引入本地提交前检查。
 
 ## 已完成
 
@@ -57,7 +57,7 @@ P0、P1 和已列出的 P2 工程化/性能/可观测性收敛项已经基本落
 ### P2-4 日志 scope 字段落地
 
 - `electron/log-format.ts` 的 `ElectronLogEntryInput` 增加 `scope: string` 必填字段，并引入 `ElectronLogSource = "electron-main" | "electron-renderer" | "next-api"`，便于后续在渲染进程和 Next API 沿用同一格式。
-- `electron/main.ts` 增补 `deriveScope` 辅助函数，从消息首词派生稳定 scope（默认 `"main"`），所有现有 `writeLog` 调用统一通过它传入。
+- `electron/log-format.ts` 导出 `deriveScope` 辅助函数，从消息首词派生稳定 scope（默认 `"main"`），`electron/main.ts` 的 `writeLog` 改为通过它注入 scope，所有现有调用点统一走同一路径。
 - `electron/log-format.test.ts` 增补 scope 字段相关断言（主进程、渲染进程、Next API 三类 source 均可解析回原 scope），保证后续推广时格式契约不退化。
 
 ## 仍需处理
