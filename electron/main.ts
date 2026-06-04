@@ -9,6 +9,7 @@ import { getStartupFailureDisposition } from "./startup-failure";
 import { waitForNextServerReady } from "./server-wait";
 import { killProcessTree } from "./process-tree";
 import { pickApiKeys } from "./env-filter";
+import { choosePort } from "./port-selection";
 import { getNextRestartState, type ServerState } from "./restart-policy";
 
 // ---------------------------------------------------------------------------
@@ -118,16 +119,11 @@ function reservePort(port: number): Promise<number> {
 }
 
 async function findFreePort(startPort: number, maxAttempts = 10): Promise<number> {
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const port = startPort + attempt;
-    try {
-      return await reservePort(port);
-    } catch {
-      // Try next port.
-    }
-  }
-
-  throw new Error(`No free port found after ${maxAttempts} attempts`);
+  return choosePort({
+    startPort,
+    maxAttempts,
+    reservePort,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -183,6 +179,11 @@ async function restartNextServer(label: string) {
   restartAttempts = nextRestart.attempts;
 
   if (!nextRestart.shouldRestart) {
+    logError("Next.js server exited too often; automatic restart disabled", {
+      attempts: nextRestart.attempts,
+      windowMs: 60_000,
+      label,
+    });
     serverState = "stopped";
     showStartupState("stopped", `${label} 已退出`);
     return;

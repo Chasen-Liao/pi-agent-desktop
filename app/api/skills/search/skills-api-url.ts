@@ -8,7 +8,7 @@ export function getAllowedSkillsApiBase(rawBase = process.env.SKILLS_API_URL, no
     const isDefaultHost = parsed.protocol === "https:" && parsed.hostname === "skills.sh" && (!parsed.port || parsed.port === "443");
     const isLocalDevHost = nodeEnv !== "production"
       && (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
-      && (parsed.protocol === "http:" || parsed.protocol === "https:");
+      && parsed.protocol === "https:";
 
     if (!isDefaultHost && !isLocalDevHost) {
       console.error("Ignoring unsupported SKILLS_API_URL", { value: rawBase });

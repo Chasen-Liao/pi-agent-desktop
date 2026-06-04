@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { ayuDarkSyntaxTheme, ayuLightSyntaxTheme } from "@/lib/ayu-syntax-theme";
 import ReactMarkdown from "react-markdown";
@@ -524,6 +524,73 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
   );
 }
 
+function PlainTextViewer({
+  content,
+  wrapLines,
+  showLargeFileNotice,
+}: {
+  content: string;
+  wrapLines: boolean;
+  showLargeFileNotice?: boolean;
+}) {
+  const lines = useMemo(() => content.split("\n"), [content]);
+
+  return (
+    <div
+      style={{
+        minHeight: "100%",
+        background: "var(--code-bg)",
+        fontFamily: "var(--font-mono)",
+        fontSize: 13,
+        lineHeight: 1.6,
+      }}
+    >
+      {showLargeFileNotice && (
+        <div style={{ padding: "8px 12px", color: "var(--text-dim)", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
+          Large file: syntax highlighting is disabled to keep the viewer responsive.
+        </div>
+      )}
+      <div style={{ minHeight: "100%", padding: "12px 0" }}>
+        {lines.map((line, index) => (
+          <div
+            key={index}
+            style={{
+              display: "flex",
+              alignItems: "stretch",
+            }}
+          >
+            <span
+              style={{
+                color: "var(--text-dim)",
+                fontStyle: "normal",
+                minWidth: "3em",
+                paddingRight: "1em",
+                textAlign: "right",
+                userSelect: "none",
+                flexShrink: 0,
+                paddingLeft: 16,
+              }}
+            >
+              {index + 1}
+            </span>
+            <span
+              style={{
+                flex: 1,
+                whiteSpace: wrapLines ? "pre-wrap" : "pre",
+                overflowWrap: wrapLines ? "anywhere" : "normal",
+                overflowX: wrapLines ? "hidden" : "auto",
+                paddingRight: 16,
+              }}
+            >
+              {line || " "}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function FileViewer({ filePath, cwd }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} />;
@@ -621,6 +688,21 @@ function TextFileViewer({ filePath, cwd }: Props) {
     };
   }, [filePath, fetchContent]);
 
+  const content = data?.content ?? "";
+  const lines = useMemo(() => content.split("\n"), [content]);
+  const isHtml = data?.language === "html";
+  const isMarkdown = data?.language === "markdown";
+  const isLargeSource = useMemo(
+    () => Boolean(
+      data
+      && viewMode === "source"
+      && !previewMode
+      && (content.length > LARGE_SOURCE_BYTES || lines.length > LARGE_SOURCE_LINES)
+    ),
+    [content.length, data, lines.length, previewMode, viewMode]
+  );
+  const hasDiff = prevContent !== null && prevContent !== content;
+
   if (loading) {
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 13 }}>
@@ -638,14 +720,6 @@ function TextFileViewer({ filePath, cwd }: Props) {
   }
 
   if (!data) return null;
-
-  const isHtml = data.language === "html";
-  const isMarkdown = data.language === "markdown";
-  const lines = data.content.split("\n");
-  const isLargeSource = viewMode === "source"
-    && !previewMode
-    && (data.content.length > LARGE_SOURCE_BYTES || lines.length > LARGE_SOURCE_LINES);
-  const hasDiff = prevContent !== null && prevContent !== data.content;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -817,22 +891,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.content}</ReactMarkdown>
           </div>
         ) : isLargeSource ? (
-          <div style={{ minHeight: "100%", background: "var(--code-bg)", fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6 }}>
-            <div style={{ padding: "8px 12px", color: "var(--text-dim)", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
-              Large file: syntax highlighting is disabled to keep the viewer responsive.
-            </div>
-            <pre
-              style={{
-                margin: 0,
-                padding: "12px 16px",
-                whiteSpace: wrapLines ? "pre-wrap" : "pre",
-                overflowWrap: wrapLines ? "anywhere" : "normal",
-                fontFamily: "var(--font-mono)",
-              }}
-            >
-              {data.content}
-            </pre>
-          </div>
+          <PlainTextViewer content={content} wrapLines={wrapLines} showLargeFileNotice />
         ) : (
           <SyntaxHighlighter
             language={data.language === "text" ? "plaintext" : data.language}
@@ -856,7 +915,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
             codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
             wrapLongLines={wrapLines}
           >
-            {data.content}
+            {content}
           </SyntaxHighlighter>
         )}
       </div>
