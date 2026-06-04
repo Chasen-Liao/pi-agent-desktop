@@ -34,19 +34,7 @@ jobs:
 
       - name: Test
         timeout-minutes: 5
-        run: |
-          node --test --test-force-exit \
-            app/api/health/route.test.ts \
-            lib/api-error.test.ts \
-            lib/custom-path-selection.test.ts \
-            lib/normalize.test.ts \
-            lib/rpc-manager.test.ts \
-            lib/session-cascade.test.ts \
-            lib/session-lock.test.ts \
-            lib/slash-commands.test.ts \
-            hooks/agent-session/agent-phase.test.ts \
-            hooks/agent-session/session-stats.test.ts \
-            hooks/agent-session/stream-state.test.ts
+        run: npm test
 
   build:
     name: build (next.js)
@@ -96,19 +84,4 @@ jobs:
       - name: Test (Windows)
         timeout-minutes: 10
         shell: bash
-        run: |
-          node --test --test-force-exit \
-            app/api/health/route.test.ts \
-            lib/api-error.test.ts \
-            lib/custom-path-selection.test.ts \
-            lib/normalize.test.ts \
-            lib/rpc-manager.test.ts \
-            lib/session-cascade.test.ts \
-            lib/session-lock.test.ts \
-            lib/slash-commands.test.ts \
-            hooks/agent-session/agent-phase.test.ts \
-            hooks/agent-session/session-stats.test.ts \
-            hooks/agent-session/stream-state.test.ts \
-            electron/process-tree.test.ts \
-            electron/server-wait.test.ts \
-            electron/startup-failure.test.ts
+        run: npm test
