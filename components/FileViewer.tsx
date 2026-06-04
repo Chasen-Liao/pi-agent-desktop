@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTheme } from "@/hooks/useTheme";
 import { encodeFilePathForApi, getFileName, getRelativeFilePath } from "@/lib/file-paths";
+import { getVirtualLineWindow } from "./file-viewer-virtualization";
 
 interface Props {
   filePath: string;
@@ -23,6 +24,8 @@ const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "
 const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "weba", "webm"]);
 const LARGE_SOURCE_BYTES = 200_000;
 const LARGE_SOURCE_LINES = 5_000;
+const VIRTUAL_ROW_HEIGHT = 21;
+const VIRTUAL_OVERSCAN_ROWS = 20;
 
 function isImagePath(filePath: string): boolean {
   const base = getFileName(filePath);
@@ -534,29 +537,76 @@ function PlainTextViewer({
   showLargeFileNotice?: boolean;
 }) {
   const lines = useMemo(() => content.split("\n"), [content]);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    const updateViewportHeight = () => setViewportHeight(scroller.clientHeight);
+    updateViewportHeight();
+
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(updateViewportHeight);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, []);
+
+  const shouldVirtualize = showLargeFileNotice && !wrapLines;
+  const visibleWindow = useMemo(
+    () => getVirtualLineWindow({
+      lineCount: lines.length,
+      scrollTop,
+      viewportHeight,
+      rowHeight: VIRTUAL_ROW_HEIGHT,
+      overscanRows: VIRTUAL_OVERSCAN_ROWS,
+    }),
+    [lines.length, scrollTop, viewportHeight]
+  );
+  const visibleLines = useMemo(() => {
+    if (!shouldVirtualize) {
+      return lines.map((line, index) => ({ index, text: line }));
+    }
+
+    return lines.slice(visibleWindow.startIndex, visibleWindow.endIndex).map((line, offset) => ({
+      index: visibleWindow.startIndex + offset,
+      text: line,
+    }));
+  }, [lines, shouldVirtualize, visibleWindow]);
+
+  const topPaddingHeight = shouldVirtualize ? visibleWindow.topPaddingHeight : 0;
+  const bottomPaddingHeight = shouldVirtualize ? visibleWindow.bottomPaddingHeight : 0;
 
   return (
     <div
+      ref={scrollerRef}
+      onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
       style={{
-        minHeight: "100%",
+        height: "100%",
+        overflow: "auto",
         background: "var(--code-bg)",
         fontFamily: "var(--font-mono)",
         fontSize: 13,
-        lineHeight: 1.6,
+        lineHeight: `${VIRTUAL_ROW_HEIGHT}px`,
       }}
     >
       {showLargeFileNotice && (
-        <div style={{ padding: "8px 12px", color: "var(--text-dim)", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
+        <div style={{ padding: "8px 12px", color: "var(--text-dim)", borderBottom: "1px solid var(--border)", fontSize: 12, lineHeight: 1.4 }}>
           Large file: syntax highlighting is disabled to keep the viewer responsive.
         </div>
       )}
       <div style={{ minHeight: "100%", padding: "12px 0" }}>
-        {lines.map((line, index) => (
+        {topPaddingHeight > 0 && <div style={{ height: topPaddingHeight }} />}
+        {visibleLines.map(({ text, index }) => (
           <div
             key={index}
             style={{
               display: "flex",
               alignItems: "stretch",
+              minHeight: VIRTUAL_ROW_HEIGHT,
             }}
           >
             <span
@@ -582,10 +632,11 @@ function PlainTextViewer({
                 paddingRight: 16,
               }}
             >
-              {line || " "}
+              {text || " "}
             </span>
           </div>
         ))}
+        {bottomPaddingHeight > 0 && <div style={{ height: bottomPaddingHeight }} />}
       </div>
     </div>
   );
@@ -873,7 +924,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
       </div>
 
       {/* Content area */}
-      <div style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}>
+      <div style={{ flex: 1, overflow: isLargeSource ? "hidden" : "auto", background: "var(--bg)" }}>
         {viewMode === "diff" && hasDiff ? (
           <DiffView oldContent={prevContent!} newContent={data.content} language={data.language} />
         ) : isHtml && previewMode ? (
