@@ -50,3 +50,6 @@ next-env.d.ts
 
 # local Claude Code worktrees
 /.claude/worktrees/
+
+# dev server stdout/stderr captures (should never be committed)
+/tmp/
