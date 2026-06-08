@@ -1,0 +1,47 @@
+
+> @chasen-liao/pi-agent-desktop@0.7.7 dev
+> next dev -p 30141
+
+▲ Next.js 16.2.1 (Turbopack)
+- Local:         http://localhost:30141
+- Network:       http://169.254.83.107:30141
+✓ Ready in 15.7s
+
+  We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
+  The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
+
+  	- include was updated to add '.next/dev/dev/types/**/*.ts'
+
+
+○ Compiling / ...
+ GET / 200 in 62ms (next.js: 4ms, application-code: 58ms)
+ GET /api/health 200 in 885ms (next.js: 864ms, application-code: 21ms)
+ GET / 200 in 86ms (next.js: 13ms, application-code: 72ms)
+○ Compiling /api/sessions ...
+ GET /api/home 200 in 53s (next.js: 53s, application-code: 7ms)
+ GET /api/health 200 in 16ms (next.js: 10ms, application-code: 6ms)
+ GET /api/sessions 200 in 53s (next.js: 53s, application-code: 92ms)
+ GET /api/auth/providers 200 in 382ms (next.js: 357ms, application-code: 26ms)
+ GET /api/auth/providers 200 in 398ms (next.js: 390ms, application-code: 8ms)
+ GET /api/models-config 200 in 475ms (next.js: 450ms, application-code: 25ms)
+ GET /api/models-config 200 in 465ms (next.js: 457ms, application-code: 8ms)
+ GET /api/auth/all-providers 200 in 540ms (next.js: 526ms, application-code: 14ms)
+ GET /api/auth/all-providers 200 in 556ms (next.js: 545ms, application-code: 11ms)
+ GET / 200 in 33ms (next.js: 9ms, application-code: 23ms)
+ GET / 200 in 45ms (next.js: 4ms, application-code: 40ms)
+ GET /api/models 200 in 7.2s (next.js: 7.2s, application-code: 9ms)
+○ Compiling /api/models ...
+ GET /api/models 200 in 88ms (next.js: 77ms, application-code: 11ms)
+ GET / 200 in 99ms (next.js: 9ms, application-code: 90ms)
+ GET /api/home 200 in 12ms (next.js: 8ms, application-code: 4ms)
+ GET /api/sessions 200 in 20ms (next.js: 3ms, application-code: 18ms)
+ GET / 200 in 13ms (next.js: 3ms, application-code: 10ms)
+ GET /api/models 200 in 14ms (next.js: 3ms, application-code: 11ms)
+ GET /api/models 200 in 11ms (next.js: 1705µs, application-code: 9ms)
+ GET / 200 in 26ms (next.js: 3ms, application-code: 22ms)
+ GET /api/files/C%3A/Users/Og/pi-cwd-20260602?type=list 200 in 9.4s (next.js: 9.4s, application-code: 16ms)
+ GET /api/files/C%3A/Users/Og/pi-cwd-20260602?type=list 200 in 15ms (next.js: 9ms, application-code: 6ms)
+ GET /api/files/C%3A/Users/Og/pi-cwd-20260602?type=list 200 in 10ms (next.js: 4ms, application-code: 6ms)
+ GET /api/files/C%3A/Users/Og/pi-cwd-20260602?type=list 200 in 7ms (next.js: 3ms, application-code: 4ms)
+ GET / 200 in 404ms (next.js: 141ms, application-code: 263ms)
+ GET / 200 in 100ms (next.js: 25ms, application-code: 75ms)
