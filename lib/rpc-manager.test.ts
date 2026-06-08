@@ -1,8 +1,17 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { AgentSessionWrapper } from "./rpc-manager.ts";
 
 type SubscribeFn = (cb: (event: unknown) => void) => () => void;
+
+const source = readFileSync(new URL("./rpc-manager.ts", import.meta.url), "utf8");
+
+test("startRpcSession does not pass a hardcoded default tool allowlist", () => {
+  assert.doesNotMatch(source, /const allCodingToolNames = \[[^\]]+\]/);
+  assert.match(source, /toolNames\?\.length === 0 \? \{ tools: \[\] \} : \{\}/);
+  assert.match(source, /inner\.setActiveToolsByName\(toolNames\)/);
+});
 
 function makeStubInner(overrides: {
   subscribe?: SubscribeFn;

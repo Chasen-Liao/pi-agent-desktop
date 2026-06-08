@@ -20,14 +20,16 @@
   ],
   "scripts": {
     "dev": "next dev -p 30141",
-    "build": "next build --webpack",
+    "build": "npm run build:standalone",
+    "build:standalone": "next build --webpack",
     "start": "next start -p 30141",
     "lint": "eslint .",
-    "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public",
+    "test": "node --test --test-force-exit package.test.ts app/api/health/route.test.ts app/api/skills/search/route.test.ts components/FileViewer.test.ts components/file-viewer-virtualization.test.ts lib/api-error.test.ts lib/custom-path-selection.test.ts lib/normalize.test.ts lib/rpc-manager.test.ts lib/session-cascade.test.ts lib/session-lock.test.ts lib/slash-commands.test.ts hooks/agent-session/agent-phase.test.ts hooks/agent-session/session-stats.test.ts hooks/agent-session/stream-state.test.ts electron/log-format.test.ts electron/main.test.ts electron/port-selection.test.ts electron/process-tree.test.ts electron/restart-policy.test.ts electron/server-wait.test.ts electron/startup-failure.test.ts",
+    "release": "npm version patch --no-git-tag-version && npm run build:standalone && npm publish --access public",
     "build:electron": "tsc -p electron/tsconfig.json && node -e \"const fs=require('fs'); fs.copyFileSync('electron/startup.html', 'electron/dist/startup.html'); fs.copyFileSync('electron/startup.js', 'electron/dist/startup.js')\"",
     "dev:electron": "npm run build:electron && npx electron .",
-    "pack": "npm run build && npm run build:electron && npx @electron/rebuild && npx electron-builder --dir",
-    "dist": "npm run build && npm run build:electron && npx @electron/rebuild && npx electron-builder"
+    "pack": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --dir",
+    "dist": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder"
   },
   "build": {
     "extends": "electron-builder.yml"
@@ -42,7 +44,8 @@
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@electron/packager": "^20.0.0",
@@ -53,7 +56,6 @@
     "@types/react-dom": "^19",
     "electron": "^36.9.5",
     "electron-builder": "^26.8.1",
-    "electron-updater": "^6.8.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "postcss": "^8",

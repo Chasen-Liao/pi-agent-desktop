@@ -19,10 +19,14 @@ test("source mode derives large-file detection from memoized lines", () => {
   );
 });
 
-test("plain text viewer keeps explicit line numbers for large files", () => {
-  assert.match(source, /function PlainTextViewer\(/);
-  assert.match(source, /\{index \+ 1\}/);
-  assert.match(source, /Large file: syntax highlighting is disabled to keep the viewer responsive\./);
+test("plain text viewer virtualizes large file rows", () => {
+  assert.match(source, /const VIRTUAL_ROW_HEIGHT = \d+;/);
+  assert.match(source, /const visibleLines = useMemo\(/);
+  assert.match(source, /topPaddingHeight/);
+  assert.match(source, /const shouldVirtualize = showLargeFileNotice && !wrapLines;/);
+  assert.match(source, /getVirtualLineWindow\(\{/);
+  assert.match(source, /viewportHeight,/);
+  assert.doesNotMatch(source, /\{lines\.map\(\(line, index\) => \(/);
 });
 
 test("markdown preview and diff branches remain ahead of large source fallback", () => {
