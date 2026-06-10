@@ -259,3 +259,70 @@ export async function POST() { }
 ---
 
 > 报告由 5 个并行 subagent 分析生成，覆盖 6 个维度共 ~83 个发现项。
+
+---
+
+## 七、P0 修复记录（2026-06-10 已完成）
+
+| # | 问题 | 状态 | 提交 |
+|---|------|:----:|------|
+| P0-1 | iframe sandbox `allow-scripts` → `""` | ✅ | `components/FileViewer.tsx:933` |
+| P0-2 | `Math.random()` → `crypto.randomUUID()` | ✅ | `app/api/auth/login/[provider]/route.ts:74` |
+| P0-3 | `asar: false` → `asar: true` | ✅ | `electron-builder.yml:33` |
+| P0-4 | CSP `script-src 'self'` → 加 `'unsafe-inline'` | ✅ | `electron/startup.html:5` |
+| P0-5 | 13+ 处 `.catch(() => {})` 加 `console.error` | ✅ | 7 个文件 |
+| P0-6 | `/api/sessions/new` 死路由 | ✅ | 已是 410 Gone，无需改动 |
+| P0-9 | test 脚本硬编码 → glob | ✅ | `package.json:27` |
+| P0-10 | `@types/react-syntax-highlighter` 移 deps→devDeps | ✅ | `package.json` |
+| P0-11 | 主应用 CSP | ✅ | 新增 `middleware.ts` |
+| - | `void shell/serverState/activePort` 死代码 | ✅ | `electron/main.ts:84-86` |
+
+**尚未在本次修复中完成（需要较大重构，放入 P1/P2）：**
+| # | 问题 | 说明 |
+|---|------|------|
+| P0-7 | 未使用动态导入 | AppShell 静态 import ModelsConfig/SkillsConfig/FileViewer，需用 `next/dynamic` |
+| P0-8 | AppShell 无 memo + 20+ state | 需提取 MemoizedStatsBar、拆分 state |
+| P0-12 | `useAgentSession` God Hook | 558 行/34 state/50+ 返回值，需拆分为子 hook |
+
+---
+
+## 八、下一步讨论
+
+### P1 高优先级（建议下一轮）
+
+**安全 & 体验：**
+1. 全局内联 `onMouseEnter`/`onMouseLeave` → CSS `:hover` 类（P1-11）— 涉及几乎所有组件，工作量 ~2 天
+2. 颜色对比度修复 `--text-dim`/`--text-muted`（P1-12）— 简单 CSS 调整
+3. 模态框/工具栏无障碍属性（P1-13, P1-14）— 加 ARIA 属性，~0.5 天
+
+**性能：**
+4. SSE 重连添加指数退避（P1-01）— `hooks/agent-session/use-agent-events.ts`
+5. Electron 启动并行化 `createWindow`/`createTray`（P1-02）— `electron/main.ts`
+
+**代码质量：**
+6. 提取共享 MIME maps → `lib/file-types.ts`（P1-04）
+7. 提取工具预设定义 → `lib/tool-presets.ts`（P1-05）
+8. `lib/panel-layout.js` → `.ts`（P1-06）
+
+**测试：**
+9. `app/api/files/[...path]/route.ts` 380 行零测试（P1-18）
+10. `lib/session-reader.ts` 190 行核心逻辑零测试（P1-19）
+11. tsconfig `target: "ES2017"` → `"ES2022"`（P1-16）
+
+### 建议顺序
+
+**先做低风险、高收益的：** P1-12（颜色）、P1-16（tsconfig）、P1-06（panel-layout.js→ts）、P1-04 + P1-05（提取共享常量）— 这些都是纯结构调整，不会引入 bug。
+
+**再做需要仔细测试的：** P1-11（hover 改 CSS）、P1-01（SSE 重连）、P1-02（Electron 启动）— 涉及的改动会影响运行时行为，需要手动验证。
+
+**最后做测试补充：** P1-18、P1-19 — 在没有测试基础的情况下加测试等于先搭架子，可以先为纯函数写测试，再考虑集成测试。
+
+### P0-7/P0-8/P0-12（大重构）的处理
+
+这三个问题都涉及较大改动：
+- **动态导入**（P0-7）：改动面小（只改 AppShell 的 import 语句），风险低，可以随时做
+- **AppShell 拆分**（P0-8）和 **God Hook 拆分**（P0-12）：耦合度高，建议在做 P1 的其他拆分（提取常量、迁移文件）积累经验后再动手
+
+---
+
+> 最后更新：2026-06-10，P0 修复轮次完成。
