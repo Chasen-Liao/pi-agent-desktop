@@ -30,7 +30,7 @@ extraResources:
     filter:
       - "**/*"
 
-asar: false
+asar: true
 
 npmRebuild: true
 

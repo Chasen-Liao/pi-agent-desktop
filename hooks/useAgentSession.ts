@@ -146,7 +146,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               if (d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
               if (d.state?.systemPrompt !== undefined) setSystemPrompt(d.state.systemPrompt ?? null);
             })
-            .catch(() => {});
+            .catch((err) => { console.error("Agent end fetch failed:", err); });
         }
         onAgentEnd?.();
         break;
@@ -526,7 +526,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           setNewSessionModel(selected);
         }
       }
-    }).catch(() => {});
+    }).catch((err) => { console.error("Failed to load model list:", err); });
   }, [isNew, modelsRefreshKey, setNewSessionModel]);
 
   // Compact error auto-dismiss

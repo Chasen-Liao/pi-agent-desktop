@@ -86,7 +86,7 @@ export class AgentSessionWrapper {
       case "prompt": {
         // Fire and forget — events come via subscribe
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined).catch(() => {});
+        this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined).catch((err) => { console.error("pi prompt failed:", err); });
         return null;
       }
 

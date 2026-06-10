@@ -16,11 +16,12 @@ export async function sendAgentCommand<T = unknown>(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(command),
   });
-  const body = (await res.json().catch(() => ({}))) as {
-    success?: boolean;
-    data?: T;
-    error?: string;
-  };
+  let body: { success?: boolean; data?: T; error?: string };
+  try {
+    body = await res.json();
+  } catch (e) {
+    throw new Error(`Invalid JSON response (HTTP ${res.status})`);
+  }
   if (!res.ok || body.error) {
     throw new Error(body.error ?? `HTTP ${res.status}`);
   }

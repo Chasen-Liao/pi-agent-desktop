@@ -81,9 +81,6 @@ function showStartupState(state: "starting" | "error" | "stopped", message?: str
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
-  void shell;
-  void serverState;
-  void activePort;
   mainWindow.loadURL(startupPageUrl(state, message));
 }
 

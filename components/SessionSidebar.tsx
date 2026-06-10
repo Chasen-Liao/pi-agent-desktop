@@ -69,7 +69,12 @@ async function pickDirectoryFromHost(): Promise<string | null> {
   }
 
   const res = await fetch("/api/select-directory", { method: "POST" });
-  const data = await res.json().catch(() => ({})) as { path?: string | null; error?: string };
+  let data: { path?: string | null; error?: string };
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(`Invalid JSON response (HTTP ${res.status})`);
+  }
   if (!res.ok) {
     throw new Error(data.error || `HTTP ${res.status}`);
   }
@@ -265,7 +270,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   useEffect(() => {
     fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
       if (d.home) setHomeDir(d.home);
-    }).catch(() => {});
+    }).catch((err) => { console.error("Failed to load home dir:", err); });
   }, []);
 
   const restoredRef = useRef(false);

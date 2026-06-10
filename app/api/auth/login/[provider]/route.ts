@@ -71,7 +71,7 @@ export async function GET(
       let pendingManualRequest: { token: string; promise: Promise<string> } | undefined;
 
       const createClientInputRequest = () => {
-        const token = `${provider}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const token = `${provider}-${Date.now()}-${crypto.randomUUID()}`;
         activeTokens.add(token);
 
         const promise = new Promise<string>((resolve, reject) => {
@@ -99,7 +99,7 @@ export async function GET(
             .finally(() => {
               pendingManualRequest = undefined;
             })
-            .catch(() => {});
+            .catch((err) => { console.error("Login pending request finalization failed:", err); });
         }
         return pendingManualRequest;
       };

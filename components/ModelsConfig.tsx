@@ -786,7 +786,8 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
         body: JSON.stringify({ token, code: code.trim() }),
       });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: string };
+        let d: { error?: string };
+        try { d = await res.json(); } catch { d = {}; }
         setLoginState({ phase: "error", message: d.error ?? `Server error ${res.status}` });
         return;
       }
@@ -806,7 +807,8 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
         body: JSON.stringify({ token, code: value }),
       });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: string };
+        let d: { error?: string };
+        try { d = await res.json(); } catch { d = {}; }
         setLoginState({ phase: "error", message: d.error ?? `Server error ${res.status}` });
       }
     } catch (e) {
@@ -1246,14 +1248,14 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     fetch("/api/auth/providers")
       .then((r) => r.json())
       .then((d: { providers: OAuthProvider[] }) => setOauthProviders(d.providers))
-      .catch(() => {});
+      .catch((err) => { console.error("Failed to load OAuth providers:", err); });
   }, []);
 
   const loadApiKeyProviders = useCallback(() => {
     fetch("/api/auth/all-providers")
       .then((r) => r.json())
       .then((d: { providers: ApiKeyProvider[] }) => setApiKeyProviders(d.providers))
-      .catch(() => {});
+      .catch((err) => { console.error("Failed to load API key providers:", err); });
   }, []);
 
   useEffect(() => {
