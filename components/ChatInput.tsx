@@ -2,18 +2,13 @@
 
 import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent, useMemo } from "react";
 import { buildSlashCommandItems, getSlashTriggerQuery, type SlashCommandItem, type SlashSkill } from "@/lib/slash-commands";
+import type { AttachedImage, ChatInputHandle } from "./chat-input/types";
+export type { ChatInputHandle };
 
-export interface AttachedImage {
-  data: string;   // base64, no prefix
-  mimeType: string;
-  previewUrl: string; // object URL for display
-}
 
-interface ModelOption {
-  provider: string;
-  modelId: string;
-  name: string;
-}
+import { AttachmentPreview } from "./chat-input/AttachmentPreview";
+import { ModelSelector } from "./chat-input/ModelSelector";
+import { PresetSelector } from "./chat-input/PresetSelector";
 
 interface Props {
   onSend: (message: string, images?: AttachedImage[]) => void;
@@ -41,15 +36,6 @@ interface Props {
   onSoundToggle?: () => void;
 }
 
-export interface ChatInputHandle {
-  insertText: (text: string) => void;
-  insertIfEmpty: (text: string) => void;
-  addImages: (files: File[]) => void;
-}
-
-const TOOL_PRESETS = ["off", "default", "full"] as const;
-const TOOL_PRESET_MAP: Record<"off" | "default" | "full", "none" | "default" | "full"> = { off: "none", default: "default", full: "full" };
-
 const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
 const THINKING_LEVEL_DESC: Record<typeof THINKING_LEVELS[number], string> = {
   auto: "沿用 pi 默认设置",
@@ -70,9 +56,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   soundEnabled, onSoundToggle,
 }: Props, ref) {
   const [value, setValue] = useState("");
-  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const [inputFocused, setInputFocused] = useState(false);
@@ -84,9 +67,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [slashDismissedValue, setSlashDismissedValue] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const modelDropdownPanelRef = useRef<HTMLDivElement>(null);
-  const toolDropdownRef = useRef<HTMLDivElement>(null);
   const thinkingDropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -140,7 +120,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             const reader = new FileReader();
             reader.onload = () => {
               const result = reader.result as string;
-              // result is "data:<mime>;base64,<data>"
               const base64 = result.split(",")[1];
               resolve({ data: base64, mimeType: file.type, previewUrl: URL.createObjectURL(file) });
             };
@@ -284,7 +263,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         if (isStreaming && (onSteer || onFollowUp)) {
-          // Default Enter sends as steer if available, else followup
           sendQueued(onSteer ? "steer" : "followup");
         } else {
           handleSend();
@@ -310,44 +288,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     processImageFiles(files);
   }, [processImageFiles]);
 
-
-
-  // Build model options: prefer modelList (has provider info), fallback to modelNames
-  const modelOptions: ModelOption[] = (() => {
-    if (modelList && modelList.length > 0) {
-      return modelList.map((m) => ({ provider: m.provider, modelId: m.id, name: m.name }));
-    }
-    return Object.entries(modelNames ?? {}).map(([modelId, name]) => ({
-      provider: model?.provider ?? "unknown",
-      modelId,
-      name,
-    }));
-  })();
-
-  // Group options by provider, preserving insertion order
-  const modelsByProvider: { provider: string; options: ModelOption[] }[] = [];
-  for (const opt of modelOptions) {
-    const group = modelsByProvider.find((g) => g.provider === opt.provider);
-    if (group) group.options.push(opt);
-    else modelsByProvider.push({ provider: opt.provider, options: [opt] });
-  }
-
-  const currentName = model
-    ? (modelOptions.find((o) => o.modelId === model.modelId && o.provider === model.provider)?.name ?? model.modelId)
-    : modelOptions.length > 0 ? modelOptions[0].name : null;
-
-  // Close dropdowns on outside click
+  // Close thinking dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (
-        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-        modelDropdownPanelRef.current && !modelDropdownPanelRef.current.contains(e.target as Node)
-      ) {
-        setModelDropdownOpen(false);
-      }
-      if (toolDropdownRef.current && !toolDropdownRef.current.contains(e.target as Node)) {
-        setToolDropdownOpen(false);
-      }
       if (thinkingDropdownRef.current && !thinkingDropdownRef.current.contains(e.target as Node)) {
         setThinkingDropdownOpen(false);
       }
@@ -355,8 +298,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-
 
   return (
     <div
@@ -396,35 +337,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             Retrying ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
+
         {/* Image previews */}
-        {attachedImages.length > 0 && (
-          <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-            {attachedImages.map((img, i) => (
-              <div key={i} style={{ position: "relative", flexShrink: 0 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={img.previewUrl}
-                  alt=""
-                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", display: "block" }}
-                />
-                <button
-                  onClick={() => removeImage(i)}
-                  style={{
-                    position: "absolute", top: -4, right: -4,
-                    width: 16, height: 16, borderRadius: "50%",
-                    background: "var(--bg-panel)", border: "1px solid var(--border)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer", padding: 0, color: "var(--text-muted)",
-                  }}
-                >
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        <AttachmentPreview attachedImages={attachedImages} onRemoveImage={removeImage} />
 
         {/* Main input */}
         <div style={{ position: "relative" }}>
@@ -741,107 +656,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <polyline points="21 15 16 10 5 21" />
               </svg>
             </button>
-            {/* Model selector — visible always, disabled during streaming */}
-            {modelOptions.length > 0 && currentName && onModelChange && (
-                <div ref={dropdownRef} style={{ position: "relative" }}>
-                  <button
-                    onClick={(e) => {
-                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                      setModelDropdownRect({ top: rect.top, left: rect.left, width: rect.width });
-                      setModelDropdownOpen((v) => !v);
-                    }}
-                    disabled={isStreaming}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "8px 12px",
-                      height: "var(--control-height)",
-                      maxWidth: 220, overflow: "hidden",
-                      background: modelDropdownOpen ? "var(--bg-hover)" : "none",
-                      border: "none",
-                      borderRadius: "var(--radius-control)",
-                      color: "var(--text-muted)",
-                      cursor: isStreaming ? "not-allowed" : "pointer",
-                      fontSize: 12,
-                      opacity: isStreaming ? 0.5 : 1,
-                      transition: "background 0.12s, color 0.12s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (isStreaming) return;
-                      e.currentTarget.style.background = "var(--bg-hover)";
-                      e.currentTarget.style.color = "var(--text)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = modelDropdownOpen ? "var(--bg-hover)" : "none";
-                      e.currentTarget.style.color = "var(--text-muted)";
-                    }}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="4" y="4" width="16" height="16" rx="2" />
-                      <rect x="9" y="9" width="6" height="6" />
-                      <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
-                      <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
-                      <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
-                      <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
-                    </svg>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
-                  </button>
-                  {modelDropdownOpen && modelDropdownRect && (() => {
-                    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-                    const bottom = viewportHeight - modelDropdownRect.top + 6;
-                    const maxH = Math.max(120, Math.min(modelDropdownRect.top - 8, viewportHeight * 0.6));
-                    return (
-                    <div ref={modelDropdownPanelRef} style={{
-                      position: "fixed",
-                      bottom, left: modelDropdownRect.left,
-                      zIndex: 500, background: "var(--bg)", border: "1px solid var(--border)",
-                      borderRadius: "var(--radius-panel)", boxShadow: "var(--shadow-popover)",
-                      overflow: "hidden", width: "max-content", minWidth: modelDropdownRect.width, maxHeight: maxH, overflowY: "auto",
-                    }}>
-                      {modelsByProvider.map((group, gi) => (
-                        <div key={group.provider}>
-                          {(modelsByProvider.length > 1) && (
-                            <div style={{
-                              padding: "6px 12px 4px",
-                              fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
-                              textTransform: "uppercase", letterSpacing: "0.07em",
-                              borderTop: gi > 0 ? "1px solid var(--border)" : "none",
-                            }}>
-                              {group.provider}
-                            </div>
-                          )}
-                          {group.options.map((opt) => {
-                            const isActive = opt.modelId === model?.modelId && opt.provider === model?.provider;
-                            return (
-                              <button
-                                key={`${opt.provider}:${opt.modelId}`}
-                                onClick={() => { setModelDropdownOpen(false); if (!isActive) onModelChange(opt.provider, opt.modelId); }}
-                                style={{
-                                  display: "flex", alignItems: "center", gap: 8,
-                                  width: "100%", padding: "7px 12px",
-                                  background: isActive ? "var(--bg-selected)" : "none",
-                                  border: "none",
-                                  color: isActive ? "var(--text)" : "var(--text-muted)",
-                                  cursor: "pointer", fontSize: 12, textAlign: "left",
-                                  fontWeight: isActive ? 600 : 400,
-                                  whiteSpace: "nowrap",
-                                }}
-                                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                              >
-                                {isActive
-                                  ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                                  : <span style={{ width: 10, flexShrink: 0 }} />}
-                                {opt.name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                    );
-                  })()}
-                </div>
-            )}
+
+            {/* Model selector */}
+            <ModelSelector
+              isStreaming={isStreaming}
+              model={model}
+              modelNames={modelNames}
+              modelList={modelList}
+              onModelChange={onModelChange}
+            />
           </div>
 
           {/* spacer */}
@@ -939,79 +762,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 )}
               </div>
             )}
+
+            {/* Preset selector */}
             {!isStreaming && onToolPresetChange && (
-              <div ref={toolDropdownRef} style={{ position: "relative" }}>
-                <button
-                  onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
-                  disabled={isStreaming}
-                  title="切换工具预设"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "8px 12px",
-                    height: "var(--control-height)",
-                    background: toolDropdownOpen ? "var(--bg-hover)" : "none",
-                    border: "none",
-                    borderRadius: "var(--radius-control)",
-                    color: "var(--text-muted)",
-                    cursor: isStreaming ? "not-allowed" : "pointer",
-                    fontSize: 12,
-                    opacity: isStreaming ? 0.5 : 1,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming) return;
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
-                    e.currentTarget.style.color = "var(--text-muted)";
-                  }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                  </svg>
-                  <span>{Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ?? "default"}</span>
-                </button>
-                {toolDropdownOpen && (
-                  <div style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-panel)", boxShadow: "var(--shadow-popover)",
-                    overflow: "hidden", minWidth: 120,
-                  }}>
-                    {TOOL_PRESETS.map((lvl) => {
-                      const preset = TOOL_PRESET_MAP[lvl];
-                      const isActive = (toolPreset ?? "default") === preset;
-                      const desc = lvl === "off" ? "无工具，纯聊天" : lvl === "default" ? "4 项内置工具" : "全部内置工具";
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
-                            background: isActive ? "var(--bg-selected)" : "none",
-                            border: "none",
-                            color: isActive ? "var(--text)" : "var(--text-muted)",
-                            cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 600 : 400,
-                            whiteSpace: "nowrap",
-                          }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                        >
-                          {isActive
-                            ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                            : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>{lvl}</span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <PresetSelector
+                isStreaming={isStreaming}
+                toolPreset={toolPreset}
+                onToolPresetChange={onToolPresetChange}
+              />
             )}
 
             {!isStreaming && onCompact && (
