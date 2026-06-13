@@ -104,10 +104,30 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handleAbortCompaction,
     handleToolPresetChange, handleThinkingLevelChange, handleAgentEventRef,
+    connectEvents,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange,
   });
+
+  const [connectionStatus, setConnectionStatus] = useState<string>("disconnected");
+
+  useEffect(() => {
+    const handleStatusChange = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      setConnectionStatus(customEvent.detail);
+    };
+    window.addEventListener("pi-connection-status", handleStatusChange);
+    return () => {
+      window.removeEventListener("pi-connection-status", handleStatusChange);
+    };
+  }, []);
+
+  const handleReconnect = useCallback(() => {
+    if (session) {
+      connectEvents(session.id);
+    }
+  }, [session, connectEvents]);
 
   const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
   const playDoneSoundRef = useRef(playDoneSound);
@@ -252,6 +272,24 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {connectionStatus === "failed" && (
+        <div className="bg-danger-bg border-b border-danger-border px-4 py-2.5 flex items-center justify-between text-[12px] text-danger shrink-0 z-50">
+          <div className="flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>连接已彻底中断，检测到网络异常</span>
+          </div>
+          <button
+            onClick={handleReconnect}
+            className="px-2.5 py-1 bg-danger text-accent-contrast rounded-control cursor-pointer hover:bg-danger-hover transition-colors font-medium text-[11px]"
+          >
+            手动重新连接
+          </button>
+        </div>
+      )}
       {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[var(--info-bg)] backdrop-blur-[1px]">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

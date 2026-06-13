@@ -8,6 +8,10 @@ import {
   invalidateSessionPathCache,
   buildSessionContext,
   listAllSessions,
+  getSessionEntriesAsync,
+  buildTree,
+  getLeafId,
+  getSessionName,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { rewriteChildHeader } from "@/lib/session-cascade";
@@ -26,13 +30,12 @@ export async function GET(
       return NextResponse.json({ error: "Session not found" }, { status: 404, headers: { "x-request-id": requestId } });
     }
 
-    const sm = SessionManager.open(filePath);
-    const entries = sm.getEntries() as never;
-    const tree = sm.getTree();
-    const leafId = sm.getLeafId();
+    const entries = await getSessionEntriesAsync(filePath);
+    const tree = buildTree(entries);
+    const leafId = getLeafId(entries);
     const context = buildSessionContext(entries, leafId);
 
-    const header = sm.getHeader();
+    const header = entries.length > 0 && (entries[0] as unknown as { type: string }).type === "session" ? entries[0] as unknown as { id: string; cwd?: string; timestamp: string } : null;
     let modified = header?.timestamp ?? new Date().toISOString();
     try { modified = statSync(filePath).mtime.toISOString(); } catch { /* use header timestamp */ }
     const allSessions = await listAllSessions();
@@ -41,7 +44,7 @@ export async function GET(
       path: filePath,
       id: header.id,
       cwd: header.cwd ?? "",
-      name: sm.getSessionName(),
+      name: getSessionName(entries),
       created: header.timestamp,
       modified,
       messageCount: context.messages.length,

@@ -22,7 +22,7 @@ export class AgentSessionWrapper {
   private listeners: EventListener[] = [];
   private unsubscribe: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
-  private onDestroyCallback: (() => void) | null = null;
+  private onDestroyCallbacks: Array<() => void> = [];
   private _alive = true;
 
   readonly inner: AgentSessionLike;
@@ -65,7 +65,7 @@ export class AgentSessionWrapper {
   }
 
   onDestroy(cb: () => void): void {
-    this.onDestroyCallback = cb;
+    this.onDestroyCallbacks.push(cb);
   }
 
   /**
@@ -254,7 +254,14 @@ export class AgentSessionWrapper {
     this._alive = false;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.unsubscribe?.();
-    this.onDestroyCallback?.();
+    for (const cb of this.onDestroyCallbacks) {
+      try {
+        cb();
+      } catch (err) {
+        console.error("Error in onDestroy callback:", err);
+      }
+    }
+    this.onDestroyCallbacks = [];
   }
 }
 

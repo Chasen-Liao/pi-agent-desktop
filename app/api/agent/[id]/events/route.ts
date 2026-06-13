@@ -1,6 +1,5 @@
-import { resolveSessionPath } from "@/lib/session-reader";
+import { resolveSessionPath, getHeaderAsync } from "@/lib/session-reader";
 import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +22,8 @@ export async function GET(
         headers: { "x-request-id": requestId },
       });
     }
-    const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
+    const header = await getHeaderAsync(filePath);
+    const cwd = header?.cwd ?? process.cwd();
     try {
       ({ session } = await startRpcSession(id, filePath, cwd));
     } catch (error) {

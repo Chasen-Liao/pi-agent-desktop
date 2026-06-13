@@ -1,67 +1,60 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { AgentEventsManager, type AgentEvent } from "./agent-events-manager";
 
-export interface AgentEvent {
-  type: string;
-  [key: string]: unknown;
-}
+export type { AgentEvent };
 
 interface UseAgentEventsOptions {
   agentRunning: boolean;
 }
 
 export function useAgentEvents({ agentRunning }: UseAgentEventsOptions) {
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const agentRunningRef = useRef(false);
+  const managerRef = useRef<AgentEventsManager | null>(null);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
 
+  if (!managerRef.current) {
+    managerRef.current = new AgentEventsManager();
+  }
+
   useEffect(() => {
-    agentRunningRef.current = agentRunning;
+    managerRef.current?.setAgentRunning(agentRunning);
   }, [agentRunning]);
 
-  const connectEvents = useCallback((sid: string) => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-    const es = new EventSource(`/api/agent/${encodeURIComponent(sid)}/events`);
-    eventSourceRef.current = es;
-    es.onmessage = (e) => {
-      try {
-        const event = JSON.parse(e.data) as AgentEvent;
+  useEffect(() => {
+    if (managerRef.current) {
+      managerRef.current.setEventHandler((event) => {
         handleAgentEventRef.current?.(event);
-      } catch (err) {
-        console.error("Failed to parse agent event", { data: e.data, error: err });
-      }
-    };
-    es.onerror = () => {
-      if (eventSourceRef.current === es && agentRunningRef.current) {
-        es.close();
-        eventSourceRef.current = null;
-        reconnectTimerRef.current = setTimeout(() => {
-          reconnectTimerRef.current = null;
-          if (agentRunningRef.current) connectEvents(sid);
-        }, 1000);
-      }
+      });
+    }
+    return () => {
+      managerRef.current?.cleanup();
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-      eventSourceRef.current?.close();
-      eventSourceRef.current = null;
-    };
+  const connectEvents = useCallback((sid: string) => {
+    managerRef.current?.connect(sid);
   }, []);
+
+  const eventSourceRef = {
+    get current() {
+      return managerRef.current?.getEventSource() ?? null;
+    },
+    set current(_val) {
+      // no-op, managed internally
+    }
+  };
+
+  const agentRunningRef = {
+    get current() {
+      return managerRef.current?.getAgentRunning() ?? false;
+    },
+    set current(val) {
+      if (managerRef.current) {
+        managerRef.current.setAgentRunning(val);
+      }
+    }
+  };
 
   return {
     eventSourceRef,

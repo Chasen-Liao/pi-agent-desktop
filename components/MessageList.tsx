@@ -79,6 +79,7 @@ export const MessageList = React.memo(function MessageList({
               messageRefs.current[currentRefIdx] = el;
               if (idx === lastUserIdx) lastUserMsgRef.current = el;
             }}
+            style={{ contentVisibility: "auto", containIntrinsicSize: "auto 150px" }}
           >
             {view}
           </div>

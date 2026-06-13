@@ -19,7 +19,7 @@ export async function sendAgentCommand<T = unknown>(
   let body: { success?: boolean; data?: T; error?: string };
   try {
     body = await res.json();
-  } catch (e) {
+  } catch {
     throw new Error(`Invalid JSON response (HTTP ${res.status})`);
   }
   if (!res.ok || body.error) {

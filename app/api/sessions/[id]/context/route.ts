@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { resolveSessionPath, buildSessionContext } from "@/lib/session-reader";
+import { resolveSessionPath, buildSessionContext, getSessionEntriesAsync } from "@/lib/session-reader";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 export async function GET(
@@ -18,8 +17,8 @@ export async function GET(
       return NextResponse.json({ error: "Session not found" }, { status: 404, headers: { "x-request-id": requestId } });
     }
 
-    const sm = SessionManager.open(filePath);
-    const context = buildSessionContext(sm.getEntries() as never, leafId);
+    const entries = await getSessionEntriesAsync(filePath);
+    const context = buildSessionContext(entries, leafId);
 
     return NextResponse.json({ context });
   } catch (error) {

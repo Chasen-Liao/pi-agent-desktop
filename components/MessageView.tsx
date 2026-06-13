@@ -116,7 +116,7 @@ export const MessageView = React.memo(function MessageView({
   return null;
 });
 
-function UserMessageView({
+const UserMessageView = React.memo(function UserMessageView({
   message,
   entryId,
   onFork,
@@ -275,9 +275,9 @@ function UserMessageView({
       )}
     </div>
   );
-}
+});
 
-function AssistantMessageView({
+const AssistantMessageView = React.memo(function AssistantMessageView({
   message,
   isStreaming,
   toolResults,
@@ -293,13 +293,11 @@ function AssistantMessageView({
   prevTimestamp?: number;
 }) {
   const time = showTimestamp ? formatTime(message.timestamp) : null;
-  const blocks = message.content ?? [];
+  const blocks = useMemo(() => message.content ?? [], [message.content]);
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const streamStartRef = useRef<number | null>(null);
   const [tps, setTps] = useState<number | null>(null);
-  const blocksRef = useRef(blocks);
-  blocksRef.current = blocks;
 
   // Streaming-based timing for thinking blocks
   const blockStartTimesRef = useRef<Map<number, number>>(new Map());
@@ -343,53 +341,53 @@ function AssistantMessageView({
       const now = Date.now();
       setStreamingDurations((prev: Map<number, number>) => {
         const next = new Map(prev);
-        for (const [idx, start] of blockStartTimesRef.current) {
-          if (!next.has(idx)) next.set(idx, Math.round((now - start) / 1000));
-        }
-        return next;
-      });
-      streamStartRef.current = null;
-      setTps(null);
-      return;
-    }
-    const tick = () => {
-      const bs = blocksRef.current;
-      const now = Date.now();
-
-      // Record start time for each block the first time we see it
-      bs.forEach((_, i) => {
-        if (!blockStartTimesRef.current.has(i)) blockStartTimesRef.current.set(i, now);
-      });
-
-      // When a non-last block has a successor already started, finalise its duration
-      setStreamingDurations((prev: Map<number, number>) => {
         let changed = false;
-        const next = new Map(prev);
-        for (let i = 0; i < bs.length - 1; i++) {
-          if (!next.has(i) && blockStartTimesRef.current.has(i)) {
-            const start = blockStartTimesRef.current.get(i)!;
-            const nextStart = blockStartTimesRef.current.get(i + 1) ?? now;
-            next.set(i, Math.round((nextStart - start) / 1000));
+        for (const [idx, start] of blockStartTimesRef.current) {
+          if (!next.has(idx)) {
+            next.set(idx, Math.round((now - start) / 1000));
             changed = true;
           }
         }
         return changed ? next : prev;
       });
+      streamStartRef.current = null;
+      setTps(null);
+      return;
+    }
 
-      let chars = 0;
-      for (const b of bs) {
-        if (b.type === "text") chars += (b as TextContent).text?.length ?? 0;
-        else if (b.type === "thinking") chars += (b as ThinkingContent).thinking?.length ?? 0;
-        else if (b.type === "toolCall") chars += JSON.stringify((b as ToolCallContent).input ?? {}).length;
+    const now = Date.now();
+
+    // Record start time for each block the first time we see it
+    blocks.forEach((_, i) => {
+      if (!blockStartTimesRef.current.has(i)) blockStartTimesRef.current.set(i, now);
+    });
+
+    // When a non-last block has a successor already started, finalise its duration
+    setStreamingDurations((prev: Map<number, number>) => {
+      let changed = false;
+      const next = new Map(prev);
+      for (let i = 0; i < blocks.length - 1; i++) {
+        if (!next.has(i) && blockStartTimesRef.current.has(i)) {
+          const start = blockStartTimesRef.current.get(i)!;
+          const nextStart = blockStartTimesRef.current.get(i + 1) ?? now;
+          next.set(i, Math.round((nextStart - start) / 1000));
+          changed = true;
+        }
       }
-      if (chars === 0) return;
-      if (streamStartRef.current === null) streamStartRef.current = now;
-      const elapsed = (now - streamStartRef.current) / 1000;
-      if (elapsed > 0.5) setTps(chars / 4 / elapsed);
-    };
-    const id = setInterval(tick, 300);
-    return () => clearInterval(id);
-  }, [isStreaming]);
+      return changed ? next : prev;
+    });
+
+    let chars = 0;
+    for (const b of blocks) {
+      if (b.type === "text") chars += (b as TextContent).text?.length ?? 0;
+      else if (b.type === "thinking") chars += (b as ThinkingContent).thinking?.length ?? 0;
+      else if (b.type === "toolCall") chars += JSON.stringify((b as ToolCallContent).input ?? {}).length;
+    }
+    if (chars === 0) return;
+    if (streamStartRef.current === null) streamStartRef.current = now;
+    const elapsed = (now - streamStartRef.current) / 1000;
+    if (elapsed > 0.5) setTps(chars / 4 / elapsed);
+  }, [blocks, isStreaming]);
 
   return (
     <div
@@ -499,7 +497,7 @@ function AssistantMessageView({
       </div>
     </div>
   );
-}
+});
 
 function BlockView({
   block,

@@ -1,7 +1,8 @@
 import { SessionManager, buildSessionContext as piBuildSessionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
-import type { SessionEntry, SessionInfo, SessionContext, SessionTreeNode, AssistantMessage } from "./types.ts";
+import type { SessionEntry, SessionInfo, SessionContext, SessionTreeNode, AssistantMessage, SessionHeader } from "./types.ts";
 import type { SessionEntry as PiSessionEntry, SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize.ts";
+import { readFile } from "fs/promises";
 
 export { getAgentDir };
 
@@ -186,6 +187,47 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
 export function getLeafId(entries: SessionEntry[]): string | null {
   if (entries.length === 0) return null;
   return entries[entries.length - 1].id;
+}
+
+export async function getSessionEntriesAsync(filePath: string): Promise<SessionEntry[]> {
+  const content = await readFile(filePath, "utf8");
+  const lines = content.split("\n");
+  const entries: SessionEntry[] = [];
+  for (const line of lines) {
+    if (line.trim()) {
+      try {
+        entries.push(JSON.parse(line) as SessionEntry);
+      } catch (err) {
+        console.error("Failed to parse JSONL line:", line, err);
+      }
+    }
+  }
+  return entries;
+}
+
+export async function getHeaderAsync(filePath: string): Promise<SessionHeader | null> {
+  try {
+    const content = await readFile(filePath, "utf8");
+    const firstLine = content.split("\n")[0];
+    if (firstLine.trim()) {
+      const header = JSON.parse(firstLine);
+      if (header.type === "session") {
+        return header as SessionHeader;
+      }
+    }
+  } catch (err) {
+    console.error("Failed to read header asynchronously:", err);
+  }
+  return null;
+}
+
+export function getSessionName(entries: SessionEntry[]): string | undefined {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].type === "session_info") {
+      return (entries[i] as { name?: string }).name;
+    }
+  }
+  return undefined;
 }
 
 

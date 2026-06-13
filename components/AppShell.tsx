@@ -5,14 +5,16 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
-import { TabBar, type Tab } from "./TabBar";
+import { TabBar } from "./TabBar";
 import { ModelsConfig } from "./ModelsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { BranchNavigator } from "./BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
-import { clampPanelWidth, getDefaultPanelWidths } from "@/lib/panel-layout";
+import { usePanelLayout } from "@/hooks/usePanelLayout";
+import { useFileTabs } from "@/hooks/useFileTabs";
+import { StatsBar } from "./StatsBar";
 
 function isEditableTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -33,13 +35,28 @@ export function AppShell() {
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
-  const [panelWidths, setPanelWidths] = useState(() =>
-    getDefaultPanelWidths(typeof window === "undefined" ? 1200 : window.innerWidth)
+
+  const {
+    sidebarOpen,
+    setSidebarOpen,
+    rightPanelOpen,
+    setRightPanelOpen,
+    panelWidths,
+    beginPanelResize,
+  } = usePanelLayout();
+
+  const {
+    fileTabs,
+    activeFileTabId,
+    setActiveFileTabId,
+    handleOpenFile,
+    handleCloseFileTab,
+  } = useFileTabs(
+    () => setRightPanelOpen(true),
+    () => setRightPanelOpen(false)
   );
-  const panelResizeRef = useRef<{ side: "left" | "right"; startX: number; startWidth: number } | null>(null);
 
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
@@ -66,32 +83,16 @@ export function AppShell() {
     setSystemPrompt(prompt);
   }, []);
 
-  // Session stats (tokens + cost) — populated by ChatWindow, displayed in top bar
-  const [sessionStats, setSessionStats] = useState<{
-    tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
-    cost?: number;
-  } | null>(null);
   const handleSessionStatsChange = useCallback(
-    (
-      stats: {
-        tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
-        cost?: number;
-      } | null
-    ) => {
-      setSessionStats(stats);
+    (stats: { tokens: { input: number; output: number; cacheRead: number; cacheWrite: number }; cost?: number } | null) => {
+      window.dispatchEvent(new CustomEvent("pi-session-stats", { detail: stats }));
     },
     []
   );
 
-  // Context usage — populated by ChatWindow, displayed in top bar
-  const [contextUsage, setContextUsage] = useState<{
-    percent: number | null;
-    contextWindow: number;
-    tokens: number | null;
-  } | null>(null);
   const handleContextUsageChange = useCallback(
     (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
-      setContextUsage(usage);
+      window.dispatchEvent(new CustomEvent("pi-context-usage", { detail: usage }));
     },
     []
   );
@@ -115,64 +116,6 @@ export function AppShell() {
     ro.observe(topBarRef.current);
     return () => ro.disconnect();
   }, [activeTopPanel]);
-
-  // Right panel — file tabs only
-  const [fileTabs, setFileTabs] = useState<Tab[]>([]);
-  const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
-
-  const beginPanelResize = useCallback(
-    (side: "left" | "right", e: React.PointerEvent<HTMLDivElement>) => {
-      if (window.innerWidth <= 640) return;
-      e.preventDefault();
-      panelResizeRef.current = {
-        side,
-        startX: e.clientX,
-        startWidth: side === "left" ? panelWidths.left : panelWidths.right,
-      };
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    },
-    [panelWidths.left, panelWidths.right]
-  );
-
-  useEffect(() => {
-    const handlePointerMove = (e: PointerEvent) => {
-      const active = panelResizeRef.current;
-      if (!active) return;
-      const delta = e.clientX - active.startX;
-      const nextWidth = active.side === "left" ? active.startWidth + delta : active.startWidth - delta;
-      setPanelWidths((prev) => ({
-        ...prev,
-        [active.side]: clampPanelWidth(active.side, nextWidth, window.innerWidth),
-      }));
-    };
-    const handlePointerUp = () => {
-      if (!panelResizeRef.current) return;
-      panelResizeRef.current = null;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setPanelWidths((prev) => ({
-        left: clampPanelWidth("left", prev.left, window.innerWidth),
-        right: clampPanelWidth("right", prev.right, window.innerWidth),
-      }));
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
   const [initialSessionId, setInitialSessionId] = useState<string | null>(null);
   const [initialSessionRestored, setInitialSessionRestored] = useState(false);
@@ -293,31 +236,6 @@ export function AppShell() {
     [selectedSession, router]
   );
 
-  const handleOpenFile = useCallback((filePath: string, fileName: string) => {
-    const tabId = `file:${filePath}`;
-    setFileTabs((prev) => {
-      if (prev.find((t) => t.id === tabId)) return prev;
-      return [...prev, { id: tabId, label: fileName, filePath }];
-    });
-    setActiveFileTabId(tabId);
-    setRightPanelOpen(true);
-  }, []);
-
-  const handleCloseFileTab = useCallback(
-    (tabId: string) => {
-      setFileTabs((prev) => {
-        const next = prev.filter((t) => t.id !== tabId);
-        if (next.length === 0) setRightPanelOpen(false);
-        return next;
-      });
-      setActiveFileTabId((cur) => {
-        if (cur !== tabId) return cur;
-        const remaining = fileTabs.filter((t) => t.id !== tabId);
-        return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
-      });
-    },
-    [fileTabs]
-  );
 
   // Keyboard shortcuts: Windows-oriented app commands.
   useEffect(() => {
@@ -373,7 +291,7 @@ export function AppShell() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeCwd, handleNewSession, newSessionCwd, selectedSession?.cwd, toggleTheme]);
+  }, [activeCwd, handleNewSession, newSessionCwd, selectedSession?.cwd, toggleTheme, setRightPanelOpen, setSidebarOpen]);
 
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
@@ -577,98 +495,7 @@ export function AppShell() {
                 </button>
               </div>
             )}
-            {/* Session stats — right-aligned in top bar */}
-            {showChat &&
-              (sessionStats || contextUsage) &&
-              (() => {
-                const t = sessionStats?.tokens;
-                const c = sessionStats?.cost ?? 0;
-                const fmt = (n: number) =>
-                  n >= 1_000_000
-                    ? `${(n / 1_000_000).toFixed(1)}M`
-                    : n >= 1000
-                    ? `${(n / 1000).toFixed(0)}k`
-                    : String(n);
-                const costStr = c > 0 ? (c >= 0.01 ? `$${c.toFixed(2)}` : `<$0.01`) : null;
-
-                let ctxColor = "var(--text-muted)";
-                let ctxStr: string | null = null;
-                if (contextUsage?.contextWindow) {
-                  const pct = contextUsage.percent;
-                  if (pct !== null && pct > 90) ctxColor = "var(--danger)";
-                  else if (pct !== null && pct > 70) ctxColor = "var(--warning)";
-                  ctxStr =
-                    pct !== null
-                      ? `${pct.toFixed(0)}% / ${fmt(contextUsage.contextWindow)}`
-                      : `? / ${fmt(contextUsage.contextWindow)}`;
-                }
-
-                const tooltipParts: string[] = [];
-                if (t) {
-                  tooltipParts.push(`in: ${t.input.toLocaleString()}`);
-                  tooltipParts.push(`out: ${t.output.toLocaleString()}`);
-                  tooltipParts.push(`cache read: ${t.cacheRead.toLocaleString()}`);
-                  tooltipParts.push(`cache write: ${t.cacheWrite.toLocaleString()}`);
-                  if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
-                }
-                if (contextUsage?.contextWindow) {
-                  const pct = contextUsage.percent;
-                  tooltipParts.push(
-                    `context: ${pct !== null ? pct.toFixed(1) + "%" : "unknown"} of ${contextUsage.contextWindow.toLocaleString()} tokens`
-                  );
-                }
-                const tooltip = tooltipParts.join("  |  ");
-
-                return (
-                  <div
-                    title={tooltip}
-                    className="ml-auto flex items-center gap-2.5 pl-3 h-full text-[11px] text-text-muted whitespace-nowrap cursor-default tabular-nums"
-                    style={{ paddingRight: rightPanelOpen ? 12 : 48 }}
-                  >
-                    {t && t.input > 0 && (
-                      <span className="flex items-center gap-1">
-                        <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="5" y1="8.5" x2="5" y2="1.5" />
-                          <polyline points="2 4 5 1.5 8 4" />
-                        </svg>
-                        {fmt(t.input)}
-                      </span>
-                    )}
-                    {t && t.output > 0 && (
-                      <span className="flex items-center gap-1">
-                        <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="5" y1="1.5" x2="5" y2="8.5" />
-                          <polyline points="2 6 5 8.5 8 6" />
-                        </svg>
-                        {fmt(t.output)}
-                      </span>
-                    )}
-                    {t && t.cacheRead > 0 && (
-                      <span className="flex items-center gap-1">
-                        <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" />
-                          <polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
-                        </svg>
-                        {fmt(t.cacheRead)}
-                      </span>
-                    )}
-                    {costStr && (
-                      <span className="flex items-center text-text font-medium">
-                        {costStr}
-                      </span>
-                    )}
-                    {ctxStr && (
-                      <span className="flex items-center gap-1" style={{ color: ctxColor }}>
-                        <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M1 9 L1 5 Q1 1 5 1 Q9 1 9 5 L9 9" />
-                          <line x1="1" y1="9" x2="9" y2="9" />
-                        </svg>
-                        {ctxStr}
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
+            <StatsBar showChat={showChat} rightPanelOpen={rightPanelOpen} />
             {/* Top panel dropdown — shared, only one active at a time */}
             {activeTopPanel && topPanelPos && (
               <div

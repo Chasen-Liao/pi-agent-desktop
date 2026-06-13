@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { AgentMessage, SessionTreeNode } from "../../lib/types";
+import { fetchSession, fetchContext } from "./session-loader-api";
 
 export interface SessionData {
   sessionId: string;
@@ -43,11 +44,8 @@ export function useSessionLoader(isNew: boolean) {
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false): Promise<LoadedSessionState | null> => {
     try {
       if (showLoading) setLoading(true);
-      const url = includeState
-        ? `/api/sessions/${encodeURIComponent(sid)}?includeState`
-        : `/api/sessions/${encodeURIComponent(sid)}`;
-      const res = await fetch(url);
-      if (res.status === 404) {
+      const d = await fetchSession(sid, includeState) as SessionData & { agentState?: LoadedAgentState } | null;
+      if (d === null) {
         if (showLoading) {
           setData(null);
           setActiveLeafId(null);
@@ -56,8 +54,6 @@ export function useSessionLoader(isNew: boolean) {
         }
         return null;
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as SessionData & { agentState?: LoadedAgentState };
       setData(d);
       setActiveLeafId(d.leafId);
       setMessages(d.context.messages);
@@ -74,12 +70,7 @@ export function useSessionLoader(isNew: boolean) {
 
   const loadContext = useCallback(async (sid: string, leafId: string | null) => {
     try {
-      const url = leafId
-        ? `/api/sessions/${encodeURIComponent(sid)}/context?leafId=${encodeURIComponent(leafId)}`
-        : `/api/sessions/${encodeURIComponent(sid)}/context`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[] } };
+      const d = await fetchContext(sid, leafId);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
     } catch (e) {
