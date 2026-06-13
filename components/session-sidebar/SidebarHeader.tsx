@@ -34,9 +34,14 @@ export function SidebarHeader({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
-      if (d.home) setHomeDir(d.home);
-    }).catch((err) => { console.error("Failed to load home dir:", err); });
+    fetch("/api/home")
+      .then((r) => r.json())
+      .then((d: { home?: string }) => {
+        if (d.home) setHomeDir(d.home);
+      })
+      .catch((err) => {
+        console.error("Failed to load home dir:", err);
+      });
   }, []);
 
   const handleCustomPath = useCallback(async () => {
@@ -62,7 +67,7 @@ export function SidebarHeader({
   const handleDefaultCwd = useCallback(async () => {
     try {
       const res = await fetch("/api/default-cwd", { method: "POST" });
-      const data = await res.json() as { cwd?: string; error?: string };
+      const data = (await res.json()) as { cwd?: string; error?: string };
       if (data.cwd) {
         setCwdPickerError(null);
         if (data.cwd !== selectedCwd) {
@@ -89,57 +94,30 @@ export function SidebarHeader({
 
   const handleNewSession = useCallback(() => {
     if (!selectedCwd) return;
-    const tempId = typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    const tempId =
+      typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
     onNewSession?.(tempId, selectedCwd);
   }, [selectedCwd, onNewSession]);
 
   const recentCwds = getRecentCwds(allSessions);
 
   return (
-    <div
-      style={{
-        padding: "12px 10px 10px",
-        borderBottom: "1px solid var(--divider)",
-        flexShrink: 0,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+    <div className="p-2.5 pb-[10px] border-b border-divider shrink-0">
+      <div className="flex items-center justify-between mb-2.5">
         <PiAgentTitle />
-        <div style={{ display: "flex", gap: 6 }}>
+        <div className="flex gap-1.5">
           <button
             onClick={handleNewSession}
             disabled={!selectedCwd}
             aria-label="New session"
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-              background: "var(--chrome-button-bg)",
-              border: "1px solid var(--border)",
-              color: selectedCwd ? "var(--text-muted)" : "var(--text-dim)",
-              cursor: selectedCwd ? "pointer" : "not-allowed",
-              height: "var(--control-height)",
-              paddingLeft: 10,
-              paddingRight: 12,
-              borderRadius: "var(--radius-control)",
-              fontSize: 12,
-              fontWeight: 500,
-              letterSpacing: 0,
-              flexShrink: 0,
-              transition: "background 0.12s, color 0.12s, border-color 0.12s",
-            }}
+            className={`flex items-center justify-center gap-1.25 h-control-height pl-2.5 pr-3 rounded-control text-[12px] font-medium tracking-normal shrink-0 transition-all duration-120 border ${
+              selectedCwd
+                ? "bg-chrome-button-bg border-border text-text-muted cursor-pointer hover:bg-chrome-button-hover hover:text-accent hover:border-focus-ring"
+                : "bg-chrome-button-bg border-border text-text-dim cursor-not-allowed"
+            }`}
             title={selectedCwd ? `New session in ${selectedCwd}` : "Select a project first"}
-            onMouseEnter={(e) => {
-              if (!selectedCwd) return;
-              e.currentTarget.style.background = "var(--chrome-button-hover)";
-              e.currentTarget.style.color = "var(--accent)";
-              e.currentTarget.style.borderColor = "var(--focus-ring)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "var(--chrome-button-bg)";
-              e.currentTarget.style.color = selectedCwd ? "var(--text-muted)" : "var(--text-dim)";
-              e.currentTarget.style.borderColor = "var(--border)";
-            }}
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <line x1="6" y1="1" x2="6" y2="11" />
@@ -150,30 +128,11 @@ export function SidebarHeader({
           <button
             onClick={() => loadSessions(false)}
             aria-label="Refresh sessions"
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: sessionRefreshDone ? "var(--success-bg)" : "var(--chrome-button-bg)",
-              border: `1px solid ${sessionRefreshDone ? "var(--success-border)" : "var(--border)"}`,
-              color: sessionRefreshDone ? "var(--success)" : "var(--text-muted)",
-              cursor: "pointer",
-              width: 32, height: "var(--control-height)",
-              borderRadius: "var(--radius-control)",
-              padding: 0,
-              flexShrink: 0,
-              transition: "background 0.3s, color 0.3s, border-color 0.3s",
-            }}
-            onMouseEnter={(e) => {
-              if (sessionRefreshDone) return;
-              e.currentTarget.style.background = "var(--chrome-button-hover)";
-              e.currentTarget.style.color = "var(--accent)";
-              e.currentTarget.style.borderColor = "var(--focus-ring)";
-            }}
-            onMouseLeave={(e) => {
-              if (sessionRefreshDone) return;
-              e.currentTarget.style.background = "var(--chrome-button-bg)";
-              e.currentTarget.style.color = "var(--text-muted)";
-              e.currentTarget.style.borderColor = "var(--border)";
-            }}
+            className={`flex items-center justify-center w-8 h-control-height p-0 shrink-0 rounded-control cursor-pointer transition-all duration-300 border ${
+              sessionRefreshDone
+                ? "bg-success-bg border-success-border text-success"
+                : "bg-chrome-button-bg border-border text-text-muted hover:bg-chrome-button-hover hover:text-accent hover:border-focus-ring"
+            }`}
             title="Refresh"
           >
             {sessionRefreshDone ? (
@@ -191,55 +150,29 @@ export function SidebarHeader({
       </div>
 
       {/* CWD picker */}
-      <div ref={dropdownRef} style={{ position: "relative" }}>
+      <div ref={dropdownRef} className="relative">
         <button
           onClick={() => setDropdownOpen((v) => !v)}
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            padding: "6px 10px",
-            background: selectedCwd ? "var(--bg-hover)" : "var(--warning-bg)",
-            border: selectedCwd ? "1px solid var(--border)" : "1px solid var(--warning-border)",
-            borderRadius: "var(--radius-control)",
-            cursor: "pointer",
-            fontSize: 12,
-            color: "var(--text)",
-            textAlign: "left",
-            transition: "border-color 0.15s, background 0.15s",
-          }}
+          className={`w-full flex items-center px-2.5 py-1.5 rounded-control cursor-pointer text-[12px] text-text text-left transition-all duration-150 border ${
+            selectedCwd ? "bg-bg-hover border-border" : "bg-warning-bg border-warning-border"
+          }`}
         >
           <span
-            style={{
-              flex: 1,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              color: selectedCwd ? "var(--text)" : "var(--text-dim)",
-            }}
+            className={`flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] ${
+              selectedCwd ? "text-text" : "text-text-dim"
+            }`}
             title={selectedCwd ?? ""}
           >
-            {selectedCwd ? shortenCwd(selectedCwd, homeDir) : (initialSessionId && !restoredRef.current ? "" : "Select project…")}
+            {selectedCwd
+              ? shortenCwd(selectedCwd, homeDir)
+              : initialSessionId && !restoredRef.current
+              ? ""
+              : "Select project…"}
           </span>
         </button>
 
         {dropdownOpen && (
-          <div
-            style={{
-              position: "absolute",
-              top: "calc(100% + 4px)",
-              left: 0,
-              right: 0,
-              zIndex: 100,
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius-panel)",
-              boxShadow: "var(--shadow-popover)",
-              overflow: "hidden",
-            }}
-          >
+          <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-[100] bg-bg border border-border rounded-panel shadow-popover overflow-hidden">
             {recentCwds.map((cwd) => (
               <button
                 key={cwd}
@@ -251,56 +184,31 @@ export function SidebarHeader({
                   setCustomPathOpen(false);
                   setDropdownOpen(false);
                 }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 7,
-                  width: "100%",
-                  padding: "8px 10px",
-                  background: cwd === selectedCwd ? "var(--bg-selected)" : "none",
-                  border: "none",
-                  borderBottom: "1px solid var(--border)",
-                  color: cwd === selectedCwd ? "var(--text)" : "var(--text-muted)",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  fontSize: 11,
-                  fontFamily: "var(--font-mono)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
+                className={`flex items-center gap-[7px] w-full px-2.5 py-2 border-none border-b border-divider text-left text-[11px] font-mono overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer ${
+                  cwd === selectedCwd ? "bg-bg-selected text-text" : "bg-transparent text-text-muted hover:bg-bg-hover"
+                }`}
                 title={cwd}
               >
                 {cwd === selectedCwd && (
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                     <polyline points="1.5 5 4 7.5 8.5 2.5" />
                   </svg>
                 )}
-                {cwd !== selectedCwd && <span style={{ width: 10, flexShrink: 0 }} />}
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortenCwd(cwd, homeDir)}</span>
+                {cwd !== selectedCwd && <span className="w-2.5 shrink-0" />}
+                <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{shortenCwd(cwd, homeDir)}</span>
               </button>
             ))}
 
             {/* Default cwd shortcut */}
             {!customPathOpen && (
               <button
-                onClick={(e) => { e.stopPropagation(); handleDefaultCwd(); }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 7,
-                  width: "100%",
-                  padding: "8px 10px",
-                  background: "none",
-                  border: "none",
-                  borderTop: recentCwds.length > 0 ? "1px solid var(--border)" : "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  fontSize: 11,
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDefaultCwd();
                 }}
+                className="flex items-center gap-[7px] w-full px-2.5 py-2 bg-transparent border-none border-t border-divider text-text-muted hover:bg-bg-hover cursor-pointer text-left text-[11px]"
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                   <path d="M1 3A1 1 0 0 1 2 2H4L5 3.5H8.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 1 8V3Z" />
                 </svg>
                 <span>Use default directory</span>
@@ -314,35 +222,16 @@ export function SidebarHeader({
                   e.stopPropagation();
                   void handleCustomPath();
                 }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 7,
-                  width: "100%",
-                  padding: "8px 10px",
-                  background: "none",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  fontSize: 11,
-                }}
+                className="flex items-center gap-[7px] w-full px-2.5 py-2 bg-transparent border-none text-text-muted hover:bg-bg-hover cursor-pointer text-left text-[11px]"
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" style={{ flexShrink: 0 }}>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" className="shrink-0">
                   <line x1="5" y1="1" x2="5" y2="9" />
                   <line x1="1" y1="5" x2="9" y2="5" />
                 </svg>
                 <span>Custom path…</span>
               </button>
             ) : (
-              <div
-                style={{
-                  padding: "8px 10px",
-                  color: "var(--text-muted)",
-                  fontSize: 11,
-                  borderTop: recentCwds.length > 0 ? "none" : undefined,
-                }}
-              >
+              <div className="px-2.5 py-2 text-text-muted text-[11px] border-t border-divider">
                 Opening folder picker...
               </div>
             )}
@@ -350,7 +239,7 @@ export function SidebarHeader({
         )}
       </div>
       {cwdPickerError && (
-        <div style={{ marginTop: 6, color: "var(--danger)", fontSize: 11 }}>
+        <div className="mt-1.5 color-danger text-[11px]">
           {cwdPickerError}
         </div>
       )}

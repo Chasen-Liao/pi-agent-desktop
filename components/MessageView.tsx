@@ -37,12 +37,17 @@ function formatTime(ts?: number): string | null {
   if (!ts) return null;
   const d = new Date(ts);
   const now = new Date();
-  const isToday = d.getFullYear() === now.getFullYear() &&
+  const isToday =
+    d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
   const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   if (isToday) return time;
-  const date = d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+  const date = d.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
   return `${date} ${time}`;
 }
 
@@ -65,12 +70,44 @@ function copyText(text: string): Promise<void> {
   }
 }
 
-export const MessageView = React.memo(function MessageView({ message, isStreaming, toolResults, modelNames, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp }: Props) {
+export const MessageView = React.memo(function MessageView({
+  message,
+  isStreaming,
+  toolResults,
+  modelNames,
+  entryId,
+  onFork,
+  forking,
+  onNavigate,
+  prevAssistantEntryId,
+  onEditContent,
+  showTimestamp,
+  prevTimestamp,
+}: Props) {
   if (message.role === "user") {
-    return <UserMessageView message={message as UserMessage} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
+    return (
+      <UserMessageView
+        message={message as UserMessage}
+        entryId={entryId}
+        onFork={onFork}
+        forking={forking}
+        onNavigate={onNavigate}
+        prevAssistantEntryId={prevAssistantEntryId}
+        onEditContent={onEditContent}
+      />
+    );
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} />;
+    return (
+      <AssistantMessageView
+        message={message as AssistantMessage}
+        isStreaming={isStreaming}
+        toolResults={toolResults}
+        modelNames={modelNames}
+        showTimestamp={showTimestamp}
+        prevTimestamp={prevTimestamp}
+      />
+    );
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -79,7 +116,15 @@ export const MessageView = React.memo(function MessageView({ message, isStreamin
   return null;
 });
 
-function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent }: {
+function UserMessageView({
+  message,
+  entryId,
+  onFork,
+  forking,
+  onNavigate,
+  prevAssistantEntryId,
+  onEditContent,
+}: {
   message: UserMessage;
   entryId?: string;
   onFork?: (entryId: string) => void;
@@ -117,46 +162,30 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
 
   return (
     <div
-      style={{ marginBottom: 18, display: "flex", flexDirection: "column", alignItems: "flex-end" }}
+      className="mb-[18px] flex flex-col items-end"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: "85%" }}>
-        <div
-          style={{
-            flex: 1,
-            minWidth: 0,
-            background: "var(--user-bg)",
-            border: "1px solid var(--user-border)",
-            borderRadius: "var(--radius-panel)",
-            padding: "8px 12px",
-            fontSize: 14,
-            lineHeight: 1.6,
-            color: "var(--text)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        >
+      <div className="flex items-end gap-1.5 max-w-[85%]">
+        <div className="flex-1 min-w-0 bg-user-bg border border-user-border rounded-panel px-3 py-2 text-[14px] leading-[1.6] text-text whitespace-pre-wrap break-words">
           {imageBlocks.length > 0 && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: content ? 8 : 0 }}>
+            <div className={`flex gap-1.5 flex-wrap ${content ? "mb-2" : "mb-0"}`}>
               {imageBlocks.map((img, i) => {
-                // lib/types.ts ImageContent uses {source:{type,data,media_type,url}}
-                // pi-ai on-disk format uses flat {data, mimeType} — handle both
                 const flat = img as unknown as { data?: string; mimeType?: string };
                 const src = img.source
                   ? img.source.type === "base64"
                     ? `data:${img.source.media_type};base64,${img.source.data}`
                     : img.source.url ?? ""
                   : flat.data
-                    ? `data:${flat.mimeType};base64,${flat.data}`
-                    : "";
+                  ? `data:${flat.mimeType};base64,${flat.data}`
+                  : "";
                 return (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     key={i}
                     src={src}
                     alt=""
-                    style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--user-border)" }}
+                    className="max-w-[240px] max-h-[240px] rounded-md object-contain block border border-user-border"
                   />
                 );
               })}
@@ -164,38 +193,23 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
           )}
           {content}
         </div>
-
       </div>
 
       {/* Bottom row: action buttons + timestamp */}
       {(time || canFork || canNavigate || true) && (
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "flex-end",
-          gap: 6, marginTop: 3,
-        }}>
-          <div style={{
-            display: "flex", gap: 3,
-            opacity: hovered ? 1 : 0,
-            pointerEvents: hovered ? "auto" : "none",
-            transition: "opacity 0.12s",
-          }}>
+        <div className="flex items-center justify-end gap-1.5 mt-[3px]">
+          <div
+            className={`flex gap-[3px] transition-opacity duration-120 ${
+              hovered ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+            }`}
+          >
             <button
               onClick={copyContent}
               title="Copy message"
               aria-label="Copy message"
-              style={{
-                display: "flex", alignItems: "center", gap: 4,
-                padding: "3px 8px", height: 22,
-                background: "none", border: "none",
-                borderRadius: "var(--radius-control)",
-                color: copied ? "var(--accent)" : "var(--text-dim)",
-                cursor: "pointer",
-                fontSize: 11, fontWeight: 400,
-                whiteSpace: "nowrap",
-                transition: "color 0.12s",
-              }}
-              onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
-              onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
+              className={`flex items-center gap-1 px-2 py-[3px] h-[22px] bg-transparent border-none rounded-control cursor-pointer text-[11px] font-normal whitespace-nowrap transition-colors duration-120 ${
+                copied ? "text-accent" : "text-text-dim hover:text-accent"
+              }`}
             >
               {copied ? (
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -211,30 +225,20 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
             </button>
           </div>
           {(canFork || canNavigate) && (
-            <div style={{
-              display: "flex", gap: 3,
-              opacity: (hovered || forking) ? 1 : 0,
-              pointerEvents: (hovered || forking) ? "auto" : "none",
-              transition: "opacity 0.12s",
-            }}>
+            <div
+              className={`flex gap-[3px] transition-opacity duration-120 ${
+                hovered || forking ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+              }`}
+            >
               {canNavigate && (
                 <button
-                  onClick={() => { onNavigate!(prevAssistantEntryId!); onEditContent?.(content); }}
+                  onClick={() => {
+                    onNavigate!(prevAssistantEntryId!);
+                    onEditContent?.(content);
+                  }}
                   title="Edit from here — branches within this session"
                   aria-label="Edit from here"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 4,
-                    padding: "3px 8px", height: 22,
-                    background: "none", border: "none",
-                    borderRadius: "var(--radius-control)",
-                    color: "var(--text-dim)",
-                    cursor: "pointer",
-                    fontSize: 11, fontWeight: 400,
-                    whiteSpace: "nowrap",
-                    transition: "color 0.12s",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
+                  className="flex items-center gap-1 px-2 py-[3px] h-[22px] bg-transparent border-none rounded-control text-text-dim hover:text-accent cursor-pointer text-[11px] font-normal whitespace-nowrap transition-colors duration-120"
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="15 10 20 15 15 20" />
@@ -245,23 +249,15 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
               )}
               {canFork && (
                 <button
-                  onClick={() => { onFork!(entryId!); }}
+                  onClick={() => {
+                    onFork!(entryId!);
+                  }}
                   disabled={forking}
                   title={forking ? "Creating new session…" : "New session — creates an independent copy from here"}
                   aria-label="Create new session from here"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 4,
-                    padding: "3px 8px", height: 22,
-                    background: "none", border: "none",
-                    borderRadius: "var(--radius-control)",
-                    color: forking ? "var(--accent)" : "var(--text-dim)",
-                    cursor: forking ? "not-allowed" : "pointer",
-                    fontSize: 11, fontWeight: 400,
-                    whiteSpace: "nowrap",
-                    transition: "color 0.12s",
-                  }}
-                  onMouseEnter={(e) => { if (!forking) e.currentTarget.style.color = "var(--accent)"; }}
-                  onMouseLeave={(e) => { if (!forking) e.currentTarget.style.color = "var(--text-dim)"; }}
+                  className={`flex items-center gap-1 px-2 py-[3px] h-[22px] bg-transparent border-none rounded-control cursor-pointer text-[11px] font-normal whitespace-nowrap transition-colors duration-120 ${
+                    forking ? "text-accent cursor-not-allowed" : "text-text-dim hover:text-accent"
+                  }`}
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="6" y1="3" x2="6" y2="15" />
@@ -274,7 +270,7 @@ function UserMessageView({ message, entryId, onFork, forking, onNavigate, prevAs
               )}
             </div>
           )}
-          {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}
+          {time && <span className="text-[10px] text-text-dim">{time}</span>}
         </div>
       )}
     </div>
@@ -310,16 +306,13 @@ function AssistantMessageView({
   const [streamingDurations, setStreamingDurations] = useState<Map<number, number>>(new Map());
 
   // Thinking duration derived from file timestamps: time from prev message end to this message end
-  // This is the total generation time (thinking + any text before first tool call)
   const thinkingDurationFromFile = useMemo<number | undefined>(() => {
     if (!message.timestamp || !prevTimestamp) return undefined;
     const secs = Math.round((message.timestamp - prevTimestamp) / 1000);
     return secs > 0 ? secs : undefined;
   }, [message.timestamp, prevTimestamp]);
 
-  // Tool call durations derived from session file timestamps (accurate for completed messages)
-  // assistant message timestamp = when generation ended = when tools started running
-  // toolResult timestamp = when tool execution finished
+  // Tool call durations derived from session file timestamps
   const toolCallDurations = useMemo<Map<string, number>>(() => {
     const map = new Map<string, number>();
     if (!toolResults || !message.timestamp) return map;
@@ -400,92 +393,92 @@ function AssistantMessageView({
 
   return (
     <div
-      style={{ marginBottom: 18 }}
+      className="mb-[18px]"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {/* Model label */}
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--text-dim)",
-          marginBottom: 4,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}
-      >
+      <div className="text-[11px] text-text-dim mb-1 flex items-center gap-1.5">
         {message.provider && (
-          <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
+          <span>
+            {modelNames?.[`${message.provider}:${message.model}`] ??
+              modelNames?.[message.model] ??
+              message.model}
+          </span>
         )}
-        {isStreaming && (() => {
-          let chars = 0;
-          for (const b of blocks) {
-            if (b.type === "text") chars += (b as TextContent).text?.length ?? 0;
-            else if (b.type === "thinking") chars += (b as ThinkingContent).thinking?.length ?? 0;
-            else if (b.type === "toolCall") chars += JSON.stringify((b as ToolCallContent).input ?? {}).length;
-          }
-          const est = Math.round(chars / 4);
-          return (
-            <>
-
-              {est > 0 && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text)" }} title="预估 token 数（流式接收中）">
-                  <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 11, fontWeight: 400 }}>
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
-                    </svg>
-                    {est}
+        {isStreaming &&
+          (() => {
+            let chars = 0;
+            for (const b of blocks) {
+              if (b.type === "text") chars += (b as TextContent).text?.length ?? 0;
+              else if (b.type === "thinking") chars += (b as ThinkingContent).thinking?.length ?? 0;
+              else if (b.type === "toolCall") chars += JSON.stringify((b as ToolCallContent).input ?? {}).length;
+            }
+            const est = Math.round(chars / 4);
+            return (
+              <>
+                {est > 0 && (
+                  <span className="flex items-center gap-1 text-text" title="预估 token 数（流式接收中）">
+                    <span className="flex items-center gap-0.5 text-[11px] font-normal">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="5" y1="1.5" x2="5" y2="8.5" />
+                        <polyline points="2 6 5 8.5 8 6" />
+                      </svg>
+                      {est}
+                    </span>
+                    {tps !== null &&
+                      (() => {
+                        const bg =
+                          tps >= 50
+                            ? "var(--info)"
+                            : tps >= 30
+                            ? "var(--success)"
+                            : tps >= 15
+                            ? "var(--warning)"
+                            : "var(--danger)";
+                        return (
+                          <span
+                            className="ml-1.5 px-1.5 py-[1px] rounded-[4px] text-accent-contrast text-[11px] font-normal"
+                            style={{ background: bg }}
+                          >
+                            {tps.toFixed(1)} t/s
+                          </span>
+                        );
+                      })()}
                   </span>
-                  {tps !== null && (() => {
-                    const bg = tps >= 50 ? "var(--info)" : tps >= 30 ? "var(--success)" : tps >= 15 ? "var(--warning)" : "var(--danger)";
-                    return (
-                      <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: bg, color: "var(--accent-contrast)", fontSize: 11, fontWeight: 400 }}>
-                        {tps.toFixed(1)} t/s
-                      </span>
-                    );
-                  })()}
-                </span>
-              )}
-            </>
-          );
-        })()}
+                )}
+              </>
+            );
+          })()}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="flex flex-col gap-2">
         {blocks.map((block, i) => (
-          <BlockView key={i} block={block} toolResults={toolResults} streamingDuration={streamingDurations.get(i) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} />
+          <BlockView
+            key={i}
+            block={block}
+            toolResults={toolResults}
+            streamingDuration={
+              streamingDurations.get(i) ??
+              (block.type === "thinking" ? thinkingDurationFromFile : undefined)
+            }
+            toolCallDurations={toolCallDurations}
+          />
         ))}
       </div>
 
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8, marginTop: 4,
-      }}>
+      <div className="flex items-center gap-2 mt-1">
         {message.usage && !isStreaming && (
-          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            {formatUsage(message.usage)}
-          </div>
+          <div className="text-[11px] text-text-dim">{formatUsage(message.usage)}</div>
         )}
         {textContent && !isStreaming && (
           <button
             onClick={copyContent}
             title="Copy message"
             aria-label="Copy message"
-            style={{
-              display: "flex", alignItems: "center", gap: 4,
-              padding: "3px 8px", height: 22,
-              background: "none", border: "none",
-              borderRadius: "var(--radius-control)",
-              color: copied ? "var(--accent)" : "var(--text-dim)",
-              cursor: "pointer",
-              fontSize: 11, fontWeight: 400,
-              whiteSpace: "nowrap",
-              opacity: hovered ? 1 : 0,
-              pointerEvents: hovered ? "auto" : "none",
-              transition: "opacity 0.12s, color 0.12s",
-            }}
-            onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
+            className={`flex items-center gap-1 px-2 py-[3px] h-[22px] bg-transparent border-none rounded-control cursor-pointer text-[11px] font-normal whitespace-nowrap transition-colors duration-120 ${
+              copied ? "text-accent" : "text-text-dim hover:text-accent"
+            } ${hovered ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
           >
             {copied ? (
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -501,14 +494,24 @@ function AssistantMessageView({
           </button>
         )}
         {time && !isStreaming && (
-          <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto" }}>{time}</span>
+          <span className="text-[10px] text-text-dim ml-auto">{time}</span>
         )}
       </div>
     </div>
   );
 }
 
-function BlockView({ block, toolResults, streamingDuration, toolCallDurations }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; streamingDuration?: number; toolCallDurations?: Map<string, number> }) {
+function BlockView({
+  block,
+  toolResults,
+  streamingDuration,
+  toolCallDurations,
+}: {
+  block: AssistantContentBlock;
+  toolResults?: Map<string, ToolResultMessage>;
+  streamingDuration?: number;
+  toolCallDurations?: Map<string, number>;
+}) {
   if (block.type === "text") {
     return <TextBlock block={block as TextContent} />;
   }
@@ -539,13 +542,7 @@ function TextBlock({ block }: { block: TextContent }) {
             }
             return (
               <code
-                style={{
-                  background: "var(--bg-selected)",
-                  padding: "1px 4px",
-                  borderRadius: 3,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.9em",
-                }}
+                className="bg-bg-selected px-1 py-[1px] rounded-[3px] font-mono text-[0.9em]"
                 {...props}
               >
                 {children}
@@ -553,7 +550,6 @@ function TextBlock({ block }: { block: TextContent }) {
             );
           },
           pre({ children }) {
-            // Unwrap <pre> wrapper — CodeBlock handles its own container
             return <>{children}</>;
           },
         }}
@@ -567,48 +563,19 @@ function TextBlock({ block }: { block: TextContent }) {
 function ThinkingBlock({ block, duration }: { block: ThinkingContent; duration?: number }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius-panel)",
-        overflow: "hidden",
-        fontSize: 13,
-      }}
-    >
+    <div className="border border-border rounded-panel overflow-hidden text-[13px]">
       <button
         onClick={() => setExpanded((v) => !v)}
         aria-label={expanded ? "Collapse thinking" : "Expand thinking"}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          width: "100%",
-          padding: "6px 10px",
-          background: "var(--code-header-bg)",
-          border: "none",
-          color: "var(--text-muted)",
-          cursor: "pointer",
-          fontSize: 12,
-          textAlign: "left",
-        }}
+        className="flex items-center gap-1.5 w-full px-2.5 py-1.5 bg-code-header-bg border-none text-text-muted cursor-pointer text-[12px] text-left"
       >
         <span>Thinking</span>
         {duration !== undefined && (
-          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
+          <span className="ml-auto text-[11px] text-text-dim tabular-nums">{duration}s</span>
         )}
       </button>
       {expanded && (
-        <div
-          style={{
-            padding: "8px 10px",
-            color: "var(--text-muted)",
-            fontSize: 12,
-            lineHeight: 1.6,
-            whiteSpace: "pre-wrap",
-            background: "var(--bg-panel)",
-            borderTop: "1px solid var(--border)",
-          }}
-        >
+        <div className="px-2.5 py-2 text-text-muted text-[12px] leading-[1.6] whitespace-pre-wrap bg-bg-panel border-t border-border">
           {block.thinking}
         </div>
       )}
@@ -616,57 +583,60 @@ function ThinkingBlock({ block, duration }: { block: ThinkingContent; duration?:
   );
 }
 
-
-function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number }) {
+function ToolCallBlock({
+  block,
+  result,
+  duration,
+}: {
+  block: ToolCallContent;
+  result?: ToolResultMessage;
+  duration?: number;
+}) {
   const [expanded, setExpanded] = useState(false);
   const inputStr = JSON.stringify(block.input, null, 2);
 
-  // Result display
   const resultText = result
-    ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
+    ? result.content
+        .filter((b): b is { type: "text"; text: string } => b.type === "text")
+        .map((b) => b.text)
+        .join("\n")
     : null;
-  const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
+  const resultIsEmpty = resultText === null ? false : resultText.trim() === "(no output)" || resultText.trim() === "";
   const isError = result?.isError ?? false;
 
   return (
     <div
-      style={{
-        borderRadius: "var(--radius-panel)",
-        overflow: "hidden",
-        fontSize: 12,
-        border: isError ? "1px solid var(--danger-border)" : "1px solid var(--success-border)",
-        background: isError ? "var(--danger-bg)" : "var(--success-bg)",
-      }}
+      className={`rounded-panel overflow-hidden text-[12px] border ${
+        isError ? "border-danger-border bg-danger-bg" : "border-success-border bg-success-bg"
+      }`}
     >
       {/* ── Tool call header ── */}
       <button
         onClick={() => setExpanded((v) => !v)}
         aria-label={expanded ? `Collapse ${block.toolName} tool call` : `Expand ${block.toolName} tool call`}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          width: "100%",
-          padding: "6px 10px",
-          background: "none",
-          border: "none",
-          color: "var(--text-muted)",
-          cursor: "pointer",
-          fontSize: 12,
-          textAlign: "left",
-          minWidth: 0,
-        }}
+        className="flex items-center gap-1.5 w-full px-2.5 py-1.5 bg-transparent border-none text-text-muted cursor-pointer text-[12px] text-left min-w-0"
       >
-        <span style={{ color: isError ? "var(--danger)" : "var(--success)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+        <span className={`font-mono font-semibold text-[11px] shrink-0 ${isError ? "text-danger" : "text-success"}`}>
           {block.toolName}
         </span>
-        <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+        <span className="text-text-dim font-mono text-[11px] overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0">
           {getToolPreview(block)}
         </span>
         {duration !== undefined && (
-          <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
+          <span className="text-[11px] text-text-dim shrink-0 tabular-nums">{duration}s</span>
         )}
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="var(--text-dim)"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0 transition-transform duration-150"
+          style={{ transform: expanded ? "rotate(180deg)" : "none" }}
+        >
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>
       </button>
@@ -674,18 +644,9 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
       {/* ── Expanded: input args ── */}
       {expanded && (
         <pre
-          style={{
-            margin: 0,
-            padding: "8px 10px",
-            color: "var(--text-muted)",
-            fontSize: 12,
-            lineHeight: 1.5,
-            overflow: "auto",
-            background: "var(--bg-subtle)",
-            borderTop: isError ? "1px solid var(--danger-border)" : "1px solid var(--success-border)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-          }}
+          className={`m-0 px-2.5 py-2 text-text-muted text-[12px] leading-[1.5] overflow-auto bg-bg-subtle border-t whitespace-pre-wrap break-all ${
+            isError ? "border-danger-border" : "border-success-border"
+          }`}
         >
           {inputStr}
         </pre>
@@ -693,43 +654,31 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
 
       {/* ── Paired result — only shown when expanded ── */}
       {expanded && result && (
-        <PairedResult
-          text={resultText ?? ""}
-          isEmpty={resultIsEmpty}
-          isError={isError}
-        />
+        <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />
       )}
     </div>
   );
 }
 
-function PairedResult({ text, isEmpty, isError }: {
+function PairedResult({
+  text,
+  isEmpty,
+  isError,
+}: {
   text: string;
   isEmpty: boolean;
   isError: boolean;
 }) {
   return (
     <div
-      style={{
-        borderTop: `1px solid ${isError ? "var(--danger-border)" : "var(--success-border)"}`,
-        background: isError ? "var(--danger-bg)" : "var(--bg-subtle)",
-      }}
+      className={`border-t ${
+        isError ? "border-danger-border bg-danger-bg" : "border-success-border bg-bg-subtle"
+      }`}
     >
       <pre
-        style={{
-          margin: 0,
-          padding: "8px 10px",
-          color: isError ? "var(--danger)" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
-          fontSize: 12,
-          lineHeight: 1.5,
-          overflow: "auto",
-          maxHeight: 400,
-          background: "var(--bg)",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-all",
-          fontStyle: isEmpty ? "italic" : "normal",
-          opacity: isEmpty ? 0.6 : 1,
-        }}
+        className={`m-0 px-2.5 py-2 text-[12px] leading-[1.5] overflow-auto max-h-[400px] bg-bg whitespace-pre-wrap break-all ${
+          isError ? "text-danger" : isEmpty ? "text-text-dim italic opacity-60" : "text-text-muted normal-case opacity-100"
+        }`}
       >
         {isEmpty ? "(no output)" : text}
       </pre>
@@ -737,14 +686,12 @@ function PairedResult({ text, isEmpty, isError }: {
   );
 }
 
-
 function getToolPreview(block: ToolCallContent): string {
   const input = block.input;
   if (!input || typeof input !== "object") return "";
   const keys = Object.keys(input);
   if (keys.length === 0) return "";
 
-  // Common tool input patterns
   if ("command" in input) return String(input.command).slice(0, 120);
   if ("path" in input) return String(input.path).slice(0, 120);
   if ("file_path" in input) return String(input.file_path).slice(0, 120);
@@ -770,8 +717,6 @@ function formatUsage(usage: {
   return parts.join(" · ");
 }
 
-
-
 function CodeBlock({ code, lang }: { code: string; lang: string }) {
   const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
@@ -784,41 +729,13 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
   };
 
   return (
-    <div
-      style={{
-        position: "relative",
-        marginTop: 4,
-        marginBottom: 4,
-        borderRadius: "var(--radius-panel)",
-        overflow: "hidden",
-        border: "1px solid var(--border)",
-      }}
-    >
-      <div
-        style={{
-          padding: "3px 10px",
-          background: "var(--bg-panel)",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
+    <div className="relative my-1 rounded-panel overflow-hidden border border-border">
+      <div className="px-2.5 py-[3px] bg-bg-panel border-b border-border text-[11px] text-text-dim flex justify-between items-center">
         <span>{lang}</span>
         <button
           onClick={copy}
           aria-label="Copy code"
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--text-muted)",
-            cursor: "pointer",
-            fontSize: 11,
-            borderRadius: "var(--radius-control)",
-            padding: "2px 6px",
-          }}
+          className="bg-transparent border-none text-text-muted hover:text-text cursor-pointer text-[11px] rounded-control px-1.5 py-[2px] transition-colors duration-120"
         >
           {copied ? "copied" : "copy"}
         </button>
@@ -843,5 +760,3 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
     </div>
   );
 }
-
-

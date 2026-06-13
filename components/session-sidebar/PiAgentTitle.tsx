@@ -77,13 +77,9 @@ export function PiAgentTitle() {
   return (
     <button
       onClick={handleClick}
-      style={{
-        background: "none", border: "none", padding: 0, cursor: "default",
-        fontWeight: 700, fontSize: 15, letterSpacing: 0,
-        color: showVersion ? "var(--accent)" : "var(--text-strong)",
-        fontFamily: "var(--font-mono)",
-        minWidth: "6ch",
-      }}
+      className={`bg-transparent border-none p-0 cursor-default font-bold text-[15px] tracking-normal font-mono min-w-[6ch] transition-colors duration-150 ${
+        showVersion ? "text-accent" : "text-text-strong"
+      }`}
     >
       {display}
     </button>

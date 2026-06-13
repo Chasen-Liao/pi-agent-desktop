@@ -36,7 +36,9 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
-  const [panelWidths, setPanelWidths] = useState(() => getDefaultPanelWidths(typeof window === "undefined" ? 1200 : window.innerWidth));
+  const [panelWidths, setPanelWidths] = useState(() =>
+    getDefaultPanelWidths(typeof window === "undefined" ? 1200 : window.innerWidth)
+  );
   const panelResizeRef = useRef<{ side: "left" | "right"; startX: number; startWidth: number } | null>(null);
 
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
@@ -44,11 +46,14 @@ export function AppShell() {
   const [branchActiveLeafId, setBranchActiveLeafId] = useState<string | null>(null);
   const branchLeafChangeFnRef = useRef<((leafId: string | null) => void) | null>(null);
 
-  const handleBranchDataChange = useCallback((tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => {
-    setBranchTree(tree);
-    setBranchActiveLeafId(activeLeafId);
-    branchLeafChangeFnRef.current = onLeafChange;
-  }, []);
+  const handleBranchDataChange = useCallback(
+    (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => {
+      setBranchTree(tree);
+      setBranchActiveLeafId(activeLeafId);
+      branchLeafChangeFnRef.current = onLeafChange;
+    },
+    []
+  );
 
   const handleBranchLeafChange = useCallback((leafId: string | null) => {
     branchLeafChangeFnRef.current?.(leafId);
@@ -62,23 +67,41 @@ export function AppShell() {
   }, []);
 
   // Session stats (tokens + cost) — populated by ChatWindow, displayed in top bar
-  const [sessionStats, setSessionStats] = useState<{ tokens: { input: number; output: number; cacheRead: number; cacheWrite: number }; cost?: number } | null>(null);
-  const handleSessionStatsChange = useCallback((stats: { tokens: { input: number; output: number; cacheRead: number; cacheWrite: number }; cost?: number } | null) => {
-    setSessionStats(stats);
-  }, []);
+  const [sessionStats, setSessionStats] = useState<{
+    tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
+    cost?: number;
+  } | null>(null);
+  const handleSessionStatsChange = useCallback(
+    (
+      stats: {
+        tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
+        cost?: number;
+      } | null
+    ) => {
+      setSessionStats(stats);
+    },
+    []
+  );
 
   // Context usage — populated by ChatWindow, displayed in top bar
-  const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
-  const handleContextUsageChange = useCallback((usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
-    setContextUsage(usage);
-  }, []);
+  const [contextUsage, setContextUsage] = useState<{
+    percent: number | null;
+    contextWindow: number;
+    tokens: number | null;
+  } | null>(null);
+  const handleContextUsageChange = useCallback(
+    (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
+      setContextUsage(usage);
+    },
+    []
+  );
 
   // Single active panel — only one dropdown open at a time
   const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "system" | null>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const toggleTopPanel = useCallback((panel: "branches" | "system") => {
-    setActiveTopPanel((cur) => cur === panel ? null : panel);
+    setActiveTopPanel((cur) => (cur === panel ? null : panel));
   }, []);
 
   useEffect(() => {
@@ -98,26 +121,27 @@ export function AppShell() {
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
 
-  const beginPanelResize = useCallback((side: "left" | "right", e: React.PointerEvent<HTMLDivElement>) => {
-    if (window.innerWidth <= 640) return;
-    e.preventDefault();
-    panelResizeRef.current = {
-      side,
-      startX: e.clientX,
-      startWidth: side === "left" ? panelWidths.left : panelWidths.right,
-    };
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }, [panelWidths.left, panelWidths.right]);
+  const beginPanelResize = useCallback(
+    (side: "left" | "right", e: React.PointerEvent<HTMLDivElement>) => {
+      if (window.innerWidth <= 640) return;
+      e.preventDefault();
+      panelResizeRef.current = {
+        side,
+        startX: e.clientX,
+        startWidth: side === "left" ? panelWidths.left : panelWidths.right,
+      };
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [panelWidths.left, panelWidths.right]
+  );
 
   useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
       const active = panelResizeRef.current;
       if (!active) return;
       const delta = e.clientX - active.startX;
-      const nextWidth = active.side === "left"
-        ? active.startWidth + delta
-        : active.startWidth - delta;
+      const nextWidth = active.side === "left" ? active.startWidth + delta : active.startWidth - delta;
       setPanelWidths((prev) => ({
         ...prev,
         [active.side]: clampPanelWidth(active.side, nextWidth, window.innerWidth),
@@ -150,101 +174,124 @@ export function AppShell() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const handleAtMention = useCallback((relativePath: string) => {
-    chatInputRef.current?.insertText("`" + relativePath + "`");
-  }, []);
-
-  const [initialSessionId] = useState<string | null>(() => searchParams.get("session"));
+  const [initialSessionId, setInitialSessionId] = useState<string | null>(null);
+  const [initialSessionRestored, setInitialSessionRestored] = useState(false);
   const [activeCwd, setActiveCwd] = useState<string | null>(null);
-  // True once the initial ?session= URL param has been resolved (or confirmed absent)
-  const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !searchParams.get("session"));
+
+  useEffect(() => {
+    const s = searchParams.get("session");
+    if (s) {
+      setInitialSessionId(s);
+    } else {
+      setInitialSessionRestored(true);
+    }
+  }, [searchParams]);
 
   const handleCwdChange = useCallback((cwd: string | null) => {
     setActiveCwd(cwd);
-    if (!cwd) return;
-    setSelectedSession((prev) => {
-      if (prev && prev.cwd !== cwd) return null;
-      return prev;
-    });
-    setNewSessionCwd((prev) => {
-      if (prev && prev !== cwd) return null;
-      return prev;
-    });
-    setSessionKey((k) => k + 1);
-    setBranchTree([]);
-    setBranchActiveLeafId(null);
-    setSystemPrompt(null);
-    setActiveTopPanel(null);
-    router.replace("/", { scroll: false });
-  }, [router]);
+    setExplorerRefreshKey((k) => k + 1);
+  }, []);
 
-  const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
-    setNewSessionCwd(null);
-    setActiveCwd(session.cwd);
-    setSelectedSession(session);
-    setSessionKey((k) => k + 1);
-    setSystemPrompt(null);
-    setInitialSessionRestored(true);
-    // Skip router.replace when restoring from URL — the param is already correct
-    // and calling replace in production Next.js triggers a Suspense remount loop
-    if (!isRestore) {
-      router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
-    }
-  }, [router]);
+  const handleSelectSession = useCallback(
+    (session: SessionInfo, isRestore?: boolean) => {
+      setSelectedSession(session);
+      setNewSessionCwd(null);
+      setSessionKey((k) => k + 1);
+      setBranchTree([]);
+      setBranchActiveLeafId(null);
+      setSystemPrompt(null);
+      setActiveTopPanel(null);
 
-  const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
-    setSelectedSession(null);
-    setNewSessionCwd(cwd);
-    setSessionKey((k) => k + 1);
-    setBranchTree([]);
-    setBranchActiveLeafId(null);
-    setSystemPrompt(null);
-    setActiveTopPanel(null);
-    router.replace("/", { scroll: false });
-  }, [router]);
+      if (session.cwd && session.cwd !== activeCwd) {
+        setActiveCwd(session.cwd);
+        setExplorerRefreshKey((k) => k + 1);
+      }
 
-  // Called by ChatWindow when a new session gets its real id from pi
+      if (!isRestore) {
+        router.replace(`/?session=${encodeURIComponent(session.id)}`, { scroll: false });
+      }
+      setInitialSessionRestored(true);
+    },
+    [router, activeCwd]
+  );
+
+  const handleNewSession = useCallback(
+    (tempId: string, cwd: string) => {
+      setSelectedSession(null);
+      setNewSessionCwd(cwd);
+      setSessionKey((k) => k + 1);
+      setBranchTree([]);
+      setBranchActiveLeafId(null);
+      setSystemPrompt(null);
+      setActiveTopPanel(null);
+
+      if (cwd !== activeCwd) {
+        setActiveCwd(cwd);
+        setExplorerRefreshKey((k) => k + 1);
+      }
+
+      router.replace("/", { scroll: false });
+    },
+    [router, activeCwd]
+  );
+
   const handleSessionCreated = useCallback((session: SessionInfo) => {
-    setNewSessionCwd(null);
-    setSelectedSession(session);
     setRefreshKey((k) => k + 1);
-    router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
+    router.replace(`/?session=${encodeURIComponent(session.id)}`, { scroll: false });
   }, [router]);
+
+
+  const handleSessionForked = useCallback(
+    (newId: string) => {
+      setRefreshKey((k) => k + 1);
+      // Wait for registry refresh, then load
+      setTimeout(async () => {
+        try {
+          const res = await fetch("/api/sessions");
+          if (!res.ok) return;
+          const data = (await res.json()) as { sessions: SessionInfo[] };
+          const s = data.sessions.find((x) => x.id === newId);
+          if (s) {
+            handleSelectSession(s, false);
+          }
+        } catch {
+          // ignore
+        }
+      }, 50);
+    },
+    [handleSelectSession]
+  );
 
   const handleAgentEnd = useCallback(() => {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
   }, []);
 
-  const handleSessionForked = useCallback((newSessionId: string) => {
-    setRefreshKey((k) => k + 1);
-    setSessionKey((k) => k + 1);
-    setNewSessionCwd(null);
-    setSelectedSession((prev) => ({
-      ...(prev ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "" }),
-      id: newSessionId,
-    }));
-    router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
-  }, [router]);
+  const handleAtMention = useCallback((relativePath: string) => {
+    chatInputRef.current?.insertText(`@${relativePath}`);
+  }, []);
 
   const handleInitialRestoreDone = useCallback(() => {
     setInitialSessionRestored(true);
   }, []);
 
-  const handleSessionDeleted = useCallback((sessionId: string) => {
-    setRefreshKey((k) => k + 1);
-    if (selectedSession?.id === sessionId) {
-      const cwd = selectedSession.cwd;
-      setSelectedSession(null);
-      setNewSessionCwd(cwd ?? null);
-      setSessionKey((k) => k + 1);
-      setBranchTree([]);
-      setBranchActiveLeafId(null);
-      setSystemPrompt(null);
-      setActiveTopPanel(null);
-      router.replace("/", { scroll: false });
-    }
-  }, [selectedSession, router]);
+  const handleSessionDeleted = useCallback(
+    (sessionId: string) => {
+      setRefreshKey((k) => k + 1);
+      if (selectedSession?.id === sessionId) {
+        const cwd = selectedSession.cwd;
+        setSelectedSession(null);
+        setNewSessionCwd(cwd ?? null);
+        setSessionKey((k) => k + 1);
+        setBranchTree([]);
+        setBranchActiveLeafId(null);
+        setSystemPrompt(null);
+        setActiveTopPanel(null);
+        router.replace("/", { scroll: false });
+      }
+    },
+    [selectedSession, router]
+  );
 
   const handleOpenFile = useCallback((filePath: string, fileName: string) => {
     const tabId = `file:${filePath}`;
@@ -256,18 +303,21 @@ export function AppShell() {
     setRightPanelOpen(true);
   }, []);
 
-  const handleCloseFileTab = useCallback((tabId: string) => {
-    setFileTabs((prev) => {
-      const next = prev.filter((t) => t.id !== tabId);
-      if (next.length === 0) setRightPanelOpen(false);
-      return next;
-    });
-    setActiveFileTabId((cur) => {
-      if (cur !== tabId) return cur;
-      const remaining = fileTabs.filter((t) => t.id !== tabId);
-      return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
-    });
-  }, [fileTabs]);
+  const handleCloseFileTab = useCallback(
+    (tabId: string) => {
+      setFileTabs((prev) => {
+        const next = prev.filter((t) => t.id !== tabId);
+        if (next.length === 0) setRightPanelOpen(false);
+        return next;
+      });
+      setActiveFileTabId((cur) => {
+        if (cur !== tabId) return cur;
+        const remaining = fileTabs.filter((t) => t.id !== tabId);
+        return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
+      });
+    },
+    [fileTabs]
+  );
 
   // Keyboard shortcuts: Windows-oriented app commands.
   useEffect(() => {
@@ -325,12 +375,9 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", handler);
   }, [activeCwd, handleNewSession, newSessionCwd, selectedSession?.cwd, toggleTheme]);
 
-  // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
-  // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
-
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
 
   const sidebarContent = (
@@ -349,50 +396,53 @@ export function AppShell() {
         explorerRefreshKey={explorerRefreshKey}
         onAtMention={handleAtMention}
       />
-      <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
-        {([
-          {
-            label: "Models",
-            onClick: () => setModelsConfigOpen(true),
-            disabled: false,
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" />
-                <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
-                <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
-                <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
-                <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
-              </svg>
-            ),
-          },
-          {
-            label: "Skills",
-            onClick: () => setSkillsConfigOpen(true),
-            disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd,
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-            ),
-          },
-        ] as { label: string; onClick: () => void; disabled: boolean; icon: React.ReactNode }[]).map(({ label, onClick, disabled, icon }) => (
+      <div className="p-2 shrink-0 flex justify-between gap-1">
+        {(
+          [
+            {
+              label: "Models",
+              onClick: () => setModelsConfigOpen(true),
+              disabled: false,
+              icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="4" y="4" width="16" height="16" rx="2" />
+                  <rect x="9" y="9" width="6" height="6" />
+                  <line x1="9" y1="1" x2="9" y2="4" />
+                  <line x1="15" y1="1" x2="15" y2="4" />
+                  <line x1="9" y1="20" x2="9" y2="23" />
+                  <line x1="15" y1="20" x2="15" y2="23" />
+                  <line x1="20" y1="9" x2="23" y2="9" />
+                  <line x1="20" y1="14" x2="23" y2="14" />
+                  <line x1="1" y1="9" x2="4" y2="9" />
+                  <line x1="1" y1="14" x2="4" y2="14" />
+                </svg>
+              ),
+            },
+            {
+              label: "Skills",
+              onClick: () => setSkillsConfigOpen(true),
+              disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd,
+              icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
+              ),
+            },
+          ] as { label: string; onClick: () => void; disabled: boolean; icon: React.ReactNode }[]
+        ).map(({ label, onClick, disabled, icon }) => (
           <button
             key={label}
             onClick={onClick}
             disabled={disabled}
             title={label}
             aria-label={label}
-            style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              height: "var(--control-height)", padding: 0, background: "none", border: "none",
-              borderRadius: "var(--radius-control)", color: "var(--text-muted)", cursor: disabled ? "default" : "pointer",
-              fontSize: 12, opacity: disabled ? 0.35 : 1,
-              transition: "background 0.12s, color 0.12s",
-            }}
-            onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            className={`flex-1 flex items-center justify-center gap-1.5 h-control-height p-0 bg-transparent border-none rounded-control text-[12px] transition-colors duration-120 ${
+              disabled
+                ? "cursor-default opacity-35 text-text-muted"
+                : "cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text"
+            }`}
           >
             {icon}
             {label}
@@ -404,384 +454,372 @@ export function AppShell() {
 
   return (
     <>
-    <div style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
-      {/* Mobile overlay backdrop */}
-      <div
-        className="sidebar-overlay-backdrop"
-        onClick={() => setSidebarOpen(false)}
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 199,
-          background: "rgba(0,0,0,0.4)",
-          opacity: sidebarOpen ? 1 : 0,
-          pointerEvents: sidebarOpen ? "auto" : "none",
-          transition: "opacity 0.25s ease",
-        }}
-      />
+      <div className="flex h-screen overflow-hidden bg-bg">
+        {/* Mobile overlay backdrop */}
+        <div
+          className="sidebar-overlay-backdrop fixed inset-0 z-[199] bg-black/40 transition-opacity duration-250 ease-in-out"
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            opacity: sidebarOpen ? 1 : 0,
+            pointerEvents: sidebarOpen ? "auto" : "none",
+          }}
+        />
 
-      {/* Left sidebar */}
-      <div
-        className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}`}
-        style={{
-          background: "var(--bg-panel)",
-          borderRight: "1px solid var(--divider)",
-          display: "flex",
-          flexDirection: "column",
-          flexShrink: 0,
-          zIndex: 200,
-          width: sidebarOpen ? panelWidths.left : 0,
-          minWidth: sidebarOpen ? panelWidths.left : 0,
-        }}
-      >
-        {sidebarContent}
-        {sidebarOpen && (
-          <div
-            className="panel-resize-handle panel-resize-handle-left"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize sidebar"
-            onPointerDown={(e) => beginPanelResize("left", e)}
-          />
-        )}
-      </div>
-
-      {/* Center: chat */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        {/* Top bar with sidebar toggle */}
-        <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--divider)", height: "var(--toolbar-height)", background: "var(--bg-elevated)" }}>
-          <button
-            onClick={() => setSidebarOpen((v) => !v)}
-            title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: "100%", padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--divider)",
-              color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            {sidebarOpen ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            )}
-          </button>
-          <button
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-            }}
-            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            aria-pressed={isDark}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: "100%", padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--divider)",
-              color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            {isDark ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            )}
-          </button>
-          {showChat && (
-            <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-              <BranchNavigator
-                tree={branchTree}
-                activeLeafId={branchActiveLeafId}
-                onLeafChange={handleBranchLeafChange}
-                inline
-                containerRef={topBarRef}
-                open={activeTopPanel === "branches"}
-                onToggle={() => toggleTopPanel("branches")}
-                hasSession
-              />
-              <button
-                ref={systemBtnRef}
-                onClick={() => toggleTopPanel("system")}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  height: "100%", padding: "0 12px",
-                  background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
-                  border: "none",
-                  borderTop: activeTopPanel === "system" ? "2px solid var(--accent)" : "2px solid transparent",
-                  borderRight: "1px solid var(--divider)",
-                  cursor: "pointer",
-                  color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
-                  fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)"; }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: systemPrompt ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }}>
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="8" y1="13" x2="16" y2="13" />
-                  <line x1="8" y1="17" x2="13" y2="17" />
-                </svg>
-                <span>System</span>
-              </button>
-            </div>
+        {/* Left sidebar */}
+        <div
+          className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"} bg-bg-panel border-r border-divider flex flex-col shrink-0 z-[200]`}
+          style={{
+            width: sidebarOpen ? panelWidths.left : 0,
+            minWidth: sidebarOpen ? panelWidths.left : 0,
+          }}
+        >
+          {sidebarContent}
+          {sidebarOpen && (
+            <div
+              className="panel-resize-handle panel-resize-handle-left"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize sidebar"
+              onPointerDown={(e) => beginPanelResize("left", e)}
+            />
           )}
-          {/* Session stats — right-aligned in top bar */}
-          {showChat && (sessionStats || contextUsage) && (() => {
-            const t = sessionStats?.tokens;
-            const c = sessionStats?.cost ?? 0;
-            const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
-            const costStr = c > 0 ? (c >= 0.01 ? `$${c.toFixed(2)}` : `<$0.01`) : null;
+        </div>
 
-            let ctxColor = "var(--text-muted)";
-            let ctxStr: string | null = null;
-            if (contextUsage?.contextWindow) {
-              const pct = contextUsage.percent;
-              if (pct !== null && pct > 90) ctxColor = "var(--danger)";
-              else if (pct !== null && pct > 70) ctxColor = "var(--warning)";
-              ctxStr = pct !== null ? `${pct.toFixed(0)}% / ${fmt(contextUsage.contextWindow)}` : `? / ${fmt(contextUsage.contextWindow)}`;
-            }
-
-            const tooltipParts: string[] = [];
-            if (t) {
-              tooltipParts.push(`in: ${t.input.toLocaleString()}`);
-              tooltipParts.push(`out: ${t.output.toLocaleString()}`);
-              tooltipParts.push(`cache read: ${t.cacheRead.toLocaleString()}`);
-              tooltipParts.push(`cache write: ${t.cacheWrite.toLocaleString()}`);
-              if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
-            }
-            if (contextUsage?.contextWindow) {
-              const pct = contextUsage.percent;
-              tooltipParts.push(`context: ${pct !== null ? pct.toFixed(1) + "%" : "unknown"} of ${contextUsage.contextWindow.toLocaleString()} tokens`);
-            }
-            const tooltip = tooltipParts.join("  |  ");
-
-            return (
-              <div
-                title={tooltip}
-                style={{
-                  marginLeft: "auto",
-                  display: "flex", alignItems: "center", gap: 10,
-                  paddingLeft: 12,
-                  paddingRight: rightPanelOpen ? 12 : 48,
-                  height: "100%",
-                  fontSize: 11, color: "var(--text-muted)",
-                  whiteSpace: "nowrap", cursor: "default",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {t && t.input > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="8.5" x2="5" y2="1.5" /><polyline points="2 4 5 1.5 8 4" />
-                    </svg>
-                    {fmt(t.input)}
-                  </span>
-                )}
-                {t && t.output > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
-                    </svg>
-                    {fmt(t.output)}
-                  </span>
-                )}
-                {t && t.cacheRead > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" /><polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
-                    </svg>
-                    {fmt(t.cacheRead)}
-                  </span>
-                )}
-                {costStr && (
-                  <span style={{ display: "flex", alignItems: "center", color: "var(--text)", fontWeight: 500 }}>
-                    {costStr}
-                  </span>
-                )}
-                {ctxStr && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4, color: ctxColor }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 9 L1 5 Q1 1 5 1 Q9 1 9 5 L9 9" /><line x1="1" y1="9" x2="9" y2="9" />
-                    </svg>
-                    {ctxStr}
-                  </span>
-                )}
-              </div>
-            );
-          })()}
-          {/* Top panel dropdown — shared, only one active at a time */}
-          {activeTopPanel && topPanelPos && (
-            <div style={{
-              position: "fixed",
-              top: topPanelPos.top,
-              left: topPanelPos.left,
-              width: topPanelPos.width,
-              zIndex: 500,
-            }}>
-              {activeTopPanel === "system" && (
-                <div style={{
-                  background: "var(--bg-elevated)",
-                  borderBottom: "1px solid var(--divider)",
-                  boxShadow: "var(--shadow-popover)",
-                }}>
-                  {systemPrompt ? (
-                    <div style={{
-                      maxHeight: "min(600px, 75vh)",
-                      overflowY: "auto",
-                      padding: "12px 16px",
-                      color: "var(--text-muted)",
-                      fontSize: 12,
-                      lineHeight: 1.6,
-                      whiteSpace: "pre-wrap",
-                      fontFamily: "var(--font-mono)",
-                    }}>
-                      {systemPrompt}
-                    </div>
-                  ) : systemPrompt === "" ? (
-                    <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                      System prompt is empty (tools are disabled)
-                    </div>
-                  ) : (
-                    <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                      Send a message to load the system prompt
-                    </div>
-                  )}
-                </div>
+        {/* Center: chat */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Top bar with sidebar toggle */}
+          <div ref={topBarRef} className="flex items-center shrink-0 border-b border-divider h-toolbar-height bg-bg-elevated">
+            <button
+              onClick={() => setSidebarOpen((v) => !v)}
+              title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+              aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-r border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-120"
+            >
+              {sidebarOpen ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="9" y1="3" x2="9" y2="21" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
               )}
-            </div>
-          )}
-
-        </div>
-
-        {/* Chat content */}
-        <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-          {showChat ? (
-            <ChatWindow
-              key={sessionKey}
-              session={selectedSession}
-              newSessionCwd={effectiveNewSessionCwd}
-              onAgentEnd={handleAgentEnd}
-              onSessionCreated={handleSessionCreated}
-              onSessionForked={handleSessionForked}
-              modelsRefreshKey={modelsRefreshKey}
-              chatInputRef={chatInputRef}
-              onBranchDataChange={handleBranchDataChange}
-              onSystemPromptChange={handleSystemPromptChange}
-              onSessionStatsChange={handleSessionStatsChange}
-              onContextUsageChange={handleContextUsageChange}
-            />
-          ) : showPlaceholder ? (
-            activeCwd ? (
-              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 15 }}>
-                Select a session from the sidebar
-              </div>
-            ) : (
-              <div style={{ position: "absolute", top: 12, left: 12, display: "flex", alignItems: "flex-start", gap: 8, userSelect: "none", pointerEvents: "none" }}>
-                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7, flexShrink: 0 }}>
-                  <line x1="20" y1="12" x2="4" y2="12" /><polyline points="10 6 4 12 10 18" />
+            </button>
+            <button
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+              }}
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              aria-pressed={isDark}
+              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-r border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-120"
+            >
+              {isDark ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="5" />
+                  <line x1="12" y1="1" x2="12" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="23" />
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                  <line x1="1" y1="12" x2="3" y2="12" />
+                  <line x1="21" y1="12" x2="23" y2="12" />
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
                 </svg>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>Get Started</div>
-                  <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
-                    <span style={{ color: "var(--text-dim)", marginRight: 6 }}>1.</span>Select a project directory from the sidebar<br />
-                    <span style={{ color: "var(--text-dim)", marginRight: 6 }}>2.</span>Add models via the <strong style={{ color: "var(--text)" }}>Models</strong> button at the bottom
-                  </div>
-                </div>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              )}
+            </button>
+            {showChat && (
+              <div className="flex items-stretch h-full">
+                <BranchNavigator
+                  tree={branchTree}
+                  activeLeafId={branchActiveLeafId}
+                  onLeafChange={handleBranchLeafChange}
+                  inline
+                  containerRef={topBarRef}
+                  open={activeTopPanel === "branches"}
+                  onToggle={() => toggleTopPanel("branches")}
+                  hasSession
+                />
+                <button
+                  ref={systemBtnRef}
+                  onClick={() => toggleTopPanel("system")}
+                  className={`flex items-center gap-1.5 h-full px-3 border-none border-r border-divider cursor-pointer text-[11px] whitespace-nowrap transition-all duration-100 ${
+                    activeTopPanel === "system"
+                      ? "bg-bg-selected border-t-2 border-t-accent text-text"
+                      : "bg-transparent border-t-2 border-t-transparent text-text-muted hover:text-text"
+                  }`}
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`shrink-0 ${systemPrompt ? "text-accent" : "text-text-dim"}`}
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="8" y1="13" x2="16" y2="13" />
+                    <line x1="8" y1="17" x2="13" y2="17" />
+                  </svg>
+                  <span>System</span>
+                </button>
               </div>
-            )
-          ) : null}
-        </div>
-      </div>
+            )}
+            {/* Session stats — right-aligned in top bar */}
+            {showChat &&
+              (sessionStats || contextUsage) &&
+              (() => {
+                const t = sessionStats?.tokens;
+                const c = sessionStats?.cost ?? 0;
+                const fmt = (n: number) =>
+                  n >= 1_000_000
+                    ? `${(n / 1_000_000).toFixed(1)}M`
+                    : n >= 1000
+                    ? `${(n / 1000).toFixed(0)}k`
+                    : String(n);
+                const costStr = c > 0 ? (c >= 0.01 ? `$${c.toFixed(2)}` : `<$0.01`) : null;
 
-      {/* Right panel: file viewer — always mounted, width animated via CSS */}
-      <div
-        className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}`}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          borderLeft: "1px solid var(--divider)",
-          background: "var(--bg)",
-          position: "relative",
-          width: rightPanelOpen ? panelWidths.right : 0,
-          minWidth: rightPanelOpen ? panelWidths.right : 0,
-        }}
-      >
-        {rightPanelOpen && (
-          <div
-            className="panel-resize-handle panel-resize-handle-right"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize file panel"
-            onPointerDown={(e) => beginPanelResize("right", e)}
-          />
-        )}
-        {/* Right panel tab bar */}
-        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "var(--bg-elevated)", borderBottom: "1px solid var(--divider)", height: "var(--toolbar-height)" }}>
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <TabBar
-              tabs={fileTabs}
-              activeTabId={activeFileTabId ?? ""}
-              onSelectTab={setActiveFileTabId}
-              onCloseTab={handleCloseFileTab}
-            />
+                let ctxColor = "var(--text-muted)";
+                let ctxStr: string | null = null;
+                if (contextUsage?.contextWindow) {
+                  const pct = contextUsage.percent;
+                  if (pct !== null && pct > 90) ctxColor = "var(--danger)";
+                  else if (pct !== null && pct > 70) ctxColor = "var(--warning)";
+                  ctxStr =
+                    pct !== null
+                      ? `${pct.toFixed(0)}% / ${fmt(contextUsage.contextWindow)}`
+                      : `? / ${fmt(contextUsage.contextWindow)}`;
+                }
+
+                const tooltipParts: string[] = [];
+                if (t) {
+                  tooltipParts.push(`in: ${t.input.toLocaleString()}`);
+                  tooltipParts.push(`out: ${t.output.toLocaleString()}`);
+                  tooltipParts.push(`cache read: ${t.cacheRead.toLocaleString()}`);
+                  tooltipParts.push(`cache write: ${t.cacheWrite.toLocaleString()}`);
+                  if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
+                }
+                if (contextUsage?.contextWindow) {
+                  const pct = contextUsage.percent;
+                  tooltipParts.push(
+                    `context: ${pct !== null ? pct.toFixed(1) + "%" : "unknown"} of ${contextUsage.contextWindow.toLocaleString()} tokens`
+                  );
+                }
+                const tooltip = tooltipParts.join("  |  ");
+
+                return (
+                  <div
+                    title={tooltip}
+                    className="ml-auto flex items-center gap-2.5 pl-3 h-full text-[11px] text-text-muted whitespace-nowrap cursor-default tabular-nums"
+                    style={{ paddingRight: rightPanelOpen ? 12 : 48 }}
+                  >
+                    {t && t.input > 0 && (
+                      <span className="flex items-center gap-1">
+                        <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="5" y1="8.5" x2="5" y2="1.5" />
+                          <polyline points="2 4 5 1.5 8 4" />
+                        </svg>
+                        {fmt(t.input)}
+                      </span>
+                    )}
+                    {t && t.output > 0 && (
+                      <span className="flex items-center gap-1">
+                        <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="5" y1="1.5" x2="5" y2="8.5" />
+                          <polyline points="2 6 5 8.5 8 6" />
+                        </svg>
+                        {fmt(t.output)}
+                      </span>
+                    )}
+                    {t && t.cacheRead > 0 && (
+                      <span className="flex items-center gap-1">
+                        <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" />
+                          <polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
+                        </svg>
+                        {fmt(t.cacheRead)}
+                      </span>
+                    )}
+                    {costStr && (
+                      <span className="flex items-center text-text font-medium">
+                        {costStr}
+                      </span>
+                    )}
+                    {ctxStr && (
+                      <span className="flex items-center gap-1" style={{ color: ctxColor }}>
+                        <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 9 L1 5 Q1 1 5 1 Q9 1 9 5 L9 9" />
+                          <line x1="1" y1="9" x2="9" y2="9" />
+                        </svg>
+                        {ctxStr}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            {/* Top panel dropdown — shared, only one active at a time */}
+            {activeTopPanel && topPanelPos && (
+              <div
+                className="fixed z-[500]"
+                style={{
+                  top: topPanelPos.top,
+                  left: topPanelPos.left,
+                  width: topPanelPos.width,
+                }}
+              >
+                {activeTopPanel === "system" && (
+                  <div className="bg-bg-elevated border-b border-divider shadow-popover">
+                    {systemPrompt ? (
+                      <div className="max-h-[min(600px,75vh)] overflow-y-auto px-4 py-3 text-text-muted text-[12px] leading-[1.6] whitespace-pre-wrap font-mono">
+                        {systemPrompt}
+                      </div>
+                    ) : systemPrompt === "" ? (
+                      <div className="px-4 py-2.5 text-[12px] text-text-muted italic">
+                        System prompt is empty (tools are disabled)
+                      </div>
+                    ) : (
+                      <div className="px-4 py-2.5 text-[12px] text-text-muted italic">
+                        Send a message to load the system prompt
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
+          {/* Chat content */}
+          <div className="flex-1 overflow-hidden relative">
+            {showChat ? (
+              <ChatWindow
+                key={sessionKey}
+                session={selectedSession}
+                newSessionCwd={effectiveNewSessionCwd}
+                onAgentEnd={handleAgentEnd}
+                onSessionCreated={handleSessionCreated}
+                onSessionForked={handleSessionForked}
+                modelsRefreshKey={modelsRefreshKey}
+                chatInputRef={chatInputRef}
+                onBranchDataChange={handleBranchDataChange}
+                onSystemPromptChange={handleSystemPromptChange}
+                onSessionStatsChange={handleSessionStatsChange}
+                onContextUsageChange={handleContextUsageChange}
+              />
+            ) : showPlaceholder ? (
+              activeCwd ? (
+                <div className="h-full flex items-center justify-center text-text-muted text-[15px]">
+                  Select a session from the sidebar
+                </div>
+              ) : (
+                <div className="absolute top-3 left-3 flex items-start gap-2 select-none pointer-events-none">
+                  <svg
+                    width="44"
+                    height="44"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="opacity-70 shrink-0"
+                  >
+                    <line x1="20" y1="12" x2="4" y2="12" />
+                    <polyline points="10 6 4 12 10 18" />
+                  </svg>
+                  <div>
+                    <div className="text-[18px] font-semibold text-text mb-2">Get Started</div>
+                    <div className="text-[12px] text-text-muted leading-[1.8]">
+                      <span className="text-text-dim mr-1.5">1.</span>Select a project directory from the sidebar
+                      <br />
+                      <span className="text-text-dim mr-1.5">2.</span>Add models via the{" "}
+                      <strong className="text-text">Models</strong> button at the bottom
+                    </div>
+                  </div>
+                </div>
+              )
+            ) : null}
+          </div>
         </div>
 
-        {/* File content */}
-        <div style={{ flex: 1, overflow: "hidden" }}>
-          {activeFileTab?.filePath ? (
-            <FileViewer filePath={activeFileTab.filePath} cwd={activeCwd ?? undefined} />
-          ) : (
-            <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-              No file open
-            </div>
+        {/* Right panel: file viewer — always mounted, width animated via CSS */}
+        <div
+          className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"} flex flex-col border-l border-divider bg-bg relative`}
+          style={{
+            width: rightPanelOpen ? panelWidths.right : 0,
+            minWidth: rightPanelOpen ? panelWidths.right : 0,
+          }}
+        >
+          {rightPanelOpen && (
+            <div
+              className="panel-resize-handle panel-resize-handle-right"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize file panel"
+              onPointerDown={(e) => beginPanelResize("right", e)}
+            />
           )}
+          {/* Right panel tab bar */}
+          <div className="flex items-center shrink-0 bg-bg-elevated border-b border-divider h-toolbar-height">
+            <div className="flex-1 overflow-hidden">
+              <TabBar
+                tabs={fileTabs}
+                activeTabId={activeFileTabId ?? ""}
+                onSelectTab={setActiveFileTabId}
+                onCloseTab={handleCloseFileTab}
+              />
+            </div>
+          </div>
+
+          {/* File content */}
+          <div className="flex-1 overflow-hidden">
+            {activeFileTab?.filePath ? (
+              <FileViewer filePath={activeFileTab.filePath} cwd={activeCwd ?? undefined} />
+            ) : (
+              <div className="h-full flex items-center justify-center text-text-dim text-[12px]">No file open</div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-    {/* File panel toggle — always visible at top-right */}
-    <button
-      onClick={() => setRightPanelOpen((v) => !v)}
-      title={rightPanelOpen ? "Hide file panel" : "Show file panel"}
-      aria-label={rightPanelOpen ? "Hide file panel" : "Show file panel"}
-      style={{
-        position: "fixed", top: 0, right: 0, zIndex: 300,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 36, height: "var(--toolbar-height)", padding: 0,
-        background: "var(--bg-elevated)", border: "none", borderLeft: "1px solid var(--divider)", borderBottom: "1px solid var(--divider)",
-        color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
-        cursor: "pointer", transition: "color 0.12s",
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
-      </svg>
-    </button>
-    {modelsConfigOpen && <ModelsConfig onClose={() => { setModelsConfigOpen(false); setModelsRefreshKey((k) => k + 1); }} />}
-    {skillsConfigOpen && (activeCwd ?? selectedSession?.cwd ?? newSessionCwd) && (
-      <SkillsConfig cwd={(activeCwd ?? selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setSkillsConfigOpen(false)} />
-    )}
+      {/* File panel toggle — always visible at top-right */}
+      <button
+        onClick={() => setRightPanelOpen((v) => !v)}
+        title={rightPanelOpen ? "Hide file panel" : "Show file panel"}
+        aria-label={rightPanelOpen ? "Hide file panel" : "Show file panel"}
+        className={`fixed top-0 right-0 z-[300] flex items-center justify-center w-9 h-toolbar-height p-0 bg-bg-elevated border-none border-l border-b border-divider cursor-pointer transition-colors duration-120 ${
+          rightPanelOpen ? "text-text" : "text-text-muted hover:text-text"
+        }`}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="15" y1="3" x2="15" y2="21" />
+        </svg>
+      </button>
+      {modelsConfigOpen && (
+        <ModelsConfig
+          onClose={() => {
+            setModelsConfigOpen(false);
+            setModelsRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
+      {skillsConfigOpen && (activeCwd ?? selectedSession?.cwd ?? newSessionCwd) && (
+        <SkillsConfig
+          cwd={(activeCwd ?? selectedSession?.cwd ?? newSessionCwd)!}
+          onClose={() => setSkillsConfigOpen(false)}
+        />
+      )}
     </>
   );
 }

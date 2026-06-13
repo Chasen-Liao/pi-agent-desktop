@@ -3,24 +3,48 @@
 @theme {
   --color-bg: var(--bg);
   --color-bg-panel: var(--bg-panel);
+  --color-bg-elevated: var(--bg-elevated);
   --color-bg-hover: var(--bg-hover);
   --color-bg-selected: var(--bg-selected);
   --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-divider: var(--divider);
   --color-text: var(--text);
+  --color-text-strong: var(--text-strong);
   --color-text-muted: var(--text-muted);
   --color-text-dim: var(--text-dim);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
+  --color-accent-contrast: var(--accent-contrast);
   --color-user-bg: var(--user-bg);
+  --color-user-border: var(--user-border);
   --color-assistant-bg: var(--assistant-bg);
   --color-tool-bg: var(--tool-bg);
   --color-bg-subtle: var(--bg-subtle);
+  --color-code-bg: var(--code-bg);
+  --color-code-header-bg: var(--code-header-bg);
+  --color-chrome-button-bg: var(--chrome-button-bg);
+  --color-chrome-button-hover: var(--chrome-button-hover);
   --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-success-border: var(--success-border);
   --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-border: var(--danger-border);
   --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-border: var(--warning-border);
   --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-info-border: var(--info-border);
+  --color-focus-ring: var(--focus-ring);
   --font-mono-font: var(--font-mono);
+  --shadow-popover: var(--shadow-popover);
+  --shadow-input: var(--shadow-input);
+  --radius-control: var(--radius-control);
+  --radius-panel: var(--radius-panel);
 }
+
 
 :root {
   --bg: #fafafa;

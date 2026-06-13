@@ -26,18 +26,13 @@ export function SessionTreeItem({
 
   return (
     <div>
-      <div style={{ position: "relative" }}>
+      <div className="relative">
         {/* Indent line for child sessions */}
         {depth > 0 && (
           <div
+            className="absolute top-0 bottom-0 w-px bg-border pointer-events-none"
             style={{
-              position: "absolute",
               left: depth * 12 + 6,
-              top: 0,
-              bottom: 0,
-              width: 1,
-              background: "var(--border)",
-              pointerEvents: "none",
             }}
           />
         )}
@@ -153,7 +148,20 @@ function SessionItem({
   }, []);
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
-  const ITEM_HEIGHT = 52;
+
+  const bgClass = confirmDelete
+    ? "bg-danger-bg"
+    : isSelected
+    ? "bg-bg-selected"
+    : actionsVisible
+    ? "bg-bg-hover"
+    : "bg-transparent";
+
+  const borderClass = confirmDelete
+    ? "border-l-2 border-danger"
+    : isSelected
+    ? "border-l-2 border-accent"
+    : "border-l-2 border-transparent";
 
   return (
     <div
@@ -174,57 +182,24 @@ function SessionItem({
         setRowFocused(false);
       }}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false); }}
+      onMouseLeave={() => setHovered(false)}
+      className={`h-[52px] flex items-center pr-2 transition-all duration-120 gap-1.5 overflow-hidden ${bgClass} ${borderClass} ${
+        confirmDelete || renaming ? "cursor-default" : "cursor-pointer"
+      } ${deleting ? "opacity-50" : "opacity-100"}`}
       style={{
-        height: ITEM_HEIGHT,
-        display: "flex",
-        alignItems: "center",
         paddingLeft: depth > 0 ? depth * 12 + 14 : 14,
-        paddingRight: 8,
-        cursor: confirmDelete || renaming ? "default" : "pointer",
-        background: confirmDelete
-          ? "var(--danger-bg)"
-          : isSelected
-          ? "var(--bg-selected)"
-          : actionsVisible
-          ? "var(--bg-hover)"
-          : "transparent",
-        borderLeft: confirmDelete
-          ? "2px solid var(--danger)"
-          : isSelected
-          ? "2px solid var(--accent)"
-          : "2px solid transparent",
-        transition: "background 0.12s, border-color 0.12s",
-        opacity: deleting ? 0.5 : 1,
-        gap: 6,
-        overflow: "hidden",
       }}
     >
       {confirmDelete ? (
         /* ── Delete confirmation: same height, two flat buttons ── */
         <>
-          <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            Delete <span style={{ fontWeight: 600 }}>&ldquo;{title.slice(0, 22)}{title.length > 22 ? "…" : ""}&rdquo;</span>?
+          <div className="flex-1 min-w-0 text-[12px] text-text overflow-hidden text-ellipsis whitespace-nowrap">
+            Delete <span className="font-semibold">&ldquo;{title.slice(0, 22)}{title.length > 22 ? "…" : ""}&rdquo;</span>?
           </div>
-          <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+          <div className="flex gap-1.25 shrink-0">
             <button
               onClick={handleDeleteConfirm}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                height: 30,
-                padding: "0 11px",
-                background: "var(--danger)",
-                border: "none",
-                borderRadius: "var(--radius-control)",
-                color: "var(--accent-contrast)",
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-              }}
+              className="flex items-center justify-center gap-1 h-[30px] px-[11px] bg-danger border-none rounded-control text-accent-contrast cursor-pointer text-[12px] font-semibold whitespace-nowrap"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
@@ -236,21 +211,7 @@ function SessionItem({
             </button>
             <button
               onClick={handleDeleteCancel}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                height: 30,
-                padding: "0 11px",
-                background: "var(--bg)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-control)",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: 500,
-                whiteSpace: "nowrap",
-              }}
+              className="flex items-center justify-center h-[30px] px-[11px] bg-bg hover:bg-bg-hover border border-border rounded-control text-text-muted cursor-pointer text-[12px] font-medium whitespace-nowrap"
             >
               Cancel
             </button>
@@ -268,46 +229,30 @@ function SessionItem({
             if (e.key === "Escape") setRenaming(false);
           }}
           autoFocus
-          style={{
-            flex: 1,
-            fontSize: 12,
-            padding: "5px 8px",
-            border: "1px solid var(--accent)",
-            borderRadius: "var(--radius-control)",
-            outline: "none",
-            background: "var(--bg)",
-            color: "var(--text)",
-            height: 30,
-          }}
+          className="flex-1 text-[12px] py-1.25 px-2 border border-accent rounded-control outline-none bg-bg text-text h-[30px]"
         />
       ) : (
         /* ── Normal view ── */
         <>
           {/* Fork indicator for child sessions */}
           {depth > 0 && (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="stroke-text-dim shrink-0">
               <line x1="6" y1="3" x2="6" y2="15" />
               <circle cx="18" cy="6" r="3" />
               <circle cx="6" cy="18" r="3" />
               <path d="M18 9a9 9 0 0 1-9 9" />
             </svg>
           )}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="flex-1 min-w-0">
             <div
-              style={{
-                fontSize: 12,
-                fontWeight: isSelected ? 600 : 500,
-                lineHeight: 1.4,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                color: isSelected ? "var(--text-strong)" : "var(--text)",
-              }}
+              className={`text-[12px] leading-[1.4] overflow-hidden text-ellipsis whitespace-nowrap ${
+                isSelected ? "font-semibold text-text-strong" : "font-medium text-text"
+              }`}
               title={title}
             >
               {title}
             </div>
-            <div style={{ marginTop: 2, display: "flex", gap: 8, color: "var(--text-dim)", fontSize: 11 }}>
+            <div className="mt-0.5 flex gap-2 text-text-dim text-[11px]">
               <span title={session.modified}>{formatRelativeTime(session.modified)}</span>
               <span>{session.messageCount} msgs</span>
             </div>
@@ -322,21 +267,9 @@ function SessionItem({
               }}
               title={collapsed ? "Expand forks" : "Collapse forks"}
               aria-label={collapsed ? "Expand forks" : "Collapse forks"}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 20,
-                height: 20,
-                padding: 0,
-                flexShrink: 0,
-                background: "none",
-                border: "none",
-                color: "var(--text-dim)",
-                cursor: "pointer",
-                transform: collapsed ? "rotate(-90deg)" : "none",
-                transition: "transform 0.15s",
-              }}
+              className={`flex items-center justify-center w-5 h-5 p-0 shrink-0 bg-transparent border-none text-text-dim cursor-pointer transition-transform duration-150 ${
+                collapsed ? "-rotate-90" : ""
+              }`}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="2 3.5 5 6.5 8 3.5" />
@@ -346,45 +279,16 @@ function SessionItem({
 
           {/* Action buttons keep their width reserved so hover does not shift text. */}
           <div
-            style={{
-              display: "flex",
-              gap: 4,
-              flexShrink: 0,
-              opacity: actionsVisible ? 1 : 0,
-              pointerEvents: actionsVisible ? "auto" : "none",
-              transition: "opacity 0.12s",
-            }}
+            className={`flex gap-1 shrink-0 transition-opacity duration-120 ${
+              actionsVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+            }`}
           >
             <button
               onClick={startRename}
               title="Rename"
               aria-label="Rename session"
               tabIndex={actionsVisible ? 0 : -1}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 28,
-                height: 28,
-                padding: 0,
-                background: "var(--chrome-button-bg)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-control)",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                flexShrink: 0,
-                transition: "background 0.12s, color 0.12s, border-color 0.12s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--chrome-button-hover)";
-                e.currentTarget.style.color = "var(--accent)";
-                e.currentTarget.style.borderColor = "var(--focus-ring)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--chrome-button-bg)";
-                e.currentTarget.style.color = "var(--text-muted)";
-                e.currentTarget.style.borderColor = "var(--border)";
-              }}
+              className="flex items-center justify-center w-7 h-7 p-0 bg-chrome-button-bg hover:bg-chrome-button-hover border border-border hover:border-focus-ring rounded-control text-text-muted hover:text-accent cursor-pointer shrink-0 transition-all duration-120"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
@@ -395,31 +299,7 @@ function SessionItem({
               title="Delete"
               aria-label="Delete session"
               tabIndex={actionsVisible ? 0 : -1}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 28,
-                height: 28,
-                padding: 0,
-                background: "var(--chrome-button-bg)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-control)",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                flexShrink: 0,
-                transition: "background 0.12s, color 0.12s, border-color 0.12s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--danger-bg)";
-                e.currentTarget.style.color = "var(--danger)";
-                e.currentTarget.style.borderColor = "var(--danger-border)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--chrome-button-bg)";
-                e.currentTarget.style.color = "var(--text-muted)";
-                e.currentTarget.style.borderColor = "var(--border)";
-              }}
+              className="flex items-center justify-center w-7 h-7 p-0 bg-chrome-button-bg hover:bg-danger-bg border border-border hover:border-danger-border rounded-control text-text-muted hover:text-danger cursor-pointer shrink-0 transition-all duration-120"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
