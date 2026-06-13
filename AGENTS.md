@@ -13,11 +13,28 @@ npm run dev:electron # builds electron + opens window
 npm run dist         # Next.js build + Electron build + NSIS installer
 ```
 
-Typecheck: `node_modules/.bin/tsc --noEmit`  
-Lint: `node node_modules/next/dist/bin/next lint`  
+Typecheck: `npx tsc --noEmit`  
+Lint: `npm run lint`  
 **Never run `next build` during dev** — pollutes `.next/` and breaks `npm run dev`.
 
 ---
+
+## CodeGraph MCP (Code Querying)
+
+CodeGraph provides MCP (Model Context Protocol) tools for efficient symbol searching, file reading, and codebase exploration. When the workspace is indexed (indicated by a `.codegraph/` directory), agents should prefer these tools to save context window tokens and reduce query round-trips.
+
+### Available Tools
+
+- **`codegraph_explore`**: The primary tool for querying how something works or finding related files/symbols. Accept natural-language queries or symbol/file lists (e.g., `query: "rpc-manager session fork"`). Returns source code and call paths in a single call.
+- **`codegraph_node`**:
+  - *File reading*: Use it as a faster alternative to `view_file` (pass `file` and omit `symbol`). It returns the file content with line numbers and lists all files that depend on it.
+  - *Symbol querying*: Query a specific symbol's definition, signature, and caller/callee details (pass `symbol`, set `includeCode: true`).
+- **`codegraph_search`**: Fast symbol-name search (returns locations/filenames only, no code). Useful to locate where a symbol is defined.
+
+### Indexing
+
+- The workspace must be indexed (have a `.codegraph/` directory) to use these tools.
+- To initialize indexing, run `codegraph init` in the project root. (Do not run this automatically; indexing is a user-level choice).
 
 ## Architecture
 
@@ -56,6 +73,7 @@ Pi Agent.exe (Electron main)
 ```
 
 **Production layout** (inside NSIS installer):
+
 ```
 resources/
   standalone/              ← .next/standalone (extraResources)
@@ -86,14 +104,35 @@ app/api/
   agent/[id]/events/route.ts      GET SSE stream
   files/[...path]/route.ts        GET file contents for viewer
   models/route.ts                 GET { models, modelList, defaultModel }
-  models-config/route.ts          GET/POST — read/write ~/.pi/agent/models.json
+  models-config/route.ts          GET/PUT — read/write ~/.pi/agent/models.json
+  models-config/test/route.ts     POST test connection for a model configuration
+  skills/route.ts                 GET list/search/install skills
+  default-cwd/route.ts            POST create and return default project directory
+  select-directory/route.ts       POST open native Windows folder picker
+  statusline/route.ts             GET git branch and status metadata
+  home/route.ts                   GET user home directory path
 
 lib/
   rpc-manager.ts      AgentSessionWrapper + registry + startRpcSession
   session-reader.ts   parse .jsonl; getModelNameMap/getModelList/getDefaultModel
   types.ts            shared TypeScript types
   normalize.ts        normalizeToolCalls() — field name mismatch between file format and our types
-  system-prompt-off.ts  minimal system prompt when all tools are disabled
+  agent-client.ts     browser to agent endpoint SSE client wrapper
+  slash-commands.ts   parse and handle client-side slash commands
+  api-error.ts        helper for error logging and formatting
+  session-cascade.ts  cascading updates on session deletion
+  session-lock.ts     concurrency control file lock for sessions
+  npx.ts              cross-platform wrapper to execute npx safely without a shell
+  panel-layout.js     sidebar width calculation helper (CommonJS for build compatibility)
+  file-paths.ts       file path normalization and slashes helpers (Windows compatibility)
+  pi-types.ts         TypeScript type definitions matching `@earendil-works/pi-coding-agent` interfaces
+
+hooks/
+  useAgentSession.ts  agent interaction state manager
+  useAudio.ts         play audio cues for compaction and success/failure
+  useDragDrop.ts      manage file drop handler
+  useTheme.ts         manage light/dark mode theme state
+  agent-session/      sub-hooks decomposed from useAgentSession (use-session-loader, use-agent-events, session-stats, stream-state, agent-phase, etc.)
 
 electron/
   main.ts             Electron main process: port finding, server spawn, BrowserWindow, autoUpdater
@@ -112,6 +151,7 @@ components/
   ChatMinimap.tsx     scroll minimap alongside the message list
   ToolPanel.tsx       exports PRESET_NONE/DEFAULT/FULL + getPresetFromTools
   ModelsConfig.tsx    modal for editing models.json (opened from sidebar bottom)
+  SkillsConfig.tsx    modal for searching/installing skills (opened from chat input slash commands)
   FileExplorer.tsx    file tree inside sidebar
   FileViewer.tsx      file content in a tab
   TabBar.tsx          tab bar (Chat + open file tabs)
@@ -122,44 +162,56 @@ components/
 ## Key Design Decisions & Traps
 
 ### AgentSession lifecycle (`lib/rpc-manager.ts`)
+
 - One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`
 - `globalThis` survives Next.js hot-reload; plain module-level Map does not
 - Idle timeout: 10 minutes. Concurrent `startRpcSession()` calls share a single start Promise (`globalThis.__piStartLocks`)
 
 ### Fork must destroy the wrapper immediately
+
 `AgentSession.fork()` **mutates the wrapper's inner state in-place** — after fork, `inner.sessionId` is the *new* session's id. If the wrapper stays alive in the registry under the old id, the next request gets the already-forked state and subsequent forks produce a corrupt `parentSession` chain.
 
 **Fix**: `send("fork")` captures `newSessionId`, then calls `this.destroy()` before returning. The next request for the original session reloads a clean AgentSession from the original file.
 
 ### Two kinds of branching — don't confuse them
+
 - **Fork** (Fork button on user message): creates a new independent `.jsonl` file. Shown as a child in the sidebar tree via `parentSession` header field.
 - **In-session branch** (Continue button / BranchNavigator): calls `navigate_tree` within the same file. Multiple entries share the same `parentId`. Switching between them calls `/api/sessions/[id]/context?leafId=`.
 
 ### Session files can be fully rewritten
+
 `parentSession` in the header is **display metadata only** — has zero effect on chat content. Safe to `writeFileSync` the entire file (pi does this itself during migrations). Used when cascade-reparenting children on delete.
 
 ### ToolCall field normalization
+
 Pi stores toolCall blocks as `{type:"toolCall", id, name, arguments}` but `ToolCallContent` uses `{toolCallId, toolName, input}`. `normalizeToolCalls()` in `lib/normalize.ts` handles this — called in both `session-reader.ts` (file load) and `ChatWindow.handleAgentEvent()` (streaming).
 
 ### New session tool preset
-Tool names are passed at session creation (`POST /api/agent/new` → `toolNames[]`). For existing sessions, the active preset is inferred on mount via `get_tools` → `getPresetFromTools()`. When tools are fully disabled (`toolNames = []`), `rpc-manager.ts` injects a minimal system prompt via `system-prompt-off.ts` + `DefaultResourceLoader`.
+
+Tool names are passed at session creation (`POST /api/agent/new` → `toolNames[]`). For existing sessions, the active preset is inferred on mount via `get_tools` → `getPresetFromTools()`. When tools are fully disabled (`toolNames = []`), `rpc-manager.ts` clears the system prompt entirely in the AgentSession state.
 
 ### Model defaults for new sessions
+
 `GET /api/models` returns `defaultModel` read from `~/.pi/agent/settings.json`. `ChatWindow` pre-selects this on mount for new sessions.
 
 ### SSE reconnect on page refresh mid-stream
+
 On `ChatWindow` mount, `GET /api/agent/[id]` is called. If `state.isStreaming === true`, SSE is reconnected automatically. `thinkingLevel` and `isCompacting` are also synced from this response.
 
 ### Compaction SSE events
+
 Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `auto_compaction_start` / `auto_compaction_end`. `handleAgentEvent` accepts both sets to keep `isCompacting` in sync. Manual compact is a blocking POST — the button stays disabled until the response returns.
 
 ### Orphaned sessions
+
 Sessions whose first line can't be parsed as a valid header are marked `orphaned: true` in the API response — displayed with an "incomplete" badge in the sidebar and not clickable.
 
 ### Electron extraResources must include node_modules separately
+
 electron-builder's `extraResources` with `filter: ["**/*"]` **silently excludes `node_modules` directories**, even from `.next/standalone`. The standalone `server.js` does `require("next")` which fails without `node_modules/next`.
 
 **Fix**: Add a separate `extraResources` entry for `node_modules`:
+
 ```yaml
 extraResources:
   - from: .next/standalone
@@ -172,6 +224,7 @@ extraResources:
 ```
 
 ### Electron main process spawns Next.js as a child
+
 In production, `electron/main.ts` spawns `process.execPath` (the Electron binary itself) with `ELECTRON_RUN_AS_NODE=1` to run `server.js` as a plain Node.js process. The main process then opens a `BrowserWindow` pointing at `http://127.0.0.1:PORT`. The child process is killed on `before-quit`.
 
 ---

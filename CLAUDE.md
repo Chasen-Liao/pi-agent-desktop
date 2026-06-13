@@ -24,8 +24,8 @@ npx tsc --noEmit
 # Lint
 npm run lint
 
-# 运行 Node test（项目内全部测试文件，跨 lib/、electron/、app/）
-node --test lib/*.test.ts electron/*.test.ts app/**/*.test.ts
+# 运行测试（包括 lib/、electron/、app/、hooks/、components/ 等的全部测试文件）
+npm run test
 
 # 构建 Next.js standalone 输出
 npm run build
@@ -39,6 +39,19 @@ npm run dist
 
 `AGENTS.md` 明确提醒：开发时不要直接运行 `next build`，会污染 `.next/` 并影响 `npm run dev`。如确需验证生产构建，使用项目脚本 `npm run build` 或完整打包脚本。
 
+## CodeGraph MCP 代码查询
+
+当工作区已索引（存在 `.codegraph/` 目录）时，推荐优先使用 CodeGraph MCP 工具来查询和探索代码，以减少 Token 消耗和往返次数：
+
+- **`codegraph_explore`**：首选探索工具。输入自然语言问题或一组符号/文件名（例如：`rpc-manager session fork`），它会合并返回相关符号的源码和调用路径。
+- **`codegraph_node`**：
+  - **文件读取**：当只需读取某个文件时，可传入 `file`（不传 `symbol`），它比普通文件读取工具更快，并会额外附带哪些文件依赖了该文件（Blast Radius 爆破半径分析）。
+  - **符号查询**：传入 `symbol` 和 `includeCode: true` 可单独查询某个具体符号的定义、签名及调用者/被调用者轨迹。
+- **`codegraph_search`**：快速的符号名称搜索（只返回位置/文件名，不返回源码），适用于快速定位符号位置。
+
+> [!NOTE]
+> 索引状态是由用户决定的。如果项目没有 `.codegraph/` 文件夹，可以通过在项目根目录运行 `codegraph init` 初始化索引。
+
 ## 高层架构
 
 - `app/page.tsx` 渲染 `components/AppShell.tsx`，`AppShell` 负责整体布局、URL 中的 `?session=` 状态、左右面板、文件标签、模型/技能配置弹窗，以及把分支树、系统提示词、token/cost 和上下文用量提升到顶栏。
@@ -50,7 +63,7 @@ npm run dist
 - `lib/rpc-manager.ts` 包装 `@earendil-works/pi-coding-agent` 的 `AgentSession`，用 `globalThis.__piSessions` 和 `globalThis.__piStartLocks` 跨 Next.js 热更新保存活跃 session 与并发启动锁。
 - `lib/normalize.ts` 统一 tool call 字段。pi 文件格式使用 `{ id, name, arguments }`，UI 类型使用 `{ toolCallId, toolName, input }`。
 - `app/api/auth/*`、`app/api/models*`、`app/api/skills*` 分别处理认证提供商、模型配置和技能列表/搜索/安装。`app/api/health` 提供桌面端启动健康探测（`server-wait.ts` 调用）。
-- `hooks/` 下 `useAgentSession` 承载 agent 交互，`useAudio` / `useDragDrop` / `useTheme` 是 UI 外围 hooks。
+- hooks/ 下 `useAgentSession` 承载 agent 交互（部分核心逻辑拆分到了 `hooks/agent-session/` 下的子 hooks），`useAudio` / `useDragDrop` / `useTheme` 是 UI 外围 hooks。
 - `lib/agent-client.ts` 是浏览器到 `/api/agent/[id]` 的 SSE 客户端封装；`lib/slash-commands.ts` 解析 `/` 开头的斜杠命令菜单（与 `components/SkillsConfig.tsx` 联动）。
 - `bin/pi-web.js` 是通过 `npm install -g` 或 `npx` 启动开发服务器的命令行入口（`package.json#bin`）。
 - `electron/server-wait.ts` 通过端口探测和 Next.js 子进程输出嗅探提前检测服务器就绪；`process-tree.ts` / `startup-failure.ts` 处理进程树与启动失败诊断。
@@ -70,5 +83,5 @@ npm run dist
 - 发送新消息走 `/api/agent/[id]` 和 SSE；只浏览历史走 `lib/session-reader.ts`，不要为只读浏览创建 `AgentSession`。
 - `electron-builder.yml` 需要把 `.next/standalone/node_modules` 作为单独 `extraResources` 项复制；单纯复制 standalone 会漏掉 `node_modules/next`。
 - `next.config.ts` 使用 `output: "standalone"`，并把 `@earendil-works/pi-coding-agent` 与 `@earendil-works/pi-ai` 设为 server external packages。
-- 桌面端启动时 `electron/main.ts` 通过 `server-wait.ts` 同时做端口探测和 Next.js 子进程 stdout 嗅探（匹配 "Ready"/"started server"），避免冷启动 race。
+- 桌面端启动时 `electron/main.ts` 通过 `server-wait.ts` 同时做端口探测（请求 `/api/health`）和 Next.js 子进程 stdout 嗅探（匹配 "Ready"），避免冷启动 race。
 - ESLint 配置位于 `eslint.config.mjs`，忽略 `.next/`、`electron/dist/`、`release/`、`out/`、`coverage/`，并显式关闭 `react-hooks/immutability` / `react-hooks/refs` / `react-hooks/set-state-in-effect` 三条规则。
