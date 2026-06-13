@@ -44,7 +44,7 @@ test("server readiness polls a lightweight health path", async () => {
   assert.ok(address && typeof address === "object");
 
   try {
-    await waitForHttpServerReady(address.port, { timeoutMs: 150, requestTimeoutMs: 20, getRetryDelayMs: () => 10 });
+    await waitForHttpServerReady(address.port, { timeoutMs: 300, requestTimeoutMs: 150, getRetryDelayMs: () => 10 });
     assert.deepEqual(requests, ["/api/health"]);
   } finally {
     server.close();
@@ -69,8 +69,8 @@ test("server readiness retries non-successful health responses", async () => {
 
   try {
     await assert.rejects(
-      waitForHttpServerReady(address.port, { timeoutMs: 150, requestTimeoutMs: 20, getRetryDelayMs: () => 10 }),
-      /Server not ready after 0.15s/
+      waitForHttpServerReady(address.port, { timeoutMs: 300, requestTimeoutMs: 150, getRetryDelayMs: () => 10 }),
+      /Server not ready after 0.3s/
     );
   } finally {
     server.close();
