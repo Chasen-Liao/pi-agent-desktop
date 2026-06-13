@@ -5,161 +5,278 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Pi Agent Desktop 是面向 Pi coding agent 的极简 Codex-style desktop client，复用 Next.js/React UI 并支持 Electron 桌面体验。"
+      content="Pi Agent Desktop is a premium, ultra-minimalist Codex-style desktop workbench client for the Pi coding agent, powered by Next.js and Electron."
     />
-    <meta name="theme-color" content="#070a12" />
+    <meta name="theme-color" content="#030304" />
     <meta property="og:title" content="Pi Agent Desktop" />
     <meta
       property="og:description"
-      content="A minimal Codex-style desktop client for the Pi coding agent."
+      content="A minimalist Codex-style desktop client for the Pi coding agent."
     />
     <meta property="og:type" content="website" />
-    <title>Pi Agent Desktop</title>
+    <title>Pi Agent Desktop — Codex Workspace</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <!-- Background Canvas for Particles -->
+    <canvas id="particle-canvas"></canvas>
+
     <div class="page-shell">
+      <!-- Header -->
       <header class="site-header" aria-label="Project navigation">
         <a class="brand" href="#top" aria-label="Pi Agent Desktop home">
           <span class="brand-mark">π</span>
           <span>Pi Agent Desktop</span>
         </a>
         <nav class="nav-links" aria-label="Page sections">
-          <a href="#features">Features</a>
-          <a href="#stack">Stack</a>
-          <a href="#start">Start</a>
+          <a href="#features" class="active">Features</a>
+          <a href="#architecture">Architecture</a>
+          <a href="#start">Quick Start</a>
         </nav>
       </header>
 
       <main id="top">
+        <!-- Hero Section -->
         <section class="hero" aria-labelledby="hero-title">
           <div class="hero-copy">
-            <p class="eyebrow">Codex-style desktop for Pi coding agent</p>
-            <h1 id="hero-title">把 Pi 编程智能体带进一个极简桌面工作台。</h1>
+            <p class="eyebrow">Codex Desktop Workspace</p>
+            <h1 id="hero-title">
+              <span>极简纯净的</span><br />
+              <span>AI 编程智能体工作台</span>
+            </h1>
             <p class="hero-text">
-              Pi Agent Desktop 复用同一套 Next.js / React UI，同时支持浏览器开发模式与 Electron 桌面应用模式，专注于会话、分支、文件与工具调用的清晰呈现。
+              Pi Agent Desktop 将 Pi 编程智能体带入一个专为开发者设计的 Codex 极简窗口。整合会话管理、双轨分支、代码编辑器与工具链，让你的大模型代码生成井然有序。
             </p>
             <div class="hero-actions" aria-label="Primary actions">
-              <a class="button primary" href="https://github.com/Chasen-Liao/pi-agent-desktop">View on GitHub</a>
+              <a class="button primary" href="https://github.com/Chasen-Liao/pi-agent-desktop">GitHub Repository</a>
               <a class="button secondary" href="#start">Quick Start</a>
             </div>
             <div class="status-strip" aria-label="Project highlights">
-              <span>agent sessions</span>
-              <span>branch navigation</span>
-              <span>electron desktop</span>
+              <span class="status-tag active">session workspace</span>
+              <span class="status-tag">codegraph indexing</span>
+              <span class="status-tag">branch navigation</span>
+              <span class="status-tag">electron standalone</span>
             </div>
           </div>
 
-          <div class="terminal-card" aria-label="Preview mockup of the desktop interface">
-            <div class="window-bar">
-              <span class="dot red"></span>
-              <span class="dot yellow"></span>
-              <span class="dot green"></span>
-              <span class="window-title">preview · not a real screenshot</span>
+          <!-- Glassmorphic IDE Workspace Mockup -->
+          <div class="workspace-mockup" aria-label="Desktop interface mockup preview">
+            <div class="workspace-bar">
+              <div class="window-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="window-title-path">
+                workspace / <span class="highlight">pi-agent-desktop</span>
+              </div>
             </div>
-            <div class="terminal-body">
-              <aside class="mock-sidebar" aria-label="Session tree preview">
-                <p class="panel-label">sessions</p>
-                <div class="tree-item active">main · build landing page</div>
-                <div class="tree-item child">fork · refine copy</div>
-                <div class="tree-item child">fork · inspect files</div>
+            <div class="workspace-content">
+              <!-- Sidebar -->
+              <aside class="mock-sidebar" aria-label="Sessions tree">
+                <span class="sidebar-title">Sessions</span>
+                <div class="mock-tree">
+                  <div class="tree-node active">main · init layouts</div>
+                  <div class="tree-node fork">branch · design system</div>
+                  <div class="tree-node fork">branch · canvas component</div>
+                  <div class="tree-node">feat · codegraph helper</div>
+                </div>
               </aside>
-              <section class="mock-chat" aria-label="Agent conversation preview">
-                <div class="message user-message">Create a focused GitHub Pages intro.</div>
-                <div class="message agent-message">
-                  <span class="prompt">pi-agent</span>
-                  <span>Plan: static /docs page, terminal mockup, no build step.</span>
+
+              <!-- Editor View -->
+              <section class="mock-editor" aria-label="File viewer">
+                <div class="editor-tabs">
+                  <div class="editor-tab active">AppShell.tsx</div>
+                  <div class="editor-tab">styles.css</div>
+                  <div class="editor-tab">script.js</div>
                 </div>
-                <div class="tool-call">
-                  <span>tool</span>
-                  <code>Read docs/index.html</code>
+                <div class="editor-lines">
+                  <div class="code-row">
+                    <span class="line-num">1</span>
+                    <span class="code-content"><span class="code-keyword">import</span> { useState } <span class="code-keyword">from</span> <span class="code-string">"react"</span>;</span>
+                  </div>
+                  <div class="code-row">
+                    <span class="line-num">2</span>
+                    <span class="code-content"><span class="code-keyword">import</span> { AppShell } <span class="code-keyword">from</span> <span class="code-string">"@/components/AppShell"</span>;</span>
+                  </div>
+                  <div class="code-row">
+                    <span class="line-num">3</span>
+                    <span class="code-content"></span>
+                  </div>
+                  <div class="code-row">
+                    <span class="line-num">4</span>
+                    <span class="code-content"><span class="code-keyword">export default function</span> <span class="code-entity">Home</span>() {</span>
+                  </div>
+                  <div class="code-row">
+                    <span class="line-num">5</span>
+                    <span class="code-content">  <span class="code-keyword">return</span> (</span>
+                  </div>
+                  <div class="code-row">
+                    <span class="line-num">6</span>
+                    <span class="code-content">    &lt;<span class="code-entity">AppShell</span>&gt;</span>
+                  </div>
+                  <div class="code-row">
+                    <span class="line-num">7</span>
+                    <span class="code-content">      &lt;<span class="code-entity">WorkspaceGrid</span> /&gt;</span>
+                  </div>
+                  <div class="code-row">
+                    <span class="line-num">8</span>
+                    <span class="code-content">    &lt;/<span class="code-entity">AppShell</span>&gt;</span>
+                  </div>
+                  <div class="code-row">
+                    <span class="line-num">9</span>
+                    <span class="code-content">  );</span>
+                  </div>
+                  <div class="code-row">
+                    <span class="line-num">10</span>
+                    <span class="code-content">}</span>
+                  </div>
                 </div>
-                <div class="file-tabs">
-                  <span class="tab active">index.html</span>
-                  <span class="tab">styles.css</span>
-                  <span class="tab">script.js</span>
+              </section>
+
+              <!-- Chat View -->
+              <section class="mock-chat-window" aria-label="Agent chat log">
+                <div class="chat-header">Pi Assistant</div>
+                <div class="chat-history">
+                  <div class="chat-msg user">
+                    查询 AppShell 的实现，并优化布局。
+                  </div>
+                  <div class="chat-msg agent">
+                    <span class="agent-name">pi-agent</span>
+                    使用 codegraph 查询 WorkspaceGrid 相关的符号依赖...
+                  </div>
+                  <div class="mock-tool-call">
+                    <span class="tool-lbl">call</span>
+                    <code>codegraph_explore query: "AppShell"</code>
+                  </div>
                 </div>
               </section>
             </div>
           </div>
         </section>
 
+        <!-- Features Section -->
         <section id="features" class="section" aria-labelledby="features-title">
-          <div class="section-heading">
-            <p class="eyebrow">Features</p>
-            <h2 id="features-title">为 agent 工作流保留最重要的上下文。</h2>
+          <div class="section-head">
+            <p class="eyebrow">Features & Specs</p>
+            <h2 id="features-title">为高效代码智能体工作流而生</h2>
+            <p class="section-desc">
+              剔除繁杂，专注于最关键的上下文、分支探索、以及原生 Electron 的无缝接入。
+            </p>
           </div>
-          <div class="feature-grid">
+          
+          <div class="features-grid">
             <article class="feature-card">
-              <span class="card-index">01</span>
-              <h3>Session Tree</h3>
-              <p>按工作目录组织历史会话，让浏览、恢复和理解上下文更直接。</p>
+              <span class="feature-num">01 // WORKSPACE TREE</span>
+              <h3>会话工作区</h3>
+              <p>按项目工作目录（CWD）自动组织历史会话树，使多项目并发开发时的上下文浏览、切换和恢复更加直观、扁平。</p>
             </article>
+            
             <article class="feature-card">
-              <span class="card-index">02</span>
-              <h3>Branch Navigation</h3>
-              <p>支持会话内分支与 fork 关系展示，方便比较不同探索路径。</p>
+              <span class="feature-num">02 // DOUBLE BRANCHING</span>
+              <h3>双轨分支探索</h3>
+              <p>支持物理 Fork（创建独立 session.jsonl 文件）与会话内分支切换（通过 navigate_tree 回退到历史节点继续对话），完美契合 AI 多样化试错。</p>
             </article>
+            
             <article class="feature-card">
-              <span class="card-index">03</span>
-              <h3>File Viewer</h3>
-              <p>内置文件查看与标签页区域，把对话和代码上下文放在同一个界面。</p>
+              <span class="feature-num">03 // CODEGRAPH INTEGRATION</span>
+              <h3>CodeGraph 深度集成</h3>
+              <p>对于索引过的项目，内置 CodeGraph MCP 工具可以直接进行高效的跨文件符号关系、定义及引用搜索，无需在大量无关文件之间反复切换。</p>
             </article>
+            
             <article class="feature-card">
-              <span class="card-index">04</span>
-              <h3>Electron Desktop</h3>
-              <p>同一套 UI 可在浏览器开发模式与 Electron 桌面模式中运行。</p>
+              <span class="feature-num">04 // TABBED WORKBENCH</span>
+              <h3>标签页式工作台</h3>
+              <p>内置轻量级代码浏览器与 Tab 切换机制，使智能体的输出、工具链的调用与实际的源文件保持在同一屏中，上下文零断层。</p>
             </article>
           </div>
         </section>
 
-        <section id="stack" class="section split-section" aria-labelledby="stack-title">
-          <div>
-            <p class="eyebrow">Architecture</p>
-            <h2 id="stack-title">Next.js UI，Electron shell，Pi agent runtime。</h2>
+        <!-- Architecture Section -->
+        <section id="architecture" class="section" aria-labelledby="arch-title">
+          <div class="section-head">
+            <p class="eyebrow">Technical Stack</p>
+            <h2 id="arch-title">轻量级双向融合架构</h2>
+            <p class="section-desc">
+              Pi Agent Desktop 使用 Next.js / React 搭建交互层，Electron 提供桌面化外壳，通过 SSE (Server-Sent Events) 与 Pi 智能体核心保持高频实时通信。
+            </p>
           </div>
-          <div class="stack-panel">
-            <div class="stack-row">
-              <span>Next.js / React</span>
-              <p>提供浏览器开发体验和共享 UI。</p>
-            </div>
-            <div class="stack-row">
-              <span>Electron</span>
-              <p>封装桌面窗口、托盘和更新相关能力。</p>
-            </div>
-            <div class="stack-row">
-              <span>Pi Agent</span>
-              <p>驱动会话、SSE 事件流、工具调用和分支上下文。</p>
-            </div>
+          
+          <div class="features-grid">
+            <article class="feature-card">
+              <span class="feature-num">APP // NEXT.JS FRONTEND</span>
+              <h3>React & Next.js UI</h3>
+              <p>复用现代化 Web UI，基于 TailwindCSS 和 Vanilla CSS 进行主题与响应式精细调整。通过自定义 SSE client 监听智能体实时响应。</p>
+            </article>
+            
+            <article class="feature-card">
+              <span class="feature-num">SHELL // ELECTRON STANDALONE</span>
+              <h3>Electron 原生托盘</h3>
+              <p>独立窗口运行，支持快速唤醒、最小化到系统托盘，并集成自动更新检查模块。生产环境下通过 Node.js 进程级托管 Next.js 服务端。</p>
+            </article>
           </div>
         </section>
 
-        <section id="start" class="section start-section" aria-labelledby="start-title">
-          <div class="section-heading">
-            <p class="eyebrow">Getting Started</p>
-            <h2 id="start-title">从源码启动项目。</h2>
-            <p>以下命令来自当前仓库脚本，适合开发者快速进入项目。</p>
+        <!-- Getting Started -->
+        <section id="start" class="section" aria-labelledby="start-title">
+          <div class="section-head">
+            <p class="eyebrow">Setup & Deployment</p>
+            <h2 id="start-title">三步快速运行工作台</h2>
+            <p class="section-desc">
+              你可以通过克隆源码或下载最新版发行程序，在本地快速接入你的 Pi coding agent。
+            </p>
           </div>
-          <div class="command-list" aria-label="Setup commands">
-            <button class="command" type="button" data-copy="npm install">
-              <span>$ npm install</span>
-              <small>copy</small>
-            </button>
-            <button class="command" type="button" data-copy="npm run dev">
-              <span>$ npm run dev</span>
-              <small>copy</small>
-            </button>
-            <button class="command" type="button" data-copy="npm run dev:electron">
-              <span>$ npm run dev:electron</span>
-              <small>copy</small>
-            </button>
+
+          <div class="console-layout">
+            <div class="terminal-console">
+              <div class="console-header">
+                <div class="console-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <span class="console-tab">pi-setup.sh</span>
+              </div>
+              <div class="console-body">
+                <div class="cmd-block">
+                  <span class="cmd-desc">1. 安装依赖软件包</span>
+                  <div class="cmd-line" data-copy="npm install">
+                    <span class="cmd-text">npm install</span>
+                    <span class="cmd-copy-btn">copy</span>
+                  </div>
+                </div>
+                
+                <div class="cmd-block">
+                  <span class="cmd-desc">2. 启动 Web 开发服务器 (默认端口: 30141)</span>
+                  <div class="cmd-line" data-copy="npm run dev">
+                    <span class="cmd-text">npm run dev</span>
+                    <span class="cmd-copy-btn">copy</span>
+                  </div>
+                </div>
+                
+                <div class="cmd-block">
+                  <span class="cmd-desc">3. 以 Electron 桌面模式启动独立客户端</span>
+                  <div class="cmd-line" data-copy="npm run dev:electron">
+                    <span class="cmd-text">npm run dev:electron</span>
+                    <span class="cmd-copy-btn">copy</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </main>
 
+      <!-- Footer -->
       <footer class="site-footer">
-        <span>Pi Agent Desktop · MIT · Chasen</span>
-        <span>© <span id="year">2026</span></span>
+        <div class="footer-meta">
+          <span>Pi Agent Desktop // MIT License</span>
+          <span>&copy; <span id="year">2026</span> Chasen</span>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/badlogic/pi-mono" target="_blank" rel="noopener">pi-mono</a> &middot;
+          <a href="https://github.com/Chasen-Liao/pi-agent-desktop" target="_blank" rel="noopener">Repository</a>
+        </div>
       </footer>
     </div>
     <script src="./script.js" defer></script>
