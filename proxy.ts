@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
-export function middleware() {
+export function proxy() {
   const response = NextResponse.next();
   response.headers.set(
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*",

@@ -21,11 +21,8 @@ export interface SlashCommandItem {
 
 export const BUILTIN_SLASH_COMMANDS: SlashCommandItem[] = [
   { id: "compact", label: "/compact", insertText: "/compact ", description: "压缩当前上下文", kind: "command" },
-  { id: "model", label: "/model", insertText: "/model ", description: "指定或切换模型", kind: "command" },
-  { id: "thinking", label: "/thinking", insertText: "/thinking ", description: "调整推理强度", kind: "command" },
   { id: "tools", label: "/tools", insertText: "/tools ", description: "选择工具预设", kind: "command" },
   { id: "skills", label: "/skills", insertText: "/skills ", description: "查看或调用可用 skills", kind: "command" },
-  { id: "statusline", label: "/statusline", insertText: "/statusline", description: "切换底部状态栏（窗口 + 会话 + git）", kind: "command" },
 ];
 
 export function getSlashTriggerQuery(value: string, caretIndex: number): string | null {

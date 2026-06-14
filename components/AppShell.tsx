@@ -289,8 +289,11 @@ export function AppShell() {
         handleNewSession("", cwd);
       }
     };
+    
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+    };
   }, [activeCwd, handleNewSession, newSessionCwd, selectedSession?.cwd, toggleTheme, setRightPanelOpen, setSidebarOpen]);
 
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);

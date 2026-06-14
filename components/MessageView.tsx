@@ -113,7 +113,48 @@ export const MessageView = React.memo(function MessageView({
     // Rendered inline under its toolCall — skip standalone rendering if paired
     return null;
   }
+  if (message.role === "custom" && message.display) {
+    return (
+      <CustomMessageView 
+        message={message as CustomMessage} 
+        showTimestamp={showTimestamp} 
+      />
+    );
+  }
   return null;
+});
+
+const CustomMessageView = React.memo(function CustomMessageView({
+  message,
+  showTimestamp,
+}: {
+  message: CustomMessage;
+  showTimestamp?: boolean;
+}) {
+  const time = showTimestamp ? formatTime(message.timestamp) : null;
+  const content =
+    typeof message.content === "string"
+      ? message.content
+      : message.content
+          .filter((b): b is TextContent => b.type === "text")
+          .map((b) => b.text)
+          .join("\n");
+
+  return (
+    <div className="mb-[18px] flex flex-col items-center">
+      <div className="bg-bg-elevated border border-border rounded-panel px-4 py-2 text-[13px] text-text-muted whitespace-pre-wrap max-w-[90%] shadow-sm">
+        {message.customType && (
+          <div className="text-[11px] font-semibold mb-2 text-text-dim uppercase tracking-wider text-center">
+            {message.customType.replace(/_/g, " ")}
+          </div>
+        )}
+        <div className="markdown-body">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        </div>
+      </div>
+      {time && <span className="text-[10px] text-text-dim mt-1">{time}</span>}
+    </div>
+  );
 });
 
 const UserMessageView = React.memo(function UserMessageView({

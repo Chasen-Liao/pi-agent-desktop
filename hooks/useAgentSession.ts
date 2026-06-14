@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/types";
+import type { AgentMessage, SessionInfo, SessionTreeNode, CustomMessage } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
 import type { ToolEntry } from "@/components/ToolPanel";
@@ -204,8 +204,60 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
-    if (!message.trim() && !images?.length) return;
+    const msgTrimmed = message.trim();
+    if (!msgTrimmed && !images?.length) return;
     if (agentRunning) return;
+
+    if (!images?.length && msgTrimmed.startsWith("/")) {
+      const parts = msgTrimmed.slice(1).split(/\s+/);
+      const cmd = parts[0].toLowerCase();
+      let handled = false;
+      switch (cmd) {
+        case "compact":
+          handleCompact();
+          handled = true;
+          break;
+        case "tools":
+          setMessages(prev => [...prev, {
+            role: "custom",
+            customType: "tools_info",
+            content: `### Tool Presets\n\n- **Off**: No tools\n- **Low**: \`read\`, \`bash\`, \`edit\`, \`write\`\n- **High**: \`read\`, \`bash\`, \`edit\`, \`write\`, \`grep\`, \`find\`, \`ls\`\n\n*Note: To change tool presets, use the **Tools** button in the chat input.*`,
+            display: true,
+            timestamp: Date.now()
+          } as CustomMessage]);
+          handled = true;
+          break;
+
+        case "skills":
+          const cwd = newSessionCwd ?? session?.cwd ?? "";
+          fetch(`/api/skills?cwd=${encodeURIComponent(cwd)}`)
+            .then(res => res.json())
+            .then(d => {
+              if (d.error) {
+                setMessages(prev => [...prev, {
+                  role: "custom",
+                  customType: "skills_error",
+                  content: `Failed to load skills: ${d.error}`,
+                  display: true,
+                  timestamp: Date.now()
+                } as CustomMessage]);
+                return;
+              }
+              const skillsList = d.skills?.map((s: any) => `- **\`${s.name}\`**: ${s.description || "No description"}`).join("\n") || "No skills found.";
+              setMessages(prev => [...prev, {
+                role: "custom",
+                customType: "skills_info",
+                content: `### Available Skills\n\n${skillsList}\n\n*Note: To install new skills, use the **Skills** button in the sidebar.*`,
+                display: true,
+                timestamp: Date.now()
+              } as CustomMessage]);
+            })
+            .catch(e => console.error("Failed to fetch skills:", e));
+          handled = true;
+          break;
+      }
+      if (handled) return;
+    }
 
     const imageBlocks = images?.map((img) => ({ type: "image" as const, source: { type: "base64" as const, media_type: img.mimeType, data: img.data } }));
     const userMsg: AgentMessage = {
