@@ -16,6 +16,7 @@ import type {
   ImageContent,
   ToolCallContent,
   ThinkingContent,
+  CustomMessage,
 } from "@/lib/types";
 
 interface Props {

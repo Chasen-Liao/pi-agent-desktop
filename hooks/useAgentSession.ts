@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode, CustomMessage } from "@/lib/types";
+import type { AgentMessage, SessionInfo, SessionTreeNode, CustomMessage, Skill } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
 import type { ToolEntry } from "@/components/ToolPanel";
@@ -203,6 +203,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [loadSession, onAgentEnd, setMessages]);
   handleAgentEventRef.current = handleAgentEvent;
 
+  const handleCompact = useCallback(async () => {
+    const sid = sessionIdRef.current;
+    if (!sid || isCompacting) return;
+    setIsCompacting(true);
+    setCompactError(null);
+    try {
+      await sendAgentCommand(sid, { type: "compact" });
+      await loadSession(sid, true);
+    } catch (e) {
+      setCompactError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsCompacting(false);
+    }
+  }, [isCompacting, loadSession]);
+
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     const msgTrimmed = message.trim();
     if (!msgTrimmed && !images?.length) return;
@@ -243,7 +258,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                 } as CustomMessage]);
                 return;
               }
-              const skillsList = d.skills?.map((s: any) => `- **\`${s.name}\`**: ${s.description || "No description"}`).join("\n") || "No skills found.";
+              const skillsList = d.skills?.map((s: Skill) => `- **\`${s.name}\`**: ${s.description || "No description"}`).join("\n") || "No skills found.";
               setMessages(prev => [...prev, {
                 role: "custom",
                 customType: "skills_info",
@@ -323,7 +338,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentPhase(null);
       dispatch({ type: "end" });
     }
-  }, [isNew, newSessionCwd, newSessionModel, toolPreset, thinkingLevel, session, agentRunning, connectEvents, onSessionCreated, pendingScrollToUserRef, setMessages]);
+  }, [isNew, newSessionCwd, newSessionModel, toolPreset, thinkingLevel, session, agentRunning, connectEvents, onSessionCreated, pendingScrollToUserRef, setMessages, handleCompact]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -400,21 +415,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       console.error("Failed to set model:", e);
     }
   }, [isNew, setNewSessionModel]);
-
-  const handleCompact = useCallback(async () => {
-    const sid = sessionIdRef.current;
-    if (!sid || isCompacting) return;
-    setIsCompacting(true);
-    setCompactError(null);
-    try {
-      await sendAgentCommand(sid, { type: "compact" });
-      await loadSession(sid, true);
-    } catch (e) {
-      setCompactError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setIsCompacting(false);
-    }
-  }, [isCompacting, loadSession]);
 
   const handleSteer = useCallback(async (message: string, images?: AttachedImage[]) => {
     const sid = sessionIdRef.current;

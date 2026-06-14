@@ -201,3 +201,16 @@ export interface RpcSessionState {
   sessionName?: string;
   messageCount: number;
 }
+
+export interface Skill {
+  name: string;
+  description: string;
+  filePath: string;
+  baseDir: string;
+  disableModelInvocation: boolean;
+  sourceInfo: {
+    source?: string;
+    scope?: string;
+  };
+}
+
