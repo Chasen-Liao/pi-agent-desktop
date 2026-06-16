@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onUpdateDownloaded: (callback: () => void) =>
     ipcRenderer.on("update-downloaded", () => callback()),
   quitAndInstall: () => ipcRenderer.invoke("quit-and-install"),
+  setTheme: (isDark: boolean) => ipcRenderer.send("set-theme", isDark),
 });

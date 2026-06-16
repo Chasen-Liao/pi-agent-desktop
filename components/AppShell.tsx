@@ -409,12 +409,12 @@ export function AppShell() {
         {/* Center: chat */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Top bar with sidebar toggle */}
-          <div ref={topBarRef} className="flex items-center shrink-0 border-b border-divider h-toolbar-height bg-bg-elevated">
+          <div ref={topBarRef} className="flex items-center shrink-0 border-b border-divider h-toolbar-height bg-bg-elevated [-webkit-app-region:drag]">
             <button
               onClick={() => setSidebarOpen((v) => !v)}
               title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
               aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-r border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-120"
+              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-r border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-120 [-webkit-app-region:no-drag]"
             >
               {sidebarOpen ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -437,7 +437,7 @@ export function AppShell() {
               title={isDark ? "Switch to light mode" : "Switch to dark mode"}
               aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
               aria-pressed={isDark}
-              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-r border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-120"
+              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-r border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-120 [-webkit-app-region:no-drag]"
             >
               {isDark ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -458,7 +458,7 @@ export function AppShell() {
               )}
             </button>
             {showChat && (
-              <div className="flex items-stretch h-full">
+              <div className="flex items-stretch h-full [-webkit-app-region:no-drag]">
                 <BranchNavigator
                   tree={branchTree}
                   activeLeafId={branchActiveLeafId}
@@ -499,6 +499,7 @@ export function AppShell() {
               </div>
             )}
             <StatsBar showChat={showChat} rightPanelOpen={rightPanelOpen} />
+            {!rightPanelOpen && <div className="w-[138px] shrink-0" />}
             {/* Top panel dropdown — shared, only one active at a time */}
             {activeTopPanel && topPanelPos && (
               <div
@@ -601,8 +602,8 @@ export function AppShell() {
             />
           )}
           {/* Right panel tab bar */}
-          <div className="flex items-center shrink-0 bg-bg-elevated border-b border-divider h-toolbar-height">
-            <div className="flex-1 overflow-hidden">
+          <div className="flex items-center shrink-0 bg-bg-elevated border-b border-divider h-toolbar-height [-webkit-app-region:drag]">
+            <div className="flex-1 overflow-hidden [-webkit-app-region:no-drag]">
               <TabBar
                 tabs={fileTabs}
                 activeTabId={activeFileTabId ?? ""}
@@ -610,6 +611,7 @@ export function AppShell() {
                 onCloseTab={handleCloseFileTab}
               />
             </div>
+            <div className="w-[138px] shrink-0" />
           </div>
 
           {/* File content */}
@@ -627,7 +629,7 @@ export function AppShell() {
         onClick={() => setRightPanelOpen((v) => !v)}
         title={rightPanelOpen ? "Hide file panel" : "Show file panel"}
         aria-label={rightPanelOpen ? "Hide file panel" : "Show file panel"}
-        className={`fixed top-0 right-0 z-[300] flex items-center justify-center w-9 h-toolbar-height p-0 bg-bg-elevated border-none border-l border-b border-divider cursor-pointer transition-colors duration-120 ${
+        className={`fixed top-0 right-[138px] z-[300] flex items-center justify-center w-9 h-toolbar-height p-0 bg-bg-elevated border-none border-l border-b border-divider cursor-pointer transition-colors duration-120 [-webkit-app-region:no-drag] ${
           rightPanelOpen ? "text-text" : "text-text-muted hover:text-text"
         }`}
       >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore, useEffect } from "react";
 
 type Theme = "light" | "dark";
 
@@ -80,6 +80,10 @@ export function useTheme() {
         // transition cancelled — ignore
       });
   }, []);
+
+  useEffect(() => {
+    (window as any).electronAPI?.setTheme?.(theme === "dark");
+  }, [theme]);
 
   return { theme, toggleTheme, isDark: theme === "dark" };
 }

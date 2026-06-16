@@ -250,6 +250,12 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#0c1118",       // --bg-elevated (dark)
+      symbolColor: "#d9deea", // --text (dark)
+      height: 36,
+    },
     title: "Pi Agent Desktop",
     icon: nativeImage.createFromPath(path.join(app.getAppPath(), "build", "icon.ico")),
     show: false,
@@ -340,6 +346,15 @@ function registerIpcHandlers() {
     setQuitting(true);
     const { autoUpdater } = await import("electron-updater");
     autoUpdater.quitAndInstall();
+  });
+
+  ipcMain.on("set-theme", (_event, isDark: boolean) => {
+    if (mainWindow) {
+      mainWindow.setTitleBarOverlay({
+        color: isDark ? "#0c1118" : "#ffffff",
+        symbolColor: isDark ? "#d9deea" : "#364152",
+      });
+    }
   });
 }
 
