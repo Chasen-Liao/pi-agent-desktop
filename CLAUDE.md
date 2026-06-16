@@ -84,4 +84,4 @@ npm run dist
 - `electron-builder.yml` 需要把 `.next/standalone/node_modules` 作为单独 `extraResources` 项复制；单纯复制 standalone 会漏掉 `node_modules/next`。
 - `next.config.ts` 使用 `output: "standalone"`，并把 `@earendil-works/pi-coding-agent` 与 `@earendil-works/pi-ai` 设为 server external packages。
 - 桌面端启动时 `electron/main.ts` 通过 `server-wait.ts` 同时做端口探测（请求 `/api/health`）和 Next.js 子进程 stdout 嗅探（匹配 "Ready"），避免冷启动 race。
-- ESLint 配置位于 `eslint.config.mjs`，忽略 `.next/`、`electron/dist/`、`release/`、`out/`、`coverage/`，并显式关闭 `react-hooks/immutability` / `react-hooks/refs` / `react-hooks/set-state-in-effect` 三条规则。
+- ESLint 配置位于 `eslint.config.mjs`，忽略 `.claude/worktrees/`、`.next/`、`electron/dist/`、`release/`、`out/`、`coverage/`，并显式关闭 `react-hooks/immutability` / `react-hooks/refs` / `react-hooks/set-state-in-effect` 三条规则。

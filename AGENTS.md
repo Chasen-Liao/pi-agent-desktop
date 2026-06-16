@@ -167,11 +167,11 @@ components/
 - `globalThis` survives Next.js hot-reload; plain module-level Map does not
 - Idle timeout: 10 minutes. Concurrent `startRpcSession()` calls share a single start Promise (`globalThis.__piStartLocks`)
 
-### Fork must destroy the wrapper immediately
+### Fork must pre-register the new wrapper before destroying the old one
 
 `AgentSession.fork()` **mutates the wrapper's inner state in-place** — after fork, `inner.sessionId` is the *new* session's id. If the wrapper stays alive in the registry under the old id, the next request gets the already-forked state and subsequent forks produce a corrupt `parentSession` chain.
 
-**Fix**: `send("fork")` captures `newSessionId`, then calls `this.destroy()` before returning. The next request for the original session reloads a clean AgentSession from the original file.
+**Fix**: `send("fork")` first calls `startRpcSession(newSessionId, newSessionFile, cwd)` to **pre-register the new wrapper while the old one is still alive**, then calls `this.destroy()`, then returns `newSessionId`. Contract: by the time `send()` returns, `newSessionId` is already in the registry. If `startRpcSession` throws, the old wrapper is **not** destroyed — it stays usable under the old id (the orphaned new `.jsonl` file on disk is acceptable; the next fork will overwrite it). The next request for the original session id reloads a clean AgentSession from the original file.
 
 ### Two kinds of branching — don't confuse them
 
