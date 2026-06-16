@@ -1,10 +1,23 @@
-# Pi Agent Desktop
+<div align="center">
+  <a href="https://github.com/Chasen-Liao/pi-agent-desktop">
+    <img src="public/logo.png" alt="Pi Agent Desktop Logo" width="128" height="128" style="border-radius: 28px; border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 4px 16px rgba(0,0,0,0.08);" />
+  </a>
 
-![show](image-2.png)
+  # Pi Agent Desktop
 
-[Pi 编程智能体](https://github.com/badlogic/pi-mono) 的原生桌面客户端。基于 Electron 构建，提供比浏览器更原生的使用体验。
+  ### **目标：做出个人极简版 Codex**
 
-# **目标：做出个人极简版 Codex**
+  [Pi 编程智能体](https://github.com/badlogic/pi-mono) 的原生桌面客户端。基于 Electron 构建，提供比浏览器更原生的使用体验。
+
+  [![Release](https://img.shields.io/github/v/release/Chasen-Liao/pi-agent-desktop?color=orange&logo=github)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
+  [![License](https://img.shields.io/github/license/Chasen-Liao/pi-agent-desktop?color=blue)](LICENSE)
+
+  ---
+
+  ![Pi Agent Desktop Demo](public/pi.gif)
+
+  ---
+</div>
 
 > **上游项目**：本项目衍生自 [pi-web](https://github.com/Chasen-Liao/pi-web)，侧重于桌面端体验的优化与功能增强。
 
@@ -75,6 +88,10 @@ lib/
 - **桌面**：Electron
 - **打包**：electron-builder (NSIS)
 - **通信**：SSE (Server-Sent Events) 实时流式传输
+
+## 界面截图
+
+![Pi Agent Desktop Interface](image-2.png)
 
 ## 致谢
 
