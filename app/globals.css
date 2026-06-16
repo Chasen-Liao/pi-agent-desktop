@@ -43,6 +43,7 @@
   --shadow-input: var(--shadow-input);
   --radius-control: var(--radius-control);
   --radius-panel: var(--radius-panel);
+  --spacing-titlebar: env(titlebar-area-width, 138px);
 }
 
 
@@ -474,5 +475,20 @@ span.linenumber {
     display: none !important;
   }
 }
+
+/* Custom layout overrides to ensure pixel-perfect titlebar and heights */
+.w-titlebar {
+  width: env(titlebar-area-width, 138px) !important;
+}
+.right-titlebar {
+  right: env(titlebar-area-width, 138px) !important;
+}
+.h-toolbar-height {
+  height: var(--toolbar-height) !important;
+}
+.h-control-height {
+  height: var(--control-height) !important;
+}
+
 
 

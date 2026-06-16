@@ -15,12 +15,10 @@ interface ContextUsage {
 
 interface StatsBarProps {
   showChat: boolean;
-  rightPanelOpen: boolean;
 }
 
 export const StatsBar = React.memo(function StatsBar({
   showChat,
-  rightPanelOpen,
 }: StatsBarProps) {
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
@@ -97,8 +95,7 @@ export const StatsBar = React.memo(function StatsBar({
   return (
     <div
       title={tooltip}
-      className="ml-auto flex items-center gap-2.5 pl-3 h-full text-[11px] text-text-muted whitespace-nowrap cursor-default tabular-nums"
-      style={{ paddingRight: rightPanelOpen ? 12 : 48 }}
+      className="flex items-center gap-2.5 px-3 h-full text-[11px] text-text-muted whitespace-nowrap cursor-default tabular-nums"
     >
       {t && t.input > 0 && (
         <span className="flex items-center gap-1">

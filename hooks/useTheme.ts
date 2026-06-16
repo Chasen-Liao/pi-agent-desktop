@@ -82,7 +82,12 @@ export function useTheme() {
   }, []);
 
   useEffect(() => {
-    (window as any).electronAPI?.setTheme?.(theme === "dark");
+    const customWindow = window as Window & {
+      electronAPI?: {
+        setTheme?: (isDark: boolean) => void;
+      };
+    };
+    customWindow.electronAPI?.setTheme?.(theme === "dark");
   }, [theme]);
 
   return { theme, toggleTheme, isDark: theme === "dark" };

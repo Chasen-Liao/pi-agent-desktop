@@ -498,8 +498,24 @@ export function AppShell() {
                 </button>
               </div>
             )}
-            <StatsBar showChat={showChat} rightPanelOpen={rightPanelOpen} />
-            {!rightPanelOpen && <div className="w-[138px] shrink-0" />}
+            <div className="flex-1" />
+            <StatsBar showChat={showChat} />
+            {!rightPanelOpen && (
+              <>
+                <button
+                  onClick={() => setRightPanelOpen(true)}
+                  title="Show file panel"
+                  aria-label="Show file panel"
+                  className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-l border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-120 [-webkit-app-region:no-drag]"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <line x1="15" y1="3" x2="15" y2="21" />
+                  </svg>
+                </button>
+                <div className="w-titlebar shrink-0" />
+              </>
+            )}
             {/* Top panel dropdown — shared, only one active at a time */}
             {activeTopPanel && topPanelPos && (
               <div
@@ -611,7 +627,18 @@ export function AppShell() {
                 onCloseTab={handleCloseFileTab}
               />
             </div>
-            <div className="w-[138px] shrink-0" />
+            <button
+              onClick={() => setRightPanelOpen(false)}
+              title="Hide file panel"
+              aria-label="Hide file panel"
+              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-l border-divider text-text hover:text-text cursor-pointer shrink-0 transition-colors duration-120 [-webkit-app-region:no-drag]"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="15" y1="3" x2="15" y2="21" />
+              </svg>
+            </button>
+            <div className="w-titlebar shrink-0" />
           </div>
 
           {/* File content */}
@@ -624,20 +651,7 @@ export function AppShell() {
           </div>
         </div>
       </div>
-      {/* File panel toggle — always visible at top-right */}
-      <button
-        onClick={() => setRightPanelOpen((v) => !v)}
-        title={rightPanelOpen ? "Hide file panel" : "Show file panel"}
-        aria-label={rightPanelOpen ? "Hide file panel" : "Show file panel"}
-        className={`fixed top-0 right-[138px] z-[300] flex items-center justify-center w-9 h-toolbar-height p-0 bg-bg-elevated border-none border-l border-b border-divider cursor-pointer transition-colors duration-120 [-webkit-app-region:no-drag] ${
-          rightPanelOpen ? "text-text" : "text-text-muted hover:text-text"
-        }`}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <line x1="15" y1="3" x2="15" y2="21" />
-        </svg>
-      </button>
+
       {modelsConfigOpen && (
         <ModelsConfig
           onClose={() => {
