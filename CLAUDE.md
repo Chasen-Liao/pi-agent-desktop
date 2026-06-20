@@ -54,34 +54,30 @@ npm run dist
 
 ## 高层架构
 
-- `app/page.tsx` 渲染 `components/AppShell.tsx`，`AppShell` 负责整体布局、URL 中的 `?session=` 状态、左右面板、文件标签、模型/技能配置弹窗，以及把分支树、系统提示词、token/cost 和上下文用量提升到顶栏。
-- `components/ChatWindow.tsx` 是对话区域外壳，主要委托 `hooks/useAgentSession.ts` 处理会话加载、SSE 连接、发送/中止/分叉/导航/压缩/模型切换/工具预设等 agent 交互。
-- `components/SessionSidebar.tsx` 展示按工作目录组织的会话树，并集成 `FileExplorer`；`FileViewer` 和 `TabBar` 组成右侧文件查看面板。
-- `app/api/sessions/*` 读取、更新、删除 pi 的 `.jsonl` 会话文件，并通过 `/context?leafId=` 返回某个会话内分支叶子的上下文。
-- `app/api/agent/*` 负责新建/恢复 agent session、发送命令和暴露 SSE 事件流。浏览历史只读会话文件；真正发送消息时才创建 `AgentSession`。
-- `lib/session-reader.ts` 封装 pi `SessionManager`，负责列出会话、缓存 session id 到文件路径、构建会话树和把 pi 的 session context 转成 UI 类型。
-- `lib/rpc-manager.ts` 包装 `@earendil-works/pi-coding-agent` 的 `AgentSession`，用 `globalThis.__piSessions` 和 `globalThis.__piStartLocks` 跨 Next.js 热更新保存活跃 session 与并发启动锁。
-- `lib/normalize.ts` 统一 tool call 字段。pi 文件格式使用 `{ id, name, arguments }`，UI 类型使用 `{ toolCallId, toolName, input }`。
-- `app/api/auth/*`、`app/api/models*`、`app/api/skills*` 分别处理认证提供商、模型配置和技能列表/搜索/安装。`app/api/health` 提供桌面端启动健康探测（`server-wait.ts` 调用）。
-- hooks/ 下 `useAgentSession` 承载 agent 交互（部分核心逻辑拆分到了 `hooks/agent-session/` 下的子 hooks），`useAudio` / `useDragDrop` / `useTheme` 是 UI 外围 hooks。
-- `lib/agent-client.ts` 是浏览器到 `/api/agent/[id]` 的 SSE 客户端封装；`lib/slash-commands.ts` 解析 `/` 开头的斜杠命令菜单（与 `components/SkillsConfig.tsx` 联动）。
-- `bin/pi-web.js` 是通过 `npm install -g` 或 `npx` 启动开发服务器的命令行入口（`package.json#bin`）。
-- `electron/server-wait.ts` 通过端口探测和 Next.js 子进程输出嗅探提前检测服务器就绪；`process-tree.ts` / `startup-failure.ts` 处理进程树与启动失败诊断。
-- `electron/main.ts` 是 Electron 主进程：寻找端口、以 `ELECTRON_RUN_AS_NODE=1` 启动 Next.js standalone `server.js` 子进程、创建 `BrowserWindow`、托盘和自动更新。`electron/preload.ts` 通过 context bridge 暴露更新相关 API。
+> 📖 **完整架构文档见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** —— 以下仅保留开发时高频查阅的速查摘要。
 
-## 会话与分支模型
+### 关键入口
 
-- Pi 会话文件位于 `~/.pi/agent/sessions/<encoded-cwd>/...jsonl`。
-- “Fork” 会创建新的独立 `.jsonl` 文件，并通过 header 中的 `parentSession` 显示为侧边栏树的子会话。
-- “会话内分支” 仍在同一个 `.jsonl` 文件内，通过不同 entry 的 `parentId` 和 `navigate_tree` 切换，UI 使用 `BranchNavigator` 与 `/api/sessions/[id]/context?leafId=` 展示指定路径。
-- `entryIds[]` 与显示的 `messages[]` 平行，用于把 UI 消息映射回 `.jsonl` entry id，以支持 fork 和会话内导航。
+- **发送消息**：`POST /api/agent/[id]` → `lib/rpc-manager.ts` 的 `startRpcSession()` 创建 `AgentSessionWrapper`
+- **浏览历史**（只读）：`GET /api/sessions/*` → `lib/session-reader.ts` 直接解析 `.jsonl`，**不创建** AgentSession
+- **SSE 流**：`GET /api/agent/[id]/events` —— 30s 心跳，单向推送
+- **UI 主入口**：`app/page.tsx` → `components/AppShell.tsx` → `components/ChatWindow.tsx` → `hooks/useAgentSession.ts`
 
-## 关键注意事项
+### 顶层目录速查
 
-- `AgentSession.fork()` 会原地改变 wrapper 内部 session 状态；`lib/rpc-manager.ts` 在 fork 后必须销毁旧 wrapper，避免旧 id 指向已 fork 的状态。
-- 活跃 session registry 必须放在 `globalThis`，普通模块级 Map 会被 Next.js 热更新重置。
-- 发送新消息走 `/api/agent/[id]` 和 SSE；只浏览历史走 `lib/session-reader.ts`，不要为只读浏览创建 `AgentSession`。
-- `electron-builder.yml` 需要把 `.next/standalone/node_modules` 作为单独 `extraResources` 项复制；单纯复制 standalone 会漏掉 `node_modules/next`。
-- `next.config.ts` 使用 `output: "standalone"`，并把 `@earendil-works/pi-coding-agent` 与 `@earendil-works/pi-ai` 设为 server external packages。
-- 桌面端启动时 `electron/main.ts` 通过 `server-wait.ts` 同时做端口探测（请求 `/api/health`）和 Next.js 子进程 stdout 嗅探（匹配 "Ready"），避免冷启动 race。
-- ESLint 配置位于 `eslint.config.mjs`，忽略 `.claude/worktrees/`、`.next/`、`electron/dist/`、`release/`、`out/`、`coverage/`，并显式关闭 `react-hooks/immutability` / `react-hooks/refs` / `react-hooks/set-state-in-effect` 三条规则。
+| 目录 | 用途 |
+|---|---|
+| `app/api/` | 24 条 API 路由（agent / sessions / files / models / skills / auth / health） |
+| `lib/` | 服务端库：`rpc-manager` / `session-reader` / `normalize` / `session-cascade` 等 |
+| `components/` | 17 个顶层组件 + `chat-input/` / `session-sidebar/` / `models-config/` 子目录 |
+| `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 8 个拆分 hook |
+| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 7 个辅助模块 |
+| `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
+
+### 三条最常踩坑的设计决策
+
+- **活跃 session 注册表必须存 `globalThis`**：Next.js HMR 会丢弃模块级变量；`globalThis.__piSessions` / `__piSessionPathCache` / `__piStartLocks` 必须挂在 globalThis 上。
+- **两种分支不要混淆**：**Fork** = 跨文件新 `.jsonl`（`POST /api/agent/[id]` with `{type:"fork"}`）；**会话内分支** = 同文件 `navigate_tree` + `GET /api/sessions/[id]/context?leafId=`。
+- **Fork 后必须立即销毁旧 wrapper**：`AgentSession.fork()` 会原地修改 wrapper 内部状态，导致旧 id 指向已 fork 的错误状态。详见 [docs/ARCHITECTURE.md §14.2](docs/ARCHITECTURE.md#142-fork-后必须立即销毁旧-wrapper)。
+
+> 更完整的设计决策与陷阱清单（ToolCall 归一化、SSE 重连、electron-builder extraResources、Windows 兼容层等）见 [docs/ARCHITECTURE.md §14](docs/ARCHITECTURE.md#14-关键设计决策与陷阱)。

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pi Web 架构深度解析</title>
+<title>Pi Agent Desktop · 架构深度解析</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
@@ -754,6 +754,7 @@
   .ft-lib .ft-name { color: var(--green); }
   .ft-comp .ft-name { color: var(--amber); }
   .ft-hook .ft-name { color: var(--rose); }
+  .ft-elec .ft-name { color: #fb923c; }
 
   /* ── Two-Mode Comparison ── */
   .compare-box {
@@ -857,7 +858,7 @@
 <canvas id="particles"></canvas>
 
 <nav>
-  <div class="logo">π Web</div>
+  <div class="logo">π Agent Desktop</div>
   <div class="links">
     <a href="#hero">首页</a>
     <a href="#architecture">架构</a>
@@ -873,19 +874,21 @@
 <section id="hero">
   <div class="glow"></div>
   <div class="section-inner">
-    <h1><span>Pi Web</span><br/>架构深度解析</h1>
+    <h1><span>Pi Agent</span><br/>Desktop 架构深度解析</h1>
     <p class="subtitle">
-      pi coding agent 的 Web 前端界面 — 基于 Next.js 16 + React 19 构建的全栈 AI 编程助手交互系统
+      pi coding agent 的原生桌面客户端 — 基于 Next.js 16 + React 19 + Electron 构建的双模式全栈 AI 编程助手
     </p>
     <div class="badges">
       <span class="badge"><b>Next.js</b> 16.2</span>
       <span class="badge"><b>React</b> 19</span>
+      <span class="badge"><b>Electron</b> 36</span>
       <span class="badge"><b>Tailwind</b> 4</span>
       <span class="badge"><b>TypeScript</b> strict</span>
-      <span class="badge"><b>pi-agent</b> ^0.75</span>
+      <span class="badge"><b>pi-agent</b> ^0.78</span>
       <span class="badge">零状态库</span>
       <span class="badge">零UI库</span>
       <span class="badge">SSE 流式</span>
+      <span class="badge">双模式</span>
     </div>
   </div>
 </section>
@@ -894,15 +897,34 @@
 <section id="architecture">
   <div class="section-inner">
     <div class="section-tag">// Architecture</div>
-    <h2 class="section-title">三层分离架构</h2>
+    <h2 class="section-title">四层分离架构</h2>
     <p class="section-desc">
-      系统采用浏览器 → Next.js 服务端 → Pi SDK 三层架构。浏览器通过 REST API 发送命令，通过 SSE 接收实时流式响应。服务端在进程内持有 AgentSession 实例，实现零延迟的事件推送。
+      系统采用 Electron 主进程 → Next.js 服务端 → Pi SDK → 持久层四层架构。Web 模式下省略最外层 Electron 壳，直接从浏览器开始。服务端在进程内持有 AgentSession 实例，实现零延迟的事件推送。
     </p>
 
     <div class="arch-container">
+      <!-- Layer 0: Electron (Desktop only) -->
+      <div class="arch-layer layer-browser">
+        <div class="layer-label"><span class="dot"></span>桌面壳层 — Electron Main（仅 Desktop 模式）</div>
+        <div class="arch-nodes">
+          <div class="arch-node"><span class="icon">🪟</span> main.ts <code>主进程入口</code></div>
+          <div class="arch-node"><span class="icon">🔌</span> preload.ts <code>contextBridge</code></div>
+          <div class="arch-node"><span class="icon">📥</span> tray.ts <code>系统托盘</code></div>
+          <div class="arch-node"><span class="icon">🌐</span> server-wait.ts <code>子进程就绪探测</code></div>
+          <div class="arch-node"><span class="icon">🔄</span> autoUpdater <code>GitHub Releases</code></div>
+          <div class="arch-node"><span class="icon">🚪</span> process-tree.ts <code>进程树管理</code></div>
+        </div>
+      </div>
+
+      <!-- Arrows -->
+      <div class="arch-arrows">
+        <div class="arrow-down"><div class="line"></div>spawn(ELECTRON_RUN_AS_NODE=1)</div>
+        <div class="arrow-down"><div class="line"></div>BrowserWindow.loadURL</div>
+      </div>
+
       <!-- Layer 1: Browser -->
       <div class="arch-layer layer-browser">
-        <div class="layer-label"><span class="dot"></span>浏览器层 — React SPA</div>
+        <div class="layer-label"><span class="dot"></span>浏览器层 — React SPA（Web 模式起点）</div>
         <div class="arch-nodes">
           <div class="arch-node"><span class="icon">💬</span> ChatWindow <code>SSE流式</code></div>
           <div class="arch-node"><span class="icon">📝</span> ChatInput <code>模型/工具/思维</code></div>
@@ -912,6 +934,8 @@
           <div class="arch-node"><span class="icon">📊</span> ChatMinimap <code>滚动缩略</code></div>
           <div class="arch-node"><span class="icon">⚙️</span> ModelsConfig <code>25+ 提供商</code></div>
           <div class="arch-node"><span class="icon">🧩</span> SkillsConfig <code>技能管理</code></div>
+          <div class="arch-node"><span class="icon">📈</span> StatsBar <code>统计栏</code></div>
+          <div class="arch-node"><span class="icon">📑</span> TabBar <code>多标签</code></div>
         </div>
       </div>
 
@@ -929,9 +953,11 @@
           <div class="arch-node"><span class="icon">🔌</span> rpc-manager.ts <code>AgentSessionWrapper</code></div>
           <div class="arch-node"><span class="icon">📖</span> session-reader.ts <code>.jsonl 解析</code></div>
           <div class="arch-node"><span class="icon">🔄</span> normalize.ts <code>ToolCall 归一化</code></div>
+          <div class="arch-node"><span class="icon">🌳</span> session-cascade.ts <code>级联重 parent</code></div>
+          <div class="arch-node"><span class="icon">🔒</span> session-lock.ts <code>文件锁</code></div>
           <div class="arch-node"><span class="icon">📁</span> files API <code>安全根限制</code></div>
-          <div class="arch-node"><span class="icon">🔐</span> auth API <code>OAuth + API Key</code></div>
-          <div class="arch-node"><span class="icon">🤖</span> agent API <code>19 条路由</code></div>
+          <div class="arch-node"><span class="icon">🔐</span> auth API <code>OAuth + API Key (5)</code></div>
+          <div class="arch-node"><span class="icon">🤖</span> agent API <code>24 条路由</code></div>
         </div>
       </div>
 
@@ -1062,9 +1088,9 @@
 <section id="components">
   <div class="section-inner">
     <div class="section-tag">// Components</div>
-    <h2 class="section-title">14 个精心打磨的组件</h2>
+    <h2 class="section-title">17 个顶层组件 + 3 个子组件目录</h2>
     <p class="section-desc">
-      全部手写，零 UI 组件库依赖。每个组件通过 CSS 变量实现暗色/亮色主题，使用 React 19 的最新特性构建。
+      全部手写，零 UI 组件库依赖。每个组件通过 CSS 变量实现暗色/亮色主题，使用 React 19 的最新特性构建。CodeGraph 索引实际统计：顶层 17 个 + 子组件目录 3 个（<code>chat-input/</code>、<code>session-sidebar/</code>、<code>models-config/</code>）。
     </p>
 
     <div class="comp-grid">
@@ -1077,7 +1103,7 @@
       <div class="comp-card" style="transition-delay:0.1s">
         <div class="card-icon">💬</div>
         <h4>ChatWindow <code>核心</code></h4>
-        <p>消息列表 + SSE 流式处理 + Fork 操作。内置 streamReducer 状态机与打字机空闲动画。</p>
+        <p>消息列表 + SSE 流式处理 + Fork 操作。委托 <code>useAgentSession</code> 处理全部 agent 交互。</p>
         <div class="tags"><span class="tag">SSE</span><span class="tag">流式</span><span class="tag">Fork</span></div>
       </div>
       <div class="comp-card" style="transition-delay:0.15s">
@@ -1087,70 +1113,106 @@
         <div class="tags"><span class="tag">7级思维</span><span class="tag">3档工具</span><span class="tag">拖拽</span></div>
       </div>
       <div class="comp-card" style="transition-delay:0.2s">
+        <div class="card-icon">📋</div>
+        <h4>MessageList <code>列表</code></h4>
+        <p>消息列表容器，内置虚拟化滚动支持，按需挂载消息节点以保持长对话流畅。</p>
+        <div class="tags"><span class="tag">虚拟化</span><span class="tag">滚动</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.25s">
         <div class="card-icon">📝</div>
         <h4>MessageView <code>渲染</code></h4>
         <p>单条消息渲染：Markdown + 代码高亮 + Thinking 折叠 + 工具调用内联配对展示。</p>
         <div class="tags"><span class="tag">Markdown</span><span class="tag">Prism</span><span class="tag">Fork</span></div>
       </div>
-      <div class="comp-card" style="transition-delay:0.25s">
+      <div class="comp-card" style="transition-delay:0.3s">
         <div class="card-icon">🌳</div>
         <h4>SessionSidebar <code>导航</code></h4>
         <p>按 cwd 分组的会话树，支持 Fork 父子关系展示、最近 cwd 快捷入口、内嵌文件浏览器。</p>
         <div class="tags"><span class="tag">会话树</span><span class="tag">搜索</span><span class="tag">重命名</span></div>
       </div>
-      <div class="comp-card" style="transition-delay:0.3s">
+      <div class="comp-card" style="transition-delay:0.35s">
         <div class="card-icon">🔀</div>
         <h4>BranchNavigator <code>分支</code></h4>
         <p>会话内分支切换器。线性链自动压缩，高亮活跃路径，点击叶节点切换分支。</p>
         <div class="tags"><span class="tag">navigate_tree</span><span class="tag">压缩</span></div>
       </div>
-      <div class="comp-card" style="transition-delay:0.35s">
+      <div class="comp-card" style="transition-delay:0.4s">
         <div class="card-icon">📊</div>
         <h4>ChatMinimap <code>缩略</code></h4>
         <p>消息列表右侧的滚动缩略导航。用户消息蓝色、助手灰色，拖拽快速定位。</p>
         <div class="tags"><span class="tag">导航</span><span class="tag">滚动</span></div>
       </div>
-      <div class="comp-card" style="transition-delay:0.4s">
+      <div class="comp-card" style="transition-delay:0.45s">
         <div class="card-icon">🛠️</div>
         <h4>ToolPanel <code>工具</code></h4>
-        <p>三档工具预设：Off（无工具）、Low（4个基础工具）、High（7个完整工具）。</p>
+        <p>三档工具预设：<code>PRESET_NONE</code>（无工具）、<code>PRESET_DEFAULT</code>（4 个）、<code>PRESET_FULL</code>（7 个）。</p>
         <div class="tags"><span class="tag">read</span><span class="tag">bash</span><span class="tag">edit</span></div>
       </div>
-      <div class="comp-card" style="transition-delay:0.45s">
+      <div class="comp-card" style="transition-delay:0.5s">
         <div class="card-icon">⚙️</div>
         <h4>ModelsConfig <code>模型</code></h4>
         <p>25+ AI 提供商配置面板。品牌图标、API Key、OAuth 登录、默认模型设置。</p>
         <div class="tags"><span class="tag">25+图标</span><span class="tag">OAuth</span></div>
       </div>
-      <div class="comp-card" style="transition-delay:0.5s">
+      <div class="comp-card" style="transition-delay:0.55s">
         <div class="card-icon">🧩</div>
         <h4>SkillsConfig <code>技能</code></h4>
         <p>Skills 管理：启用/禁用、搜索远程 Skills、安装。修改 SKILL.md frontmatter。</p>
         <div class="tags"><span class="tag">搜索</span><span class="tag">安装</span><span class="tag">toggle</span></div>
       </div>
-      <div class="comp-card" style="transition-delay:0.55s">
+      <div class="comp-card" style="transition-delay:0.6s">
         <div class="card-icon">📂</div>
         <h4>FileExplorer <code>文件树</code></h4>
-        <p>懒加载目录浏览，20+ 文件类型图标。@ 引用：点击文件在输入框插入路径。</p>
+        <p>懒加载目录浏览，20+ 文件类型图标。<code>@</code> 引用：点击文件在输入框插入路径。</p>
         <div class="tags"><span class="tag">懒加载</span><span class="tag">@引用</span></div>
       </div>
-      <div class="comp-card" style="transition-delay:0.6s">
+      <div class="comp-card" style="transition-delay:0.65s">
         <div class="card-icon">👁️</div>
         <h4>FileViewer <code>查看</code></h4>
         <p>文件内容查看：代码高亮、图片展示、音频播放、内置 Myers diff 算法。</p>
         <div class="tags"><span class="tag">diff</span><span class="tag">音频</span><span class="tag">图片</span></div>
       </div>
-      <div class="comp-card" style="transition-delay:0.65s">
+      <div class="comp-card" style="transition-delay:0.7s">
         <div class="card-icon">📑</div>
         <h4>TabBar <code>标签</code></h4>
         <p>顶部标签栏：Chat 标签 + 多文件标签。活跃高亮，文件图标匹配。</p>
         <div class="tags"><span class="tag">多文件</span><span class="tag">图标</span></div>
       </div>
-      <div class="comp-card" style="transition-delay:0.7s">
+      <div class="comp-card" style="transition-delay:0.75s">
+        <div class="card-icon">📈</div>
+        <h4>StatsBar <code>统计</code></h4>
+        <p>token / cost / 上下文用量统计栏，从 <code>session.contextUsage</code> 与消息累加计算。</p>
+        <div class="tags"><span class="tag">tokens</span><span class="tag">cost</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.8s">
         <div class="card-icon">🎨</div>
         <h4>FileIcons <code>图标</code></h4>
-        <p>纯 SVG 单色文件图标，按扩展名匹配 20+ 类型。全部使用 currentColor。</p>
+        <p>纯 SVG 单色文件图标，按扩展名匹配 20+ 类型。全部使用 <code>currentColor</code>。</p>
         <div class="tags"><span class="tag">SVG</span><span class="tag">monochrome</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.85s">
+        <div class="card-icon">🗂️</div>
+        <h4>file-viewer-virtualization <code>工具</code></h4>
+        <p>FileViewer 的虚拟化算法模块（非 React 组件），按视口裁剪大文件渲染行。</p>
+        <div class="tags"><span class="tag">虚拟化</span><span class="tag">算法</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.9s">
+        <div class="card-icon">🧩</div>
+        <h4>chat-input/ <code>子目录</code></h4>
+        <p>ChatInput 的子组件：<code>AttachmentPreview</code> 图片预览、<code>ModelSelector</code> 模型下拉、<code>PresetSelector</code> 工具预设下拉。</p>
+        <div class="tags"><span class="tag">3 子组件</span><span class="tag">输入</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:0.95s">
+        <div class="card-icon">🌲</div>
+        <h4>session-sidebar/ <code>子目录</code></h4>
+        <p>SessionSidebar 的子组件：<code>SidebarHeader</code>、<code>SessionTree</code> / <code>SessionTreeItem</code>、<code>PiAgentTitle</code>、<code>helpers</code>。</p>
+        <div class="tags"><span class="tag">4 子模块</span><span class="tag">树</span></div>
+      </div>
+      <div class="comp-card" style="transition-delay:1s">
+        <div class="card-icon">🎛️</div>
+        <h4>models-config/ <code>子目录</code></h4>
+        <p>ModelsConfig 的子组件，按提供商分组的细粒度配置面板。</p>
+        <div class="tags"><span class="tag">提供商</span><span class="tag">配置</span></div>
       </div>
     </div>
   </div>
@@ -1192,18 +1254,30 @@
       </div>
       <div class="tech-item" style="transition-delay:0.35s">
         <div class="tech-icon">🤖</div>
-        <div><div class="tech-name">pi-coding-agent</div><div class="tech-ver">^0.75.5</div></div>
+        <div><div class="tech-name">pi-coding-agent</div><div class="tech-ver">^0.78.0 SDK</div></div>
       </div>
       <div class="tech-item" style="transition-delay:0.4s">
         <div class="tech-icon">🧠</div>
-        <div><div class="tech-name">pi-ai</div><div class="tech-ver">^0.75.5</div></div>
+        <div><div class="tech-name">pi-ai</div><div class="tech-ver">^0.78.0</div></div>
       </div>
       <div class="tech-item" style="transition-delay:0.45s">
         <div class="tech-icon">🏷️</div>
         <div><div class="tech-name">@lobehub/icons</div><div class="tech-ver">^5.6.0 25+提供商</div></div>
       </div>
       <div class="tech-item" style="transition-delay:0.5s">
+        <div class="tech-icon">🪟</div>
+        <div><div class="tech-name">Electron</div><div class="tech-ver">^36.9.5 桌面壳</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.55s">
         <div class="tech-icon">📦</div>
+        <div><div class="tech-name">electron-builder</div><div class="tech-ver">^26.8.1 NSIS</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.6s">
+        <div class="tech-icon">🔄</div>
+        <div><div class="tech-name">electron-updater</div><div class="tech-ver">^6.8.3 自动更新</div></div>
+      </div>
+      <div class="tech-item" style="transition-delay:0.65s">
+        <div class="tech-icon">🚀</div>
         <div><div class="tech-name">npm CLI</div><div class="tech-ver">bin/pi-web.js</div></div>
       </div>
     </div>
@@ -1293,46 +1367,70 @@
     <div class="section-tag">// File Map</div>
     <h2 class="section-title">项目文件地图</h2>
     <p class="section-desc">
-      完整的目录结构，按颜色区分各模块职责：青色=目录、紫色=API、绿色=库、琥珀=组件、玫红=Hooks。
+      完整的目录结构（基于 CodeGraph 索引），按颜色区分各模块职责：青色=目录、紫色=API、绿色=库、琥珀=组件、玫红=Hooks、橙色=Electron、灰色=测试。
     </p>
 
     <div class="file-tree">
-      <div class="ft-line ft-dir" style="--depth:0"><span class="ft-icon">📁</span><span class="ft-name">pi-web/</span></div>
-      <div class="ft-line" style="--depth:1"><span class="ft-icon">📦</span><span class="ft-name">package.json</span><span class="ft-comment">@agegr/pi-web v0.6.11</span></div>
-      <div class="ft-line" style="--depth:1"><span class="ft-icon">⚙️</span><span class="ft-name">next.config.ts</span><span class="ft-comment">版本注入 + 外部包</span></div>
+      <div class="ft-line ft-dir" style="--depth:0"><span class="ft-icon">📁</span><span class="ft-name">pi-agent-desktop/</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">📦</span><span class="ft-name">package.json</span><span class="ft-comment">@chasen-liao/pi-agent-desktop v0.7.11</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">⚙️</span><span class="ft-name">next.config.ts</span><span class="ft-comment">standalone + 外部包</span></div>
       <div class="ft-line" style="--depth:1"><span class="ft-icon">🎨</span><span class="ft-name">tailwind.config.ts</span></div>
       <div class="ft-line" style="--depth:1"><span class="ft-icon">📘</span><span class="ft-name">tsconfig.json</span><span class="ft-comment">strict + bundler</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">📦</span><span class="ft-name">electron-builder.yml</span><span class="ft-comment">NSIS + extraResources</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">🧹</span><span class="ft-name">eslint.config.mjs</span><span class="ft-comment">flat config</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">🤖</span><span class="ft-name">AGENTS.md</span><span class="ft-comment">开发速查摘要</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">🧠</span><span class="ft-name">CLAUDE.md</span><span class="ft-comment">Claude Code 指南</span></div>
+
       <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">bin/</span></div>
       <div class="ft-line" style="--depth:2"><span class="ft-icon">🚀</span><span class="ft-name">pi-web.js</span><span class="ft-comment">CLI 入口 → next start</span></div>
-      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">app/</span></div>
-      <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">layout.tsx</span><span class="ft-comment">主题初始化 + 字体</span></div>
+
+      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">app/</span><span class="ft-comment">Next.js App Router</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">layout.tsx</span><span class="ft-comment">主题初始化 + 防 FOUC</span></div>
       <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">page.tsx</span><span class="ft-comment">AppShell 挂载</span></div>
-      <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">globals.css</span><span class="ft-comment">CSS变量主题 + View Transitions</span></div>
-      <div class="ft-line ft-dir" style="--depth:2"><span class="ft-icon">📁</span><span class="ft-name">api/</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">globals.css</span><span class="ft-comment">CSS变量 + View Transitions</span></div>
+      <div class="ft-line ft-dir" style="--depth:2"><span class="ft-icon">📁</span><span class="ft-name">api/</span><span class="ft-comment">24 条路由</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔌</span><span class="ft-name">agent/new/route.ts</span><span class="ft-comment">创建会话</span></div>
       <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔌</span><span class="ft-name">agent/[id]/route.ts</span><span class="ft-comment">GET状态 / POST命令</span></div>
       <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📡</span><span class="ft-name">agent/[id]/events/route.ts</span><span class="ft-comment">SSE 事件流</span></div>
-      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">✨</span><span class="ft-name">agent/new/route.ts</span><span class="ft-comment">创建新会话</span></div>
-      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📖</span><span class="ft-name">sessions/route.ts</span><span class="ft-comment">GET 列表</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📖</span><span class="ft-name">sessions/route.ts</span><span class="ft-comment">GET 会话列表</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📖</span><span class="ft-name">sessions/new/route.ts</span><span class="ft-comment">已弃用 (410)</span></div>
       <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📋</span><span class="ft-name">sessions/[id]/route.ts</span><span class="ft-comment">GET/PATCH/DELETE</span></div>
-      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔍</span><span class="ft-name">sessions/[id]/context/route.ts</span><span class="ft-comment">分支上下文</span></div>
-      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📂</span><span class="ft-name">files/[...path]/route.ts</span><span class="ft-comment">文件浏览/内容</span></div>
-      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🏷️</span><span class="ft-name">models/route.ts</span><span class="ft-comment">模型列表 + thinking</span></div>
-      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">⚙️</span><span class="ft-name">models-config/route.ts</span><span class="ft-comment">配置读写</span></div>
-      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🧩</span><span class="ft-name">skills/route.ts</span><span class="ft-comment">Skills 管理</span></div>
-      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔐</span><span class="ft-name">auth/*</span><span class="ft-comment">OAuth + API Key (5条路由)</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔍</span><span class="ft-name">sessions/[id]/context/route.ts</span><span class="ft-comment">?leafId= 分支上下文</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📂</span><span class="ft-name">files/[...path]/route.ts</span><span class="ft-comment">文件内容</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🏠</span><span class="ft-name">home/route.ts</span><span class="ft-comment">主目录路径</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📂</span><span class="ft-name">default-cwd/route.ts</span><span class="ft-comment">默认项目目录</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📂</span><span class="ft-name">select-directory/route.ts</span><span class="ft-comment">原生文件夹选择器</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🏷️</span><span class="ft-name">models/route.ts</span><span class="ft-comment">模型 + thinking levels</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">⚙️</span><span class="ft-name">models-config/route.ts</span><span class="ft-comment">读写 models.json</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🧪</span><span class="ft-name">models-config/test/route.ts</span><span class="ft-comment">测试连接</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🧩</span><span class="ft-name">skills/route.ts</span><span class="ft-comment">列出/启用/禁用</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔍</span><span class="ft-name">skills/search/route.ts</span><span class="ft-comment">搜索远程技能</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📥</span><span class="ft-name">skills/install/route.ts</span><span class="ft-comment">安装技能</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔐</span><span class="ft-name">auth/*</span><span class="ft-comment">OAuth + API Key (5条: providers, all-providers, login, logout, api-key)</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🌱</span><span class="ft-name">statusline/route.ts</span><span class="ft-comment">git 分支元数据</span></div>
+      <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">❤️</span><span class="ft-name">health/route.ts</span><span class="ft-comment">桌面端启动探测</span></div>
+
       <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">lib/</span></div>
-      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🔌</span><span class="ft-name">rpc-manager.ts</span><span class="ft-comment">AgentSession 生命周期</span></div>
-      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📖</span><span class="ft-name">session-reader.ts</span><span class="ft-comment">.jsonl 解析 + 路径缓存</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🔌</span><span class="ft-name">rpc-manager.ts</span><span class="ft-comment">★ AgentSession 生命周期</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📖</span><span class="ft-name">session-reader.ts</span><span class="ft-comment">★ .jsonl 解析 + 路径缓存</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🌳</span><span class="ft-name">session-cascade.ts</span><span class="ft-comment">级联重 parent</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🔒</span><span class="ft-name">session-lock.ts</span><span class="ft-comment">文件并发锁</span></div>
       <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🌐</span><span class="ft-name">agent-client.ts</span><span class="ft-comment">前端 fetch 封装</span></div>
-      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🔄</span><span class="ft-name">normalize.ts</span><span class="ft-comment">ToolCall 字段归一化</span></div>
-      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">types.ts</span><span class="ft-comment">共享类型定义</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🔄</span><span class="ft-name">normalize.ts</span><span class="ft-comment">ToolCall 归一化</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">⚡</span><span class="ft-name">slash-commands.ts</span><span class="ft-comment">/ 斜杠命令</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">types.ts</span><span class="ft-comment">共享类型</span></div>
       <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📘</span><span class="ft-name">pi-types.ts</span><span class="ft-comment">SDK 接口封装</span></div>
       <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🛤️</span><span class="ft-name">file-paths.ts</span><span class="ft-comment">跨平台路径</span></div>
-      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📦</span><span class="ft-name">npx.ts</span><span class="ft-comment">安全 npx 调用</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📦</span><span class="ft-name">npx.ts</span><span class="ft-comment">安全 npx (CVE-2024-27980)</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">⚠️</span><span class="ft-name">api-error.ts</span><span class="ft-comment">错误格式化</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">🎨</span><span class="ft-name">ayu-syntax-theme.ts</span><span class="ft-comment">语法高亮主题</span></div>
+      <div class="ft-line ft-lib" style="--depth:2"><span class="ft-icon">📐</span><span class="ft-name">panel-layout.js</span><span class="ft-comment">CJS 宽度计算</span></div>
+
       <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">components/</span></div>
       <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🏠</span><span class="ft-name">AppShell.tsx</span></div>
       <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">💬</span><span class="ft-name">ChatWindow.tsx</span></div>
       <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">⌨️</span><span class="ft-name">ChatInput.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">📋</span><span class="ft-name">MessageList.tsx</span></div>
       <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">📝</span><span class="ft-name">MessageView.tsx</span></div>
       <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🌳</span><span class="ft-name">SessionSidebar.tsx</span></div>
       <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🔀</span><span class="ft-name">BranchNavigator.tsx</span></div>
@@ -1343,18 +1441,67 @@
       <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">📂</span><span class="ft-name">FileExplorer.tsx</span></div>
       <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">👁️</span><span class="ft-name">FileViewer.tsx</span></div>
       <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">📑</span><span class="ft-name">TabBar.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">📈</span><span class="ft-name">StatsBar.tsx</span></div>
       <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🎨</span><span class="ft-name">FileIcons.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:2"><span class="ft-icon">🗂️</span><span class="ft-name">file-viewer-virtualization.ts</span></div>
+      <div class="ft-line ft-dir" style="--depth:2"><span class="ft-icon">📁</span><span class="ft-name">chat-input/</span></div>
+      <div class="ft-line ft-comp" style="--depth:3"><span class="ft-icon">🖼️</span><span class="ft-name">AttachmentPreview.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:3"><span class="ft-icon">🏷️</span><span class="ft-name">ModelSelector.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:3"><span class="ft-icon">🎚️</span><span class="ft-name">PresetSelector.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:3"><span class="ft-icon">📄</span><span class="ft-name">types.ts</span></div>
+      <div class="ft-line ft-dir" style="--depth:2"><span class="ft-icon">📁</span><span class="ft-name">session-sidebar/</span></div>
+      <div class="ft-line ft-comp" style="--depth:3"><span class="ft-icon">🌲</span><span class="ft-name">SessionTree.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:3"><span class="ft-icon">🏷️</span><span class="ft-name">PiAgentTitle.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:3"><span class="ft-icon">🔝</span><span class="ft-name">SidebarHeader.tsx</span></div>
+      <div class="ft-line ft-comp" style="--depth:3"><span class="ft-icon">🧩</span><span class="ft-name">helpers.ts</span></div>
+      <div class="ft-line ft-dir" style="--depth:2"><span class="ft-icon">📁</span><span class="ft-name">models-config/</span></div>
+
       <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">hooks/</span></div>
-      <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">🧠</span><span class="ft-name">useAgentSession.ts</span><span class="ft-comment">SSE + 流式状态机</span></div>
+      <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">🧠</span><span class="ft-name">useAgentSession.ts</span><span class="ft-comment">★ SSE + 流式状态机</span></div>
       <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">🌓</span><span class="ft-name">useTheme.ts</span><span class="ft-comment">View Transitions</span></div>
       <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">🔔</span><span class="ft-name">useAudio.ts</span><span class="ft-comment">完成音效</span></div>
       <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">🖱️</span><span class="ft-name">useDragDrop.ts</span><span class="ft-comment">图片拖拽</span></div>
+      <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">📑</span><span class="ft-name">useFileTabs.ts</span><span class="ft-comment">文件标签</span></div>
+      <div class="ft-line ft-hook" style="--depth:2"><span class="ft-icon">📐</span><span class="ft-name">usePanelLayout.ts</span><span class="ft-comment">面板布局</span></div>
+      <div class="ft-line ft-dir" style="--depth:2"><span class="ft-icon">📁</span><span class="ft-name">agent-session/</span><span class="ft-comment">useAgentSession 子 hooks</span></div>
+      <div class="ft-line ft-hook" style="--depth:3"><span class="ft-icon">📖</span><span class="ft-name">use-session-loader.ts</span></div>
+      <div class="ft-line ft-hook" style="--depth:3"><span class="ft-icon">📡</span><span class="ft-name">use-agent-events.ts</span></div>
+      <div class="ft-line ft-hook" style="--depth:3"><span class="ft-icon">📜</span><span class="ft-name">use-chat-scroll.ts</span></div>
+      <div class="ft-line ft-hook" style="--depth:3"><span class="ft-icon">🔌</span><span class="ft-name">session-loader-api.ts</span></div>
+      <div class="ft-line ft-hook" style="--depth:3"><span class="ft-icon">🎭</span><span class="ft-name">agent-events-manager.ts</span></div>
+      <div class="ft-line ft-hook" style="--depth:3"><span class="ft-icon">⚙️</span><span class="ft-name">agent-phase.ts</span></div>
+      <div class="ft-line ft-hook" style="--depth:3"><span class="ft-icon">📈</span><span class="ft-name">session-stats.ts</span></div>
+      <div class="ft-line ft-hook" style="--depth:3"><span class="ft-icon">🔄</span><span class="ft-name">stream-state.ts</span></div>
+
+      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">electron/</span><span class="ft-comment">Electron 主进程</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">🪟</span><span class="ft-name">main.ts</span><span class="ft-comment">★ 主进程入口</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">🔌</span><span class="ft-name">preload.ts</span><span class="ft-comment">contextBridge</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">📥</span><span class="ft-name">tray.ts</span><span class="ft-comment">系统托盘</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">🌐</span><span class="ft-name">server-wait.ts</span><span class="ft-comment">就绪探测</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">🔢</span><span class="ft-name">port-selection.ts</span><span class="ft-comment">端口选择</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">🚪</span><span class="ft-name">process-tree.ts</span><span class="ft-comment">进程树管理</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">🔄</span><span class="ft-name">restart-policy.ts</span><span class="ft-comment">重启策略</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">💥</span><span class="ft-name">startup-failure.ts</span><span class="ft-comment">启动失败诊断</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">📝</span><span class="ft-name">log-format.ts</span><span class="ft-comment">日志格式化</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">🛡️</span><span class="ft-name">env-filter.ts</span><span class="ft-comment">敏感环境变量过滤</span></div>
+      <div class="ft-line ft-elec" style="--depth:2"><span class="ft-icon">📜</span><span class="ft-name">startup.html/js</span><span class="ft-comment">启动占位页</span></div>
+
+      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">docs/</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">📖</span><span class="ft-name">ARCHITECTURE.md</span><span class="ft-comment">★ 详细架构文档</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">🌐</span><span class="ft-name">architecture.html</span><span class="ft-comment">可视化网页（本页）</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">🏠</span><span class="ft-name">index.html</span><span class="ft-comment">项目介绍页</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">🎨</span><span class="ft-name">styles.css / script.js</span></div>
+
+      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">build/</span></div>
+      <div class="ft-line" style="--depth:2"><span class="ft-icon">📦</span><span class="ft-name">installer.nsh</span><span class="ft-comment">NSIS 自定义脚本</span></div>
+
+      <div class="ft-line ft-dir" style="--depth:1"><span class="ft-icon">📁</span><span class="ft-name">public/ bin/ data/ test/</span><span class="ft-comment">静态资源 / CLI / 数据 / 测试</span></div>
     </div>
   </div>
 </section>
 
 <footer>
-  <p>Pi Web 架构深度解析 · 版本 0.6.11 · 2026-05-26 · <a href="https://github.com/earendil-works/pi-coding-agent" style="color:var(--accent3);text-decoration:none;">pi-coding-agent</a></p>
+  <p>Pi Agent Desktop 架构深度解析 · 版本 0.7.11 · 2026-06-21 · <a href="https://github.com/Chasen-Liao/pi-agent-desktop" style="color:var(--accent3);text-decoration:none;">pi-agent-desktop</a></p>
 </footer>
 
 <script>

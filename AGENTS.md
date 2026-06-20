@@ -38,124 +38,39 @@ CodeGraph provides MCP (Model Context Protocol) tools for efficient symbol searc
 
 ## Architecture
 
-### Web Mode (browser)
+> 📖 **详细架构文档已迁移至 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** —— 包含完整的目录地图、组件清单、API 路由清单、Electron 桌面端说明、设计决策与陷阱。
+> 本节仅保留**开发时高频查阅**的速查摘要。
 
-```
-Browser                Next.js Server              AgentSession (in-process)
-  │                        │                               │
-  ├─ GET /api/sessions ────▶ reads ~/.pi/agent/sessions/   │
-  ├─ GET /api/sessions/[id] reads .jsonl file directly     │
-  │                        │                               │
-  ├─ send message ─────────▶ POST /api/agent/[id]          │
-  │                        │   startRpcSession() ─────────▶│ createAgentSession()
-  │                        │   session.send(cmd) ─────────▶│ session.prompt()
-  │                        │                               │
-  ├─ SSE connect ──────────▶ GET /api/agent/[id]/events    │
-  │                        │   session.onEvent() ◀─────────│ session.subscribe()
-  │◀── data: {...} ─────────│                               │
-```
+### 双模式架构速查
 
-### Desktop Mode (Electron)
+- **Web 模式**：浏览器 ──HTTP/SSE──▶ Next.js Server(:30141) ──进程内──▶ AgentSession
+- **Desktop 模式**：Electron 主进程以 `ELECTRON_RUN_AS_NODE=1` 启动 Next.js standalone `server.js` 子进程，再开 `BrowserWindow` 指向 `http://127.0.0.1:PORT`
 
-```
-Pi Agent.exe (Electron main)
-  │
-  ├─ spawn( process.execPath, [server.js], { env: ELECTRON_RUN_AS_NODE=1, PORT, HOSTNAME } )
-  │     └─ Next.js standalone server on 127.0.0.1:PORT
-  │
-  ├─ BrowserWindow → loadURL( http://127.0.0.1:PORT )
-  │     └─ Same React UI as web mode
-  │
-  ├─ Tray icon (minimize to tray, right-click → quit)
-  │
-  └─ autoUpdater (checks GitHub Releases for updates)
-       └─ preload.ts exposes electronAPI.onUpdateAvailable / quitAndInstall
-```
+### 关键入口
 
-**Production layout** (inside NSIS installer):
+- **发送消息**：`POST /api/agent/[id]` → `startRpcSession()` (lib/rpc-manager.ts) 创建 `AgentSessionWrapper`
+- **浏览历史**（只读）：`GET /api/sessions/*` → `lib/session-reader.ts` 直接解析 `.jsonl`，**不创建** AgentSession
+- **SSE 流**：`GET /api/agent/[id]/events` —— 30s 心跳，单向推送
+- **UI 主入口**：`app/page.tsx` → `components/AppShell.tsx` → `components/ChatWindow.tsx` → `hooks/useAgentSession.ts`
 
-```
-resources/
-  standalone/              ← .next/standalone (extraResources)
-    server.js
-    node_modules/next/     ← separate extraResources entry (see Traps below)
-    .next/static/
-    public/
-  app/
-    build/                 ← tray-icon.ico
-  electron.asar            ← compiled electron/dist/
-```
+### 顶层目录速查
 
-**Session browsing** (read-only): reads `.jsonl` files directly via `lib/session-reader.ts` — no AgentSession created.  
-**Sending a message**: `startRpcSession()` in `lib/rpc-manager.ts` creates an AgentSession in-process.
+| 目录 | 用途 |
+|---|---|
+| `app/api/` | 24 条 API 路由（agent / sessions / files / models / skills / auth / health） |
+| `lib/` | 服务端库：`rpc-manager` / `session-reader` / `normalize` / `session-cascade` 等 |
+| `components/` | 17 个顶层组件 + `chat-input/` / `session-sidebar/` / `models-config/` 子目录 |
+| `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 8 个拆分 hook |
+| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 7 个辅助模块 |
+| `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
 
----
+### 三个必须存 `globalThis` 的原因
 
-## File Map
+Next.js HMR 会丢弃模块级变量，因此以下三个必须挂在 `globalThis` 上：
 
-```
-app/api/
-  sessions/route.ts               GET  list all sessions
-  sessions/[id]/route.ts          GET/PATCH/DELETE session
-  sessions/[id]/context/route.ts  GET ?leafId= — context for a specific leaf
-  sessions/new/route.ts           returns 410 (no longer used)
-  agent/new/route.ts              POST { cwd, message, toolNames?, provider?, modelId? }
-  agent/[id]/route.ts             GET state | POST any command
-  agent/[id]/events/route.ts      GET SSE stream
-  files/[...path]/route.ts        GET file contents for viewer
-  models/route.ts                 GET { models, modelList, defaultModel }
-  models-config/route.ts          GET/PUT — read/write ~/.pi/agent/models.json
-  models-config/test/route.ts     POST test connection for a model configuration
-  skills/route.ts                 GET list/search/install skills
-  default-cwd/route.ts            POST create and return default project directory
-  select-directory/route.ts       POST open native Windows folder picker
-  statusline/route.ts             GET git branch and status metadata
-  home/route.ts                   GET user home directory path
-
-lib/
-  rpc-manager.ts      AgentSessionWrapper + registry + startRpcSession
-  session-reader.ts   parse .jsonl; getModelNameMap/getModelList/getDefaultModel
-  types.ts            shared TypeScript types
-  normalize.ts        normalizeToolCalls() — field name mismatch between file format and our types
-  agent-client.ts     browser to agent endpoint SSE client wrapper
-  slash-commands.ts   parse and handle client-side slash commands
-  api-error.ts        helper for error logging and formatting
-  session-cascade.ts  cascading updates on session deletion
-  session-lock.ts     concurrency control file lock for sessions
-  npx.ts              cross-platform wrapper to execute npx safely without a shell
-  panel-layout.js     sidebar width calculation helper (CommonJS for build compatibility)
-  file-paths.ts       file path normalization and slashes helpers (Windows compatibility)
-  pi-types.ts         TypeScript type definitions matching `@earendil-works/pi-coding-agent` interfaces
-
-hooks/
-  useAgentSession.ts  agent interaction state manager
-  useAudio.ts         play audio cues for compaction and success/failure
-  useDragDrop.ts      manage file drop handler
-  useTheme.ts         manage light/dark mode theme state
-  agent-session/      sub-hooks decomposed from useAgentSession (use-session-loader, use-agent-events, session-stats, stream-state, agent-phase, etc.)
-
-electron/
-  main.ts             Electron main process: port finding, server spawn, BrowserWindow, autoUpdater
-  preload.ts          contextBridge exposes onUpdateAvailable / quitAndInstall
-  tray.ts             System tray: show window / quit
-
-electron-builder.yml  packaging config: files, extraResources, NSIS, publish
-
-components/
-  AppShell.tsx        layout + URL state + tab management
-  SessionSidebar.tsx  session tree + FileExplorer
-  ChatWindow.tsx      messages + streaming + SSE + fork/navigate logic
-  ChatInput.tsx       input bar + model/thinking/tools/compact controls
-  MessageView.tsx     renders one message (user/assistant/toolCall/toolResult)
-  BranchNavigator.tsx in-session branch switcher
-  ChatMinimap.tsx     scroll minimap alongside the message list
-  ToolPanel.tsx       exports PRESET_NONE/DEFAULT/FULL + getPresetFromTools
-  ModelsConfig.tsx    modal for editing models.json (opened from sidebar bottom)
-  SkillsConfig.tsx    modal for searching/installing skills (opened from chat input slash commands)
-  FileExplorer.tsx    file tree inside sidebar
-  FileViewer.tsx      file content in a tab
-  TabBar.tsx          tab bar (Chat + open file tabs)
-```
+- `globalThis.__piSessions` — `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表
+- `globalThis.__piSessionPathCache` — `sessionId → .jsonl` 路径缓存
+- `globalThis.__piStartLocks` — 并发启动共享 Promise 锁
 
 ---
 
@@ -208,42 +123,19 @@ Sessions whose first line can't be parsed as a valid header are marked `orphaned
 
 ### Electron extraResources must include node_modules separately
 
-electron-builder's `extraResources` with `filter: ["**/*"]` **silently excludes `node_modules` directories**, even from `.next/standalone`. The standalone `server.js` does `require("next")` which fails without `node_modules/next`.
-
-**Fix**: Add a separate `extraResources` entry for `node_modules`:
-
-```yaml
-extraResources:
-  - from: .next/standalone
-    to: standalone
-    filter:
-      - "**/*"
-      - "!node_modules"          # Exclude to avoid glob conflict
-  - from: .next/standalone/node_modules   # Separate entry to include
-    to: standalone/node_modules
-```
+electron-builder's `extraResources` with `filter: ["**/*"]` **silently excludes `node_modules` directories**, even from `.next/standalone`. The standalone `server.js` does `require("next")` which fails without `node_modules/next`. **Fix**: add a separate `extraResources` entry for `node_modules` — see [docs/ARCHITECTURE.md §14.6](docs/ARCHITECTURE.md#146-electron-builder-extraresources-必须单独包含-node_modules) for the full YAML.
 
 ### Electron main process spawns Next.js as a child
 
-In production, `electron/main.ts` spawns `process.execPath` (the Electron binary itself) with `ELECTRON_RUN_AS_NODE=1` to run `server.js` as a plain Node.js process. The main process then opens a `BrowserWindow` pointing at `http://127.0.0.1:PORT`. The child process is killed on `before-quit`.
+In production, `electron/main.ts` spawns `process.execPath` (the Electron binary itself) with `ELECTRON_RUN_AS_NODE=1` to run `server.js` as a plain Node.js process. The main process then opens a `BrowserWindow` pointing at `http://127.0.0.1:PORT`. The child process is killed on `before-quit`. See [docs/ARCHITECTURE.md §13](docs/ARCHITECTURE.md#13-electron-桌面端) for the full Electron module map.
 
 ---
 
 ## Pi Session File Format
 
-Location: `~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`
+Location: `~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl` — see [docs/ARCHITECTURE.md §9](docs/ARCHITECTURE.md#9-pi-会话文件格式) for the complete `.jsonl` schema and `parentSession` semantics.
 
-```jsonl
-{"type":"session","version":3,"id":"<uuid>","timestamp":"...","cwd":"/path","parentSession":"/abs/path/to/parent.jsonl"}
-{"type":"model_change","id":"<8hex>","parentId":null,"provider":"zenmux","modelId":"claude-sonnet-4-6","timestamp":"..."}
-{"type":"message","id":"<8hex>","parentId":"<8hex>","message":{"role":"user","content":"..."}}
-{"type":"message","id":"<8hex>","parentId":"<8hex>","message":{"role":"assistant","content":[...],...}}
-{"type":"message","id":"<8hex>","parentId":"<8hex>","message":{"role":"toolResult","toolCallId":"...","content":[...]}}
-{"type":"compaction","id":"<8hex>","parentId":"<8hex>","summary":"...","firstKeptEntryId":"<8hex>","tokensBefore":N}
-{"type":"session_info","id":"...","parentId":"...","name":"user-defined name"}
-```
-
-`entryIds[]` in `SessionContext` is a parallel array to `messages[]` — maps each displayed message back to its `.jsonl` entry id, used for fork and navigate_tree calls.
+Quick reference for code: `entryIds[]` in `SessionContext` is a parallel array to `messages[]` — maps each displayed message back to its `.jsonl` entry id, used for fork and navigate_tree calls.
 
 ---
 
