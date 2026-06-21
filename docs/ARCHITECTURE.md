@@ -316,7 +316,7 @@ stateDiagram-v2
     Active --> Idle: 无操作计时开始
     Idle --> Active: 收到 send() 或事件（重置计时）
     Idle --> Destroyed: 10 分钟空闲超时
-    Active --> Destroyed: fork() 后立即 destroy()
+    Active --> Destroyed: send("fork") 后立即 destroy()
     Destroyed --> [*]
 ```
 
@@ -325,10 +325,10 @@ stateDiagram-v2
 | 全局变量 | 用途 |
 |---|---|
 | `globalThis.__piSessions` | `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表 |
-| `globalThis.__piSessionPathCache` | `sessionId → .jsonl 绝对路径` 缓存 |
+| `globalThis.__piSessionPathCache` | `sessionId → .jsonl` 绝对路径缓存 |
 | `globalThis.__piStartLocks` | `Map<sessionId, Promise>` 并发启动共享锁 |
 
-**Fork 注册顺序陷阱**（详见 §14）：`AgentSession.fork()` 会**原地修改 wrapper 内部状态**，因此 `send("fork")` 必须先 `startRpcSession(newSessionId, ...)` 预注册新 wrapper，再 `this.destroy()` 旧 wrapper，最后返回 `newSessionId`。
+**Fork 注册顺序陷阱**（详见 §14.2）：fork 在**文件层**通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）完成，**不修改旧 wrapper 内部状态**。但 `send("fork")` 仍需先 `startRpcSession(newSessionId, ...)` 预注册新 wrapper，再 `this.destroy()` 旧 wrapper，以满足"返回时 newSessionId 已在注册表"的契约。
 
 ---
 

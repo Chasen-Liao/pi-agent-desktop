@@ -78,6 +78,6 @@ npm run dist
 
 - **活跃 session 注册表必须存 `globalThis`**：Next.js HMR 会丢弃模块级变量；`globalThis.__piSessions` / `__piSessionPathCache` / `__piStartLocks` 必须挂在 globalThis 上。
 - **两种分支不要混淆**：**Fork** = 跨文件新 `.jsonl`（`POST /api/agent/[id]` with `{type:"fork"}`）；**会话内分支** = 同文件 `navigate_tree` + `GET /api/sessions/[id]/context?leafId=`。
-- **Fork 后必须立即销毁旧 wrapper**：Fork 在文件层通过 `SessionManager.createBranchedSession()` 创建新 `.jsonl`，再用 `startRpcSession()` 构造全新 AgentSession 实例；旧 wrapper 不再会被请求到，立即 `destroy()` 可及时释放资源（而非等 10 分钟 idle 超时）。详见 [docs/ARCHITECTURE.md §14.2](docs/ARCHITECTURE.md#142-fork-的执行顺序预注册--销毁旧-wrapper)。
+- **Fork 后必须立即销毁旧 wrapper**：Fork 在文件层通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）创建新 `.jsonl`，再用 `startRpcSession()` 构造全新 AgentSession 实例；旧 wrapper 不再会被请求到，立即 `destroy()` 可及时释放资源（而非等 10 分钟 idle 超时）。详见 [docs/ARCHITECTURE.md §14.2](docs/ARCHITECTURE.md#142-fork-的执行顺序预注册--销毁旧-wrapper)。
 
 > 更完整的设计决策与陷阱清单（ToolCall 归一化、SSE 重连、electron-builder extraResources、Windows 兼容层等）见 [docs/ARCHITECTURE.md §14](docs/ARCHITECTURE.md#14-关键设计决策与陷阱)。
