@@ -415,8 +415,7 @@ components/chat-input/
 
 components/session-sidebar/
 ├── SidebarHeader.tsx         侧边栏头部
-├── SessionTree.tsx           会话树渲染
-├── SessionTreeItem           单个会话节点
+├── SessionTree.tsx           会话树渲染（含内部 SessionTreeItem）
 └── helpers.ts                树构建辅助
 
 components/models-config/     模型配置弹窗的子组件
@@ -497,7 +496,7 @@ components/models-config/     模型配置弹窗的子组件
 | 路由 | 方法 | 用途 |
 |---|---|---|
 | `app/api/skills/route.ts` | GET | 列出 / 启用 / 禁用技能 |
-| `app/api/skills/search/route.ts` | GET | 搜索远程技能 |
+| `app/api/skills/search/route.ts` | POST | 搜索远程技能 |
 | `app/api/skills/install/route.ts` | POST | 安装技能 |
 
 ### 认证（5 条）
@@ -508,7 +507,7 @@ components/models-config/     模型配置弹窗的子组件
 | `app/api/auth/all-providers/route.ts` | GET | 列出所有支持的提供商 |
 | `app/api/auth/login/[provider]/route.ts` | GET / POST | OAuth 登录 |
 | `app/api/auth/logout/[provider]/route.ts` | POST | 登出 |
-| `app/api/auth/api-key/[provider]/route.ts` | POST | API Key 验证 |
+| `app/api/auth/api-key/[provider]/route.ts` | GET / POST / DELETE | API Key 状态查询 / 保存 / 删除 |
 
 ### 其他（2 条）
 
@@ -569,18 +568,23 @@ Next.js 热重载（HMR）会丢弃模块级变量。若把 `Map<sessionId, Agen
 
 **解决**：存到 `globalThis.__piSessions`、`globalThis.__piSessionPathCache`、`globalThis.__piStartLocks`。
 
-### 14.2 Fork 后必须立即销毁旧 Wrapper
+### 14.2 Fork 的执行顺序：预注册 → 销毁旧 wrapper
 
-**问题**：`AgentSession.fork()` 会**原地修改 wrapper 内部状态** —— fork 后 `inner.sessionId` 变为新会话 id。若旧 wrapper 仍留在注册表中，下次请求原始 session id 时会拿到**已 fork 的错误状态**，且后续 fork 会生成损坏的 `parentSession` 链。
+**背景**：Fork 在**文件层**完成，而非修改 wrapper 内部状态。`lib/rpc-manager.ts` 的 `case "fork"` 通过 `SessionManager.createBranchedSession(entry.parentId)`（或首条消息前的 `SessionManager.create()`）创建一个全新的 `.jsonl` 文件，然后用 `startRpcSession()` 为新文件构造一个**全新的 `AgentSession` 实例**（不是复用旧的）。
 
-**解决**：`send("fork")` 的执行顺序：
+**执行顺序**（见 `lib/rpc-manager.ts` `send()` 的 `case "fork"` 分支）：
 
-1. 先 `startRpcSession(newSessionId, newSessionFile, cwd)` **预注册新 wrapper**（此时旧 wrapper 仍存活）
-2. 调用 `inner.fork()`
-3. 调用 `this.destroy()` 销毁旧 wrapper
-4. 返回 `newSessionId`
+1. 读取 `entryId`，用 `SessionManager` 在磁盘上创建新 session 文件：
+   - `entry.parentId === null`（首条消息前）：`SessionManager.create(cwd, sessionDir)` + `newSession({ parentSession })`
+   - 否则：`SessionManager.open(currentSessionFile).createBranchedSession(entry.parentId)` 拷贝到 fork 点之前的路径
+2. `cacheSessionPath(newSessionId, newSessionFile)` 缓存路径
+3. **预注册**：`await startRpcSession(newSessionId, newSessionFile, newCwd)` —— 此时旧 wrapper 仍存活，新 wrapper 已进注册表
+4. `this.destroy()` 销毁旧 wrapper（释放订阅、idle timer、内存；旧 wrapper 不会被自动复用，因为新请求会命中新 wrapper）
+5. 返回 `{ cancelled: false, newSessionId }`
 
 **契约**：`send()` 返回时，`newSessionId` 已在注册表中。若 `startRpcSession` 抛错，旧 wrapper **不销毁**（保持可用），孤儿新 `.jsonl` 文件可接受（下次 fork 会覆盖）。
+
+**为什么要立即销毁旧 wrapper**：旧 wrapper 持有的 `AgentSession` 仍订阅着原 session 的事件、跑着 10 分钟 idle timer。fork 是用户"另起炉灶"的信号，旧 wrapper 不再会被请求到（后续请求走新 id），立即销毁可及时释放资源，而非等 idle 超时。
 
 ### 14.3 ToolCall 字段归一化
 

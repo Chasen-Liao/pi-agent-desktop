@@ -84,9 +84,9 @@ Next.js HMR 会丢弃模块级变量，因此以下三个必须挂在 `globalThi
 
 ### Fork must pre-register the new wrapper before destroying the old one
 
-`AgentSession.fork()` **mutates the wrapper's inner state in-place** — after fork, `inner.sessionId` is the *new* session's id. If the wrapper stays alive in the registry under the old id, the next request gets the already-forked state and subsequent forks produce a corrupt `parentSession` chain.
+Fork happens at the **file layer** via `SessionManager.createBranchedSession(entry.parentId)` (or `SessionManager.create()` before the first message) — it creates a brand-new `.jsonl` file. Then `startRpcSession(newSessionId, newSessionFile, cwd)` builds a **fresh `AgentSession` instance** for that file (the old wrapper's inner state is NOT mutated).
 
-**Fix**: `send("fork")` first calls `startRpcSession(newSessionId, newSessionFile, cwd)` to **pre-register the new wrapper while the old one is still alive**, then calls `this.destroy()`, then returns `newSessionId`. Contract: by the time `send()` returns, `newSessionId` is already in the registry. If `startRpcSession` throws, the old wrapper is **not** destroyed — it stays usable under the old id (the orphaned new `.jsonl` file on disk is acceptable; the next fork will overwrite it). The next request for the original session id reloads a clean AgentSession from the original file.
+**Order**: `send("fork")` first creates the new session file, then `await startRpcSession(newSessionId, ...)` to **pre-register the new wrapper while the old one is still alive**, then calls `this.destroy()` (releases the old wrapper's subscriptions / idle timer immediately rather than waiting for the 10-min timeout), then returns `newSessionId`. Contract: by the time `send()` returns, `newSessionId` is already in the registry. If `startRpcSession` throws, the old wrapper is **not** destroyed — it stays usable under the old id (the orphaned new `.jsonl` file on disk is acceptable; the next fork will overwrite it).
 
 ### Two kinds of branching — don't confuse them
 

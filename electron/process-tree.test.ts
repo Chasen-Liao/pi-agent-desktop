@@ -47,10 +47,34 @@ setInterval(() => {}, 1000);`,
     { stdio: ["ignore", "pipe", "ignore"] }
   );
 
-  const [chunk] = (await once(parent.stdout!, "data")) as [Buffer];
-  const childPid = Number(chunk.toString().trim());
+  // Read stdout until we see a line that parses as a positive integer. Under
+  // parallel test load the first chunk can be empty or split mid-line, and a
+  // delayed grandchild spawn can momentarily emit `undefined`. Drain lines
+  // until the real pid shows up (or the parent exits / we time out).
+  let childPid = NaN;
+  const pidDeadline = new Promise((resolve) => setTimeout(resolve, 5000));
+  const readPid = (async () => {
+    let buf = "";
+    for await (const chunk of parent.stdout!) {
+      buf += chunk.toString();
+      const lines = buf.split(/\r?\n/);
+      for (const line of lines) {
+        const n = Number(line.trim());
+        if (Number.isInteger(n) && n > 0) {
+          return n;
+        }
+      }
+    }
+    return NaN;
+  })();
+
+  childPid = (await Promise.race([readPid, pidDeadline.then(() => NaN)])) as number;
+
   assert.ok(parent.pid);
-  assert.ok(childPid);
+  assert.ok(
+    Number.isInteger(childPid) && childPid > 0,
+    `failed to read grandchild pid from parent stdout (buf parse yielded ${childPid})`
+  );
 
   killProcessTree(parent);
   await once(parent, "exit");
