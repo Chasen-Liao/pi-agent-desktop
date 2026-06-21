@@ -19,7 +19,7 @@
   ---
 </div>
 
-> **上游项目**：本项目衍生自 [pi-web](https://github.com/Chasen-Liao/pi-web)，侧重于桌面端体验的优化与功能增强。
+> **上游项目**：本项目衍生自 [pi-web](https://github.com/agegr/pi-web)，侧重于桌面端体验的优化与功能增强。
 
 ## 特性
 
@@ -57,7 +57,7 @@ npm run dev:electron
 npx tsc --noEmit
 
 # 代码检查
-npx next lint
+npm run lint
 
 # 构建安装包
 npm run dist
@@ -68,13 +68,17 @@ npm run dist
 ```
 app/
   api/
-    sessions/      # 读写会话文件
+    sessions/      # 读取会话文件
     agent/         # 发送命令、SSE 事件流
     files/         # 文件内容读取
     models/        # 可用模型列表与默认模型
     models-config/ # 读写 models.json
+    skills/        # 技能搜索与安装
+    auth/          # 登录与 API Key 管理
+    health/        # 健康检查
 components/        # UI 组件
 electron/          # Electron 主进程
+hooks/             # React Hooks（会话管理、面板布局等）
 lib/
   session-reader.ts  # 解析 .jsonl 会话文件
   rpc-manager.ts     # 管理 AgentSession 生命周期

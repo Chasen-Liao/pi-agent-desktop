@@ -3,9 +3,9 @@
 > 本文档是项目的**权威架构参考**，由 CodeGraph 静态分析 + 源码核对生成。
 > 若与 `AGENTS.md` / `CLAUDE.md` 中的简要描述冲突，以本文档为准。
 >
-> - **项目**：`@chasen-liao/pi-agent-desktop` v0.7.11
-> - **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.78.0 / `@earendil-works/pi-ai` ^0.78.0
-> - **更新日期**：2026-06-21
+> - **项目**：`@chasen-liao/pi-agent-desktop` v0.7.13
+> - **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.79.8 / `@earendil-works/pi-ai` ^0.79.8
+> - **更新日期**：2026-06-22
 
 ---
 
@@ -141,7 +141,7 @@ flowchart TD
 
 ```text
 pi-agent-desktop/
-├── package.json                  @chasen-liao/pi-agent-desktop v0.7.11
+├── package.json                  @chasen-liao/pi-agent-desktop v0.7.13
 ├── next.config.ts                output:"standalone" + server external packages
 ├── tailwind.config.ts            Tailwind 4 配置
 ├── tsconfig.json                 strict + bundler resolution
@@ -415,6 +415,7 @@ components/chat-input/
 
 components/session-sidebar/
 ├── SidebarHeader.tsx         侧边栏头部
+├── PiAgentTitle.tsx          Pi Agent 标题（SidebarHeader 内使用）
 ├── SessionTree.tsx           会话树渲染（含内部 SessionTreeItem）
 └── helpers.ts                树构建辅助
 
@@ -665,10 +666,11 @@ serverExternalPackages: [
 | UI 库 | React | ^19.2.4 |
 | 样式 | Tailwind CSS + CSS 变量 | ^4.2.2 |
 | 类型 | TypeScript（strict） | ^5 |
-| Markdown | react-markdown + remark-gfm | ^10.1.0 |
+| Markdown | react-markdown | ^10.1.0 |
+| Markdown | remark-gfm | ^4.0.1 |
 | 代码高亮 | react-syntax-highlighter（Prism） | ^16.1.1 |
-| AI SDK | @earendil-works/pi-coding-agent | ^0.78.0 |
-| AI SDK | @earendil-works/pi-ai | ^0.78.0 |
+| AI SDK | @earendil-works/pi-coding-agent | ^0.79.8 |
+| AI SDK | @earendil-works/pi-ai | ^0.79.8 |
 | 品牌图标 | @lobehub/icons | ^5.6.0 |
 | 桌面壳 | Electron | ^36.9.5 |
 | 打包 | electron-builder（NSIS） | ^26.8.1 |
