@@ -284,6 +284,37 @@ function createWindow() {
   });
 
   installNavigationGuards(mainWindow);
+
+  // Inject a Content-Security-Policy header into every response loaded in the
+  // main window's session. Next.js does not emit CSP on its own, so without
+  // this a single XSS (e.g. from a compromised npm package or local route)
+  // could drive the preload-exposed electronAPI (quitAndInstall, select
+  // directory, ...). The port is re-read on every callback so restarts / port
+  // switches pick up the new value automatically. The policy mirrors the
+  // CSP_HEADER constant in middleware.ts (with connect-src tightened to the
+  // specific active port instead of a wildcard). startup.html ships its own
+  // stricter CSP via a meta tag and is unaffected (multiple CSPs are merged
+  // most-strict; its resources pass both). Future: share via lib/csp.ts.
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const port = activePort ?? 0;
+    const csp = [
+      "default-src 'self'",
+      `connect-src 'self' http://127.0.0.1:${port} ws://127.0.0.1:${port}`,
+      "img-src 'self' data: blob:",
+      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "font-src 'self' data:",
+      "frame-src 'self'",
+      "media-src 'self' data:",
+    ].join("; ");
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [csp],
+      },
+    });
+  });
+
   showStartupState("starting");
 
   mainWindow.once("ready-to-show", () => {
