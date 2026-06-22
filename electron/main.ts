@@ -473,19 +473,26 @@ app.whenReady().then(async () => {
 
           autoUpdater.on("update-available", (info: UpdateInfo) => {
             logInfo("autoUpdater update-available", info);
-            mainWindow?.webContents.send("update-available", { version: info.version });
+            // Notify renderer (if window is alive) for in-app banner
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send("update-available", { version: info.version });
+            }
             // 弹 dialog 问用户是否下载（因为 autoDownload=false）
-            if (!mainWindow || mainWindow.isDestroyed()) return;
-            dialog
-              .showMessageBox(mainWindow, {
-                type: "info",
-                title: "Update Available",
-                message: `A new version (${info.version}) is available.`,
-                detail: "Download and install now? The app will restart after download completes.",
-                buttons: ["Download", "Later"],
-                defaultId: 0,
-                cancelId: 1,
-              })
+            // Fallback dialog: works with or without a parent window（与 update-downloaded 一致）
+            const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+            const options = {
+              type: "info" as const,
+              title: "Update Available",
+              message: `A new version (${info.version}) is available.`,
+              detail: "Download and install now? The app will restart after download completes.",
+              buttons: ["Download", "Later"],
+              defaultId: 0,
+              cancelId: 1,
+            };
+            const dialogPromise = parent
+              ? dialog.showMessageBox(parent, options)
+              : dialog.showMessageBox(options);
+            dialogPromise
               .then(({ response }) => {
                 logInfo("Update download dialog response", { response });
                 if (response === 0) {
