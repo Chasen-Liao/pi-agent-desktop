@@ -152,7 +152,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       case "message_start":
       case "message_update": {
-        const msg = event.message as Partial<AgentMessage> | undefined;
+        // Union narrows to these two variants; `message` is Partial<AgentMessage>.
+        // `msg as AgentMessage` below is a Partial→Full conversion required by
+        // normalizeToolCalls's signature — NOT a union-narrowing cast.
+        const { message: msg } = event;
         if (msg) {
           dispatch({ type: "update", message: normalizeToolCalls(msg as AgentMessage) });
         }
@@ -160,7 +163,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       }
       case "message_end": {
-        const completed = event.message as AgentMessage | undefined;
+        const { message: completed } = event;
         if (completed) {
           setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
         }
@@ -169,18 +172,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       }
       case "tool_execution_start": {
-        const id = event.toolCallId as string;
-        const name = event.toolName as string;
+        const { toolCallId: id, toolName: name } = event;
         setAgentPhase((prev) => addRunningTool(prev, id, name));
         break;
       }
       case "tool_execution_end": {
-        const id = event.toolCallId as string;
+        const { toolCallId: id } = event;
         setAgentPhase((prev) => removeRunningTool(prev, id));
         break;
       }
       case "auto_retry_start":
-        setRetryInfo({ attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
+        setRetryInfo({ attempt: event.attempt, maxAttempts: event.maxAttempts, errorMessage: event.errorMessage });
         break;
       case "auto_retry_end":
         setRetryInfo(null);
@@ -194,7 +196,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "compaction_end":
         setIsCompacting(false);
         if (event.errorMessage) {
-          setCompactError(event.errorMessage as string);
+          setCompactError(event.errorMessage);
         } else if (!event.aborted) {
           if (sessionIdRef.current) loadSession(sessionIdRef.current);
         }

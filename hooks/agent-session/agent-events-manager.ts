@@ -1,7 +1,29 @@
-export interface AgentEvent {
-  type: string;
-  [key: string]: unknown;
-}
+import type { AgentMessage } from "@/lib/types";
+
+/**
+ * Events pushed from server to client via SSE. Each variant is discriminated
+ * by `type`, so `switch (event.type)` narrows automatically — no `as` casts
+ * needed at call sites.
+ *
+ * Note: the server-side `AgentEvent` in `lib/rpc-manager.ts` is intentionally
+ * a separate, broader type — the server only forwards pi's events without
+ * narrowing, and the two runtimes should not share a type.
+ */
+export type AgentEvent =
+  | { type: "connected"; sessionId: string }
+  | { type: "agent_start" }
+  | { type: "agent_end" }
+  | { type: "message_start"; message: Partial<AgentMessage> }
+  | { type: "message_update"; message: Partial<AgentMessage> }
+  | { type: "message_end"; message: AgentMessage }
+  | { type: "tool_execution_start"; toolCallId: string; toolName: string }
+  | { type: "tool_execution_end"; toolCallId: string }
+  | { type: "auto_retry_start"; attempt: number; maxAttempts: number; errorMessage?: string }
+  | { type: "auto_retry_end" }
+  | { type: "auto_compaction_start" }
+  | { type: "compaction_start" }
+  | { type: "auto_compaction_end"; errorMessage?: string; aborted?: boolean }
+  | { type: "compaction_end"; errorMessage?: string; aborted?: boolean };
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "failed";
 
