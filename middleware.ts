@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 // Allowed origins: localhost / 127.0.0.1 on http or https, with optional port.
 // LAN IPs (e.g. 192.168.x.x) are intentionally NOT allowed — they cannot reach
 // the dev server in browser mode and only broaden the DNS-rebinding surface.
-const ALLOWED_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+// The `i` flag makes the scheme/host match case-insensitive (Origin headers
+// are technically case-insensitive per RFC 6454).
+const ALLOWED_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
 
 /**
  * Returns true if the given Origin header value points at localhost or the
@@ -37,7 +39,10 @@ const CSP_HEADER = [
  * Exported for unit testing.
  */
 export function shouldApplyOriginCheck(pathname: string, method: string): boolean {
-  return pathname.startsWith("/api") && method !== "GET";
+  // Defensive: normalize to upper-case so a hypothetical lower-case method
+  // (RFC 7231 & Next.js both uppercase it, but we don't depend on that) is
+  // still treated as the write operation it is.
+  return pathname.startsWith("/api") && method.toUpperCase() !== "GET";
 }
 
 /**

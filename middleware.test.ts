@@ -74,6 +74,15 @@ test("isAllowedOrigin: missing scheme / malformed values are rejected", () => {
   assert.equal(isAllowedOrigin("file:///etc/passwd"), false);
 });
 
+test("isAllowedOrigin: scheme/host are matched case-insensitively", () => {
+  // RFC 6454 Origin is scheme://host:port where scheme & host are
+  // case-insensitive. The regex's `i` flag must cover uppercase variants
+  // so a hypothetical uppercase Origin is still accepted.
+  assert.equal(isAllowedOrigin("HTTP://localhost:30141"), true);
+  assert.equal(isAllowedOrigin("https://LOCALHOST:30141"), true);
+  assert.equal(isAllowedOrigin("Http://127.0.0.1"), true);
+});
+
 // ---------------------------------------------------------------------------
 // shouldApplyOriginCheck — request routing policy
 // ---------------------------------------------------------------------------
@@ -108,4 +117,11 @@ test("shouldApplyOriginCheck: non-API POST is NOT checked (handled by CSP instea
   // not by the Origin allowlist.
   assert.equal(shouldApplyOriginCheck("/some-page", "POST"), false);
   assert.equal(shouldApplyOriginCheck("/some-page", "GET"), false);
+});
+
+test("shouldApplyOriginCheck: lower-case method is normalized before the GET check", () => {
+  // Defensive: even though RFC 7231 & Next.js both uppercase methods, a
+  // lower-case method should still be recognized as a write operation.
+  assert.equal(shouldApplyOriginCheck("/api/x", "post"), true);
+  assert.equal(shouldApplyOriginCheck("/api/x", "get"), false);
 });
