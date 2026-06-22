@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { listAllSessions } from "@/lib/session-reader";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { validateWritablePath } from "@/lib/path-policy";
 
 const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -393,6 +394,15 @@ export async function PUT(
     const allowedRoots = await getAllowedRoots();
     if (!isPathAllowed(filePath, allowedRoots)) {
       return NextResponse.json({ error: "Access denied" }, { status: 403, headers: { "x-request-id": requestId } });
+    }
+
+    // Reject writes to version-control metadata, node_modules internals, and
+    // .env files even when the path is inside an allowed root. Prevents a
+    // compromised agent from planting a postinstall hook or overwriting
+    // .git/config to establish persistence. (GET intentionally not restricted.)
+    const writeError = validateWritablePath(filePath);
+    if (writeError) {
+      return NextResponse.json({ error: writeError }, { status: 403, headers: { "x-request-id": requestId } });
     }
 
     let stat: fs.Stats;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { existsSync } from "fs";
 import { startRpcSession } from "@/lib/rpc-manager";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { validateAgentCwd } from "@/lib/path-policy";
 
 // POST /api/agent/new  body: { cwd: string; type: string; message: string; ... }
 // Spawns a brand-new pi session and immediately sends the first command.
@@ -17,6 +18,15 @@ export async function POST(req: Request) {
     }
     if (!existsSync(cwd)) {
       return NextResponse.json({ error: `Directory does not exist: ${cwd}` }, { status: 400, headers: { "x-request-id": requestId } });
+    }
+
+    // Reject dangerous cwd values (filesystem root, user home, system dirs)
+    // before granting the agent file access via the allowed-roots cache.
+    // Without this, a single POST with cwd="C:\\" or "/" would let subsequent
+    // /api/files requests read/write anywhere on disk.
+    const cwdError = validateAgentCwd(cwd);
+    if (cwdError) {
+      return NextResponse.json({ error: cwdError }, { status: 400, headers: { "x-request-id": requestId } });
     }
 
     // Use a one-time key so startRpcSession's lock doesn't conflict with real session ids
