@@ -1,5 +1,6 @@
+import { unlink } from "fs/promises";
 import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
-import { cacheSessionPath } from "./session-reader.ts";
+import { cacheSessionPath, invalidateSessionPathCache } from "./session-reader.ts";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 
 // ============================================================================
@@ -156,10 +157,20 @@ export class AgentSessionWrapper {
 
         // Pre-register the new wrapper BEFORE destroying the old.
         // Contract: by the time send() returns, newSessionId is in the registry.
-        // If startRpcSession throws, do NOT destroy — old wrapper stays usable,
-        // new file remains on disk (acceptable; next fork overwrites).
+        // If startRpcSession throws, do NOT destroy — old wrapper stays usable under the old id.
+        // The orphaned new .jsonl file is cleaned up in the catch below (its name is a unique
+        // <timestamp>_<uuid>.jsonl, so it would never be overwritten by future forks).
         const newCwd = sessionManager.getHeader()?.cwd ?? process.cwd();
-        await startRpcSession(newSessionId, newSessionFile, newCwd);
+        try {
+          await startRpcSession(newSessionId, newSessionFile, newCwd);
+        } catch (err) {
+          // startRpcSession failed: clean up the orphan .jsonl file (it uses a unique
+          // <timestamp>_<uuid>.jsonl name, so it would never be overwritten by future forks).
+          // The cached path is also invalidated so future lookups don't find a dead entry.
+          invalidateSessionPathCache(newSessionId);
+          await unlink(newSessionFile).catch(() => { /* best-effort: file may not exist */ });
+          throw err;
+        }
 
         this.destroy();
         return { cancelled: false, newSessionId };
