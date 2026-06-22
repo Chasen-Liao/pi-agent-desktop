@@ -170,7 +170,7 @@ export async function DELETE(
     }
 
     // 4. Destroy any active RPC wrapper for this session
-    getRpcSession(id)?.destroy();
+    getRpcSession(id)?.destroy().catch((err) => console.error("Error destroying session wrapper:", err));
 
     // 5. Unlink parent (under lock, swallow race-condition unlink failure)
     await withFileLock(filePath, async () => {
