@@ -24,6 +24,9 @@ function makeStubInner(overrides: {
   sessionManager?: unknown;
   model?: unknown;
   agent?: unknown;
+  prompt?: (msg: string, opts?: unknown) => Promise<unknown>;
+  steer?: (msg: string, imgs?: unknown) => Promise<unknown>;
+  followUp?: (msg: string, imgs?: unknown) => Promise<unknown>;
 } = {}) {
   return {
     sessionId: "stub",
@@ -37,6 +40,9 @@ function makeStubInner(overrides: {
     agent: overrides.agent ?? { state: { systemPrompt: "", thinkingLevel: "off" } },
     sessionManager: overrides.sessionManager ?? null,
     modelRegistry: null,
+    prompt: overrides.prompt ?? (() => Promise.resolve()),
+    steer: overrides.steer ?? (() => Promise.resolve()),
+    followUp: overrides.followUp ?? (() => Promise.resolve()),
     subscribe: overrides.subscribe ?? ((cb: (event: unknown) => void) => { void cb; return () => {}; }),
   } as never;
 }
@@ -456,4 +462,93 @@ test("applyDeepSeekXhighWorkaround: no-op when model is null (default stub)", ()
   const w = new AgentSessionWrapper(inner);
 
   assert.equal(callDeepSeekWorkaround(w, "xhigh"), false);
+});
+
+// ============================================================================
+// Task D5: agent_error emission on prompt/steer/followUp failures
+// Pi-side failures used to only hit console.error (prompt) or only surface
+// via the HTTP response (steer/follow_up), leaving the client UI hanging
+// in agentRunning=true because no agent_end would ever arrive. These cases
+// now also emit an `agent_error` SSE event so the client can reset state.
+// ============================================================================
+
+test("prompt failure emits agent_error to all listeners", async () => {
+  const events: unknown[] = [];
+  const inner = makeStubInner({
+    prompt: () => Promise.reject(new Error("prompt boom")),
+  });
+  const w = new AgentSessionWrapper(inner);
+  w.onEvent((e) => { events.push(e); });
+  w.start();
+
+  // prompt is fire-and-forget; send() returns before the rejection settles.
+  await w.send({ type: "prompt", message: "hi" });
+  await flushMicrotasks();
+
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0], { type: "agent_error", errorMessage: "prompt boom" });
+});
+
+test("steer failure emits agent_error and rethrows", async () => {
+  const events: unknown[] = [];
+  const inner = makeStubInner({
+    steer: () => Promise.reject(new Error("steer boom")),
+  });
+  const w = new AgentSessionWrapper(inner);
+  w.onEvent((e) => { events.push(e); });
+  w.start();
+
+  await assert.rejects(w.send({ type: "steer", message: "hi" }), /steer boom/);
+
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0], { type: "agent_error", errorMessage: "steer boom" });
+});
+
+test("follow_up failure emits agent_error and rethrows", async () => {
+  const events: unknown[] = [];
+  const inner = makeStubInner({
+    followUp: () => Promise.reject(new Error("followup boom")),
+  });
+  const w = new AgentSessionWrapper(inner);
+  w.onEvent((e) => { events.push(e); });
+  w.start();
+
+  await assert.rejects(w.send({ type: "follow_up", message: "hi" }), /followup boom/);
+
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0], { type: "agent_error", errorMessage: "followup boom" });
+});
+
+test("agent_error reaches every listener even if an earlier listener throws", async () => {
+  const events: unknown[] = [];
+  const inner = makeStubInner({
+    prompt: () => Promise.reject(new Error("boom")),
+  });
+  const w = new AgentSessionWrapper(inner);
+  // First listener throws — must not prevent the second from receiving the event.
+  w.onEvent(() => { throw new Error("listener broken"); });
+  w.onEvent((e) => { events.push(e); });
+  w.start();
+
+  await w.send({ type: "prompt", message: "hi" });
+  await flushMicrotasks();
+
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0], { type: "agent_error", errorMessage: "boom" });
+});
+
+test("non-Error prompt rejection is stringified in agent_error", async () => {
+  const events: unknown[] = [];
+  const inner = makeStubInner({
+    prompt: () => Promise.reject("string error"), // not an Error instance
+  });
+  const w = new AgentSessionWrapper(inner);
+  w.onEvent((e) => { events.push(e); });
+  w.start();
+
+  await w.send({ type: "prompt", message: "hi" });
+  await flushMicrotasks();
+
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0], { type: "agent_error", errorMessage: "string error" });
 });

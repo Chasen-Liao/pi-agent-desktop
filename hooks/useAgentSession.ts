@@ -150,6 +150,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         onAgentEnd?.();
         break;
+      case "agent_error": {
+        // Server-side pi failure surfaced via SSE. Reset agent state so the UI
+        // doesn't hang waiting for an agent_end that will never come.
+        setAgentRunning(false);
+        setAgentPhase(null);
+        console.error("Agent error from server:", event.errorMessage);
+        dispatch({ type: "end" });
+        break;
+      }
       case "message_start":
       case "message_update": {
         // Union narrows to these two variants; `message` is Partial<AgentMessage>.

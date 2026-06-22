@@ -78,6 +78,28 @@ export class AgentSessionWrapper {
     };
   }
 
+  /**
+   * Emit an agent_error event to all listeners (SSE subscribers).
+   * Used to surface pi-side prompt/steer/followUp failures to the client,
+   * so the UI can reset agentRunning/agentPhase instead of hanging waiting
+   * for an agent_end that will never come.
+   *
+   * Each listener is invoked inside try/catch so one throwing listener
+   * does not prevent the others from receiving the event.
+   *
+   * NOTE: the message is currently passed through as-is. A sanitization
+   * step (stripping paths / credentials) can be added later.
+   */
+  private emitAgentError(message: string): void {
+    for (const l of this.listeners) {
+      try {
+        l({ type: "agent_error", errorMessage: message });
+      } catch (err) {
+        console.error("Error in agent_error listener:", err);
+      }
+    }
+  }
+
   onDestroy(cb: () => void): void {
     this.onDestroyCallbacks.push(cb);
   }
@@ -142,7 +164,11 @@ export class AgentSessionWrapper {
       case "prompt": {
         // Fire and forget — events come via subscribe
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined).catch((err) => { console.error("pi prompt failed:", err); });
+        this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined)
+          .catch((err) => {
+            console.error("pi prompt failed:", err);
+            this.emitAgentError(err instanceof Error ? err.message : String(err));
+          });
         return null;
       }
 
@@ -266,13 +292,25 @@ export class AgentSessionWrapper {
 
       case "steer": {
         const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
+        try {
+          await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
+        } catch (err) {
+          console.error("pi steer failed:", err);
+          this.emitAgentError(err instanceof Error ? err.message : String(err));
+          throw err;
+        }
         return null;
       }
 
       case "follow_up": {
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
+        try {
+          await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
+        } catch (err) {
+          console.error("pi followUp failed:", err);
+          this.emitAgentError(err instanceof Error ? err.message : String(err));
+          throw err;
+        }
         return null;
       }
 

@@ -13,6 +13,7 @@ export type AgentEvent =
   | { type: "connected"; sessionId: string }
   | { type: "agent_start" }
   | { type: "agent_end" }
+  | { type: "agent_error"; errorMessage: string }
   | { type: "message_start"; message: Partial<AgentMessage> }
   | { type: "message_update"; message: Partial<AgentMessage> }
   | { type: "message_end"; message: AgentMessage }
