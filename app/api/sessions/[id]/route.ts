@@ -66,7 +66,9 @@ export async function GET(
     if (url.searchParams.has("includeState")) {
       const rpc = getRpcSession(id);
       if (rpc?.isAlive()) {
-        const state = await rpc.send({ type: "get_state" });
+        // peekState() is read-only and does NOT reset the idle timer —
+        // polling this endpoint must not keep idle sessions alive forever.
+        const state = rpc.peekState();
         agentState = { running: true, state };
       } else {
         agentState = { running: false };

@@ -79,6 +79,48 @@ export class AgentSessionWrapper {
     this.resetIdleTimer();
   }
 
+  /**
+   * Build the current state snapshot. Shared by `send({ type: "get_state" })`
+   * (which resets the idle timer, since the caller is actively driving the
+   * session) and `peekState()` (which does not, since the caller is only
+   * observing).
+   */
+  private buildStateSnapshot(): Record<string, unknown> {
+    const model = this.inner.model;
+    const contextUsage = this.inner.getContextUsage();
+    return {
+      sessionId: this.inner.sessionId,
+      sessionFile: this.inner.sessionFile ?? "",
+      isStreaming: this.inner.isStreaming,
+      isCompacting: this.inner.isCompacting,
+      autoCompactionEnabled: this.inner.autoCompactionEnabled,
+      autoRetryEnabled: this.inner.autoRetryEnabled,
+      model: model ? { id: model.id, provider: model.provider } : undefined,
+      messageCount: 0,
+      pendingMessageCount: 0,
+      contextUsage: contextUsage
+        ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
+        : null,
+      systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
+      thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
+    };
+  }
+
+  /**
+   * Read-only state snapshot. Returns the same payload as
+   * `send({ type: "get_state" })` but does NOT reset the idle timer.
+   *
+   * Use this from observation endpoints (e.g.
+   * `GET /api/sessions/[id]?includeState=1`) so that polling clients —
+   * sidebar refreshes, stats panels — don't accidentally keep idle sessions
+   * alive forever and prevent the 10-minute idle reclamation. Callers that
+   * are intentionally driving the session should still use
+   * `send({ type: "get_state" })`.
+   */
+  peekState(): Record<string, unknown> {
+    return this.buildStateSnapshot();
+  }
+
   async send(command: Record<string, unknown>): Promise<unknown> {
     this.resetIdleTimer();
     const type = command.type as string;
@@ -96,24 +138,7 @@ export class AgentSessionWrapper {
         return null;
 
       case "get_state": {
-        const model = this.inner.model;
-        const contextUsage = this.inner.getContextUsage();
-        return {
-          sessionId: this.inner.sessionId,
-          sessionFile: this.inner.sessionFile ?? "",
-          isStreaming: this.inner.isStreaming,
-          isCompacting: this.inner.isCompacting,
-          autoCompactionEnabled: this.inner.autoCompactionEnabled,
-          autoRetryEnabled: this.inner.autoRetryEnabled,
-          model: model ? { id: model.id, provider: model.provider } : undefined,
-          messageCount: 0,
-          pendingMessageCount: 0,
-          contextUsage: contextUsage
-            ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
-            : null,
-          systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
-          thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
-        };
+        return this.buildStateSnapshot();
       }
 
       case "set_model": {

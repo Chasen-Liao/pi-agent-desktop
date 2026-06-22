@@ -126,6 +126,80 @@ test("keepAlive is a no-op on a destroyed wrapper", () => {
   }
 });
 
+test("peekState does NOT reset the idle timer (regression for Task B2)", () => {
+  // Polling GET /api/sessions/[id]?includeState=1 calls peekState(). If it
+  // reset the idle timer, any polling client would keep idle sessions alive
+  // forever. We assert the opposite: a wrapper that has been idle for 9 min
+  // is still destroyed at the 10-min mark even if peekState() was called
+  // during that window.
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const w = new AgentSessionWrapper(makeStubInner());
+    let destroyed = false;
+    w.onDestroy(() => { destroyed = true; });
+    w.start();
+
+    mock.timers.tick(9 * 60 * 1000);
+    assert.equal(destroyed, false, "should still be alive at 9 min");
+
+    // A polling client observes state — this must NOT extend the lifetime.
+    const snapshot = w.peekState();
+    assert.equal(snapshot.sessionId, "stub");
+    assert.equal(snapshot.isStreaming, false);
+
+    mock.timers.tick(30 * 1000);
+    assert.equal(destroyed, false, "should still be alive at 9:30 (only 30s since peek)");
+
+    mock.timers.tick(30 * 1000);
+    assert.equal(destroyed, true, "peekState must not reset the 10-min idle timer");
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("send({type:'get_state'}) DOES reset the idle timer (explicit control)", async () => {
+  // Callers that intentionally drive the session use send(), which keeps the
+  // wrapper alive. This guards the contract documented on peekState().
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const w = new AgentSessionWrapper(makeStubInner());
+    let destroyed = false;
+    w.onDestroy(() => { destroyed = true; });
+    w.start();
+
+    mock.timers.tick(9 * 60 * 1000);
+    assert.equal(destroyed, false);
+
+    const state = await w.send({ type: "get_state" });
+    assert.equal((state as { sessionId: string }).sessionId, "stub");
+
+    // 9 more minutes since the send() call — would cross 10 min if not reset.
+    mock.timers.tick(9 * 60 * 1000);
+    assert.equal(destroyed, false, "send({type:'get_state'}) should reset the idle timer");
+
+    mock.timers.tick(60 * 1000);
+    assert.equal(destroyed, true, "should be destroyed 10 min after last send");
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("peekState and send get_state return the same payload shape", async () => {
+  const w = new AgentSessionWrapper(makeStubInner());
+  const peeked = w.peekState();
+  const sent = await w.send({ type: "get_state" });
+  assert.deepEqual(peeked, sent, "peekState must mirror get_state payload");
+});
+
+// Defense-in-depth: if someone accidentally reintroduces resetIdleTimer into
+// peekState (e.g. by copy-pasting send), this source-text assertion catches
+// it at test time without needing to construct a live inner.
+test("peekState source does not reference resetIdleTimer", () => {
+  const peekFnMatch = source.match(/peekState\(\)[^{]*\{[\s\S]*?\n  \}/);
+  assert.ok(peekFnMatch, "peekState method should exist in source");
+  assert.doesNotMatch(peekFnMatch[0], /resetIdleTimer/);
+});
+
 test("fork returns {cancelled: true} for non-persisted session", async () => {
   const inner = makeStubInner({
     sessionManager: { isPersisted: () => false },
