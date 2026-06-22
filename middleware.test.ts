@@ -31,7 +31,7 @@ register(
   import.meta.url,
 );
 
-const { isAllowedOrigin } = await import("./middleware.ts");
+const { isAllowedOrigin, shouldApplyOriginCheck } = await import("./middleware.ts");
 
 // ---------------------------------------------------------------------------
 // isAllowedOrigin — loopback / localhost allowlist
@@ -72,4 +72,40 @@ test("isAllowedOrigin: missing scheme / malformed values are rejected", () => {
   assert.equal(isAllowedOrigin("localhost:30141"), false);
   assert.equal(isAllowedOrigin("//localhost:30141"), false);
   assert.equal(isAllowedOrigin("file:///etc/passwd"), false);
+});
+
+// ---------------------------------------------------------------------------
+// shouldApplyOriginCheck — request routing policy
+// ---------------------------------------------------------------------------
+// Decides which requests the middleware origin-checks. Only non-GET requests
+// to /api/* are checked — pages are GET-loaded and covered by CSP, while API
+// writes are the actual DNS-rebinding target.
+
+test("shouldApplyOriginCheck: POST to /api/agent/:id is checked", () => {
+  assert.equal(shouldApplyOriginCheck("/api/agent/abc-123", "POST"), true);
+});
+
+test("shouldApplyOriginCheck: GET to /api/health is NOT checked", () => {
+  assert.equal(shouldApplyOriginCheck("/api/health", "GET"), false);
+});
+
+test("shouldApplyOriginCheck: GET to / is NOT checked (page loads)", () => {
+  assert.equal(shouldApplyOriginCheck("/", "GET"), false);
+});
+
+test("shouldApplyOriginCheck: all non-GET methods on /api/* are checked", () => {
+  assert.equal(shouldApplyOriginCheck("/api/agent/x", "PUT"), true);
+  assert.equal(shouldApplyOriginCheck("/api/agent/x", "DELETE"), true);
+  assert.equal(shouldApplyOriginCheck("/api/agent/x", "PATCH"), true);
+});
+
+test("shouldApplyOriginCheck: GET to /api/agent/:id is NOT checked (read-only)", () => {
+  assert.equal(shouldApplyOriginCheck("/api/agent/abc-123", "GET"), false);
+});
+
+test("shouldApplyOriginCheck: non-API POST is NOT checked (handled by CSP instead)", () => {
+  // e.g. a page-level POST route outside /api — pages are protected by CSP,
+  // not by the Origin allowlist.
+  assert.equal(shouldApplyOriginCheck("/some-page", "POST"), false);
+  assert.equal(shouldApplyOriginCheck("/some-page", "GET"), false);
 });
