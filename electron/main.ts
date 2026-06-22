@@ -280,6 +280,10 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
+      // Electron 官方强烈推荐启用 sandbox：显著缩小渲染进程攻击面。
+      // preload 只用 contextBridge + ipcRenderer.{on,off,invoke,send}，
+      // 这些 API 在 sandbox 模式下都可用，不会破坏功能。
+      sandbox: true,
     },
   });
 
@@ -457,7 +461,9 @@ app.whenReady().then(async () => {
       setTimeout(async () => {
         try {
           const { autoUpdater } = await import("electron-updater");
-          autoUpdater.autoDownload = true;
+          // 不自动下载：让用户决定是否下载（避免流量敏感环境静默下载大文件，
+          // 也避免渲染进程 XSS 触发 quitAndInstall 路径）。
+          autoUpdater.autoDownload = false;
           logInfo("Checking for updates");
 
           // Forward update events to renderer
@@ -468,6 +474,35 @@ app.whenReady().then(async () => {
           autoUpdater.on("update-available", (info: UpdateInfo) => {
             logInfo("autoUpdater update-available", info);
             mainWindow?.webContents.send("update-available", { version: info.version });
+            // 弹 dialog 问用户是否下载（因为 autoDownload=false）
+            if (!mainWindow || mainWindow.isDestroyed()) return;
+            dialog
+              .showMessageBox(mainWindow, {
+                type: "info",
+                title: "Update Available",
+                message: `A new version (${info.version}) is available.`,
+                detail: "Download and install now? The app will restart after download completes.",
+                buttons: ["Download", "Later"],
+                defaultId: 0,
+                cancelId: 1,
+              })
+              .then(({ response }) => {
+                logInfo("Update download dialog response", { response });
+                if (response === 0) {
+                  autoUpdater.downloadUpdate().catch((err: unknown) => {
+                    logError(
+                      "Auto-update download failed",
+                      err instanceof Error ? err : new Error(String(err))
+                    );
+                  });
+                }
+              })
+              .catch((err: unknown) => {
+                logError(
+                  "Update dialog failed",
+                  err instanceof Error ? err : new Error(String(err))
+                );
+              });
           });
 
           autoUpdater.on("update-not-available", (info: UpdateInfo) => {
@@ -485,14 +520,20 @@ app.whenReady().then(async () => {
           autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
             logInfo("autoUpdater update-downloaded", info);
             mainWindow?.webContents.send("update-downloaded", { version: info.version });
-            dialog
-              .showMessageBox(mainWindow!, {
-                type: "info",
-                title: "更新可用",
-                message: `新版本 ${info.version} 已下载，重启以安装更新。`,
-                buttons: ["立即重启", "稍后"],
-                defaultId: 0,
-              })
+            // mainWindow 可能已被销毁（用户关闭到托盘后退出）；fallback 到无父窗口版本
+            // 让用户仍能看到提示，而非抛 "Cannot read properties of null"。
+            const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+            const options = {
+              type: "info" as const,
+              title: "更新可用",
+              message: `新版本 ${info.version} 已下载，重启以安装更新。`,
+              buttons: ["立即重启", "稍后"],
+              defaultId: 0,
+            };
+            const showPromise = parent
+              ? dialog.showMessageBox(parent, options)
+              : dialog.showMessageBox(options);
+            showPromise
               .then(({ response }) => {
                 logInfo("Update restart dialog response", { response });
                 if (response === 0) {
@@ -500,6 +541,12 @@ app.whenReady().then(async () => {
                   logInfo("Calling autoUpdater.quitAndInstall");
                   autoUpdater.quitAndInstall();
                 }
+              })
+              .catch((err: unknown) => {
+                logError(
+                  "Update restart dialog failed",
+                  err instanceof Error ? err : new Error(String(err))
+                );
               });
           });
 
