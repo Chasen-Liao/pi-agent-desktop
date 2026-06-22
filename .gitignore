@@ -53,3 +53,6 @@ next-env.d.ts
 
 # dev server stdout/stderr captures (should never be committed)
 /tmp/
+
+# local SQLite runtime data (pi-coding-agent state store)
+/data/
