@@ -54,7 +54,9 @@ export class AgentSessionWrapper {
 
   private resetIdleTimer(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.destroy(), 10 * 60 * 1000);
+    this.idleTimer = setTimeout(() => {
+      this.destroy().catch((err) => console.error("Error during idle destroy:", err));
+    }, 10 * 60 * 1000);
   }
 
   onEvent(listener: EventListener): () => void {
@@ -197,7 +199,7 @@ export class AgentSessionWrapper {
           throw err;
         }
 
-        this.destroy();
+        await this.destroy();
         return { cancelled: false, newSessionId };
       }
 
@@ -285,14 +287,21 @@ export class AgentSessionWrapper {
     }
   }
 
-  destroy(): void {
+  async destroy(): Promise<void> {
     if (!this._alive) return;
     this._alive = false;
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.unsubscribe?.();
+    // Await unsubscribe in case pi's subscribe() returns an async cleanup fn
+    // in the future. Current type is `() => void` (sync) — awaiting a void
+    // expression is a no-op but future-proof.
+    try {
+      await this.unsubscribe?.();
+    } catch (err) {
+      console.error("Error during unsubscribe:", err);
+    }
     for (const cb of this.onDestroyCallbacks) {
       try {
-        cb();
+        await cb();
       } catch (err) {
         console.error("Error in onDestroy callback:", err);
       }
@@ -313,7 +322,11 @@ declare global {
 function getRegistry(): Map<string, AgentSessionWrapper> {
   if (!globalThis.__piSessions) {
     globalThis.__piSessions = new Map();
-    const cleanup = () => globalThis.__piSessions?.forEach((s) => s.destroy());
+    const cleanup = () => {
+      globalThis.__piSessions?.forEach((s) => {
+        s.destroy().catch((err) => console.error("Error during exit destroy:", err));
+      });
+    };
     process.once("exit", cleanup);
     process.once("SIGINT", cleanup);
     process.once("SIGTERM", cleanup);
