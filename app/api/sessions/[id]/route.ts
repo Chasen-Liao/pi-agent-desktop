@@ -157,7 +157,29 @@ export async function DELETE(
       );
     } catch { /* dir unreadable — no cascade possible */ }
 
-    // 3. Identify and rewrite children (under per-file lock, atomic write)
+    // 3. Destroy any active RPC wrapper for this session.
+    // Done before unlink so no new commands can race into a half-deleted session.
+    getRpcSession(id)?.destroy().catch((err) => console.error("Error destroying session wrapper:", err));
+
+    // 4. Unlink parent FIRST, before rewriting children (Task D4).
+    // Rationale: a concurrent fork calls `SessionManager.open(currentSessionFile)`
+    // on this same file. If the parent is still on disk while children are being
+    // rewritten, a fork racing through that window can observe a half-cascaded
+    // tree (some children still pointing at the soon-to-be-deleted parent) and
+    // produce a new .jsonl whose parentSession references a dead path. Unlinking
+    // the parent first makes any concurrent fork fail fast (ENOENT on open, or
+    // caught by the existsSync guard in rpc-manager.ts fork case) instead of
+    // silently creating an orphan. The remaining race window is narrowed to a
+    // single child's rewrite, which is acceptable for this destructive + rare
+    // operation; fully closing it would require cross-file OS locks (out of scope).
+    await withFileLock(filePath, async () => {
+      try { await unlink(filePath); } catch { /* race: already deleted */ }
+    });
+    invalidateSessionPathCache(id);
+
+    // 5. Reparent children to the grandparent (now last).
+    // Children remain on disk and may still be read by concurrent forks; each
+    // rewrite is atomic + per-file locked, and rewriteChildHeader is idempotent.
     for (const childPath of siblingFiles) {
       let content: string;
       try { content = await readFile(childPath, "utf8"); }
@@ -169,14 +191,6 @@ export async function DELETE(
       await withFileLock(childPath, () => atomicWriteFile(childPath, newContent));
     }
 
-    // 4. Destroy any active RPC wrapper for this session
-    getRpcSession(id)?.destroy().catch((err) => console.error("Error destroying session wrapper:", err));
-
-    // 5. Unlink parent (under lock, swallow race-condition unlink failure)
-    await withFileLock(filePath, async () => {
-      try { await unlink(filePath); } catch { /* race: already deleted */ }
-    });
-    invalidateSessionPathCache(id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     logApiError({ route: "/api/sessions/[id]", method: "DELETE", requestId, error, params: { id } });

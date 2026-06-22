@@ -225,6 +225,21 @@ test("fork returns {cancelled: true} for non-persisted session", async () => {
   assert.deepEqual(result, { cancelled: true });
 });
 
+// Task D4: fork must refuse when the underlying session file has been deleted
+// (concurrent DELETE race). makeStubInner does not let callers override
+// sessionFile, and mocking existsSync would require module mocking; the guard
+// is a one-line stat check, so we assert on the source text (same pattern as
+// the other source-contract tests in this file).
+test("fork guards against deleted session file (source contract)", () => {
+  assert.match(source, /import \{ existsSync \} from "fs"/);
+  // The guard must sit between the isPersisted check and the entryId lookup,
+  // so a racing DELETE is caught before any SessionManager.open() side effect.
+  assert.match(
+    source,
+    /if \(!sessionManager\.isPersisted\(\)\) return \{ cancelled: true \};\s*\n\s*if \(!currentSessionFile\) throw new Error\([^)]*\);\s*\n[\s\S]*?if \(!existsSync\(currentSessionFile\)\) return \{ cancelled: true \};/
+  );
+});
+
 // Task A6: fork failure must clean up the orphaned .jsonl file.
 // `startRpcSession` is a same-module function that internally calls
 // `createAgentSession` (from pi-coding-agent), which can't be injected via the

@@ -1,3 +1,4 @@
+import { existsSync } from "fs";
 import { unlink } from "fs/promises";
 import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionPathCache } from "./session-reader.ts";
@@ -169,6 +170,16 @@ export class AgentSessionWrapper {
 
         if (!sessionManager.isPersisted()) return { cancelled: true };
         if (!currentSessionFile) throw new Error("Persisted session is missing a session file");
+
+        // Guard: refuse to fork if the underlying session file has been deleted
+        // (e.g., a concurrent DELETE racing with this fork — see Task D4).
+        // isPersisted() reflects in-memory state and may still return true while
+        // the file is already gone; without this check, SessionManager.open()
+        // below would throw, or — worse — createBranchedSession would produce a
+        // new .jsonl whose parentSession references a dead path. existsSync is a
+        // synchronous stat; acceptable here because fork is already an async,
+        // user-initiated, infrequent operation.
+        if (!existsSync(currentSessionFile)) return { cancelled: true };
 
         const entry = sessionManager.getEntry(entryId);
         if (!entry) throw new Error("Invalid entry ID for forking");
