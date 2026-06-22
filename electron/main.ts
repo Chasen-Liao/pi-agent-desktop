@@ -14,6 +14,23 @@ import { getNextRestartState, type ServerState } from "./restart-policy";
 import { formatElectronLogLine, deriveScope, type ElectronLogLevel } from "./log-format";
 
 // ---------------------------------------------------------------------------
+// Single Instance Lock
+// ---------------------------------------------------------------------------
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on("second-instance", () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 let mainWindow: BrowserWindow | null = null;
@@ -483,16 +500,4 @@ app.whenReady().then(async () => {
   }
 });
 
-// Handle single instance
-const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) {
-  app.quit();
-} else {
-  app.on("second-instance", () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
-}
+

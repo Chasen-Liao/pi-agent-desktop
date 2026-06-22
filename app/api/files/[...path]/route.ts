@@ -116,9 +116,10 @@ async function getAllowedRoots(): Promise<Set<string>> {
   }
   // Also allow ~/pi-cwd-* directories created by the default-cwd endpoint
   const home = (await import("os")).homedir();
-  const { readdirSync } = await import("fs");
+  const { readdir } = await import("fs/promises");
   try {
-    for (const name of readdirSync(home)) {
+    const names = await readdir(home);
+    for (const name of names) {
       if (/^pi-cwd-\d{8}$/.test(name)) {
         roots.add(path.join(home, name));
       }
@@ -263,7 +264,7 @@ export async function GET(
 
     let stat: fs.Stats;
     try {
-      stat = fs.statSync(filePath);
+      stat = await fs.promises.stat(filePath);
     } catch {
       return NextResponse.json({ error: "Not found" }, { status: 404, headers: { "x-request-id": requestId } });
     }
@@ -286,7 +287,7 @@ export async function GET(
       if (stat.size > TEXT_PREVIEW_MAX_BYTES) {
         return NextResponse.json({ error: "File too large for preview (>256KB)" }, { status: 413, headers: { "x-request-id": requestId } });
       }
-      const content = fs.readFileSync(filePath, "utf-8");
+      const content = await fs.promises.readFile(filePath, "utf-8");
       const language = getLanguage(filePath);
       return NextResponse.json({ content, language, size: stat.size });
     }
@@ -310,12 +311,13 @@ export async function GET(
           send("connected", { filePath });
           try {
             watcher = fs.watch(filePath, () => {
-              try {
-                const s = fs.statSync(filePath);
-                send("change", { mtime: s.mtime.toISOString(), size: s.size });
-              } catch {
-                send("change", { mtime: new Date().toISOString(), size: 0 });
-              }
+              fs.promises.stat(filePath)
+                .then((s) => {
+                  send("change", { mtime: s.mtime.toISOString(), size: s.size });
+                })
+                .catch(() => {
+                  send("change", { mtime: new Date().toISOString(), size: 0 });
+                });
             });
             watcher.on("error", () => {
               try { controller.close(); } catch { /* ignore */ }
@@ -344,13 +346,13 @@ export async function GET(
       return NextResponse.json({ error: "Not a directory" }, { status: 400, headers: { "x-request-id": requestId } });
     }
 
-    const names = fs.readdirSync(filePath);
-    const entries = names
+    const names = await fs.promises.readdir(filePath);
+    const entryPromises = names
       .filter((name) => !IGNORED_NAMES.has(name) && !IGNORED_SUFFIXES.some((s) => name.endsWith(s)))
-      .map((name) => {
+      .map(async (name) => {
         const full = path.join(filePath, name);
         try {
-          const s = fs.statSync(full);
+          const s = await fs.promises.stat(full);
           return {
             name,
             isDir: s.isDirectory(),
@@ -360,7 +362,8 @@ export async function GET(
         } catch {
           return null;
         }
-      })
+      });
+    const entries = (await Promise.all(entryPromises))
       .filter(Boolean)
       .sort((a, b) => {
         // Dirs first, then files, both alphabetically
@@ -394,7 +397,7 @@ export async function PUT(
 
     let stat: fs.Stats;
     try {
-      stat = fs.statSync(filePath);
+      stat = await fs.promises.stat(filePath);
     } catch {
       return NextResponse.json({ error: "Not found" }, { status: 404, headers: { "x-request-id": requestId } });
     }
@@ -416,8 +419,8 @@ export async function PUT(
       );
     }
 
-    fs.writeFileSync(filePath, body.content, "utf-8");
-    const newStat = fs.statSync(filePath);
+    await fs.promises.writeFile(filePath, body.content, "utf-8");
+    const newStat = await fs.promises.stat(filePath);
 
     return NextResponse.json({ success: true, size: newStat.size });
   } catch (error) {

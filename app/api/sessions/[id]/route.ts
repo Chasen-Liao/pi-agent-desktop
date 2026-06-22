@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { readdirSync, readFileSync, statSync, unlinkSync } from "fs";
-import { writeFile, rename, unlink } from "fs/promises";
+import { stat, writeFile, rename, unlink, readdir, readFile } from "fs/promises";
 import { join } from "path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import {
@@ -12,6 +11,7 @@ import {
   buildTree,
   getLeafId,
   getSessionName,
+  readFirstLineAsync,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { rewriteChildHeader } from "@/lib/session-cascade";
@@ -37,7 +37,10 @@ export async function GET(
 
     const header = entries.length > 0 && (entries[0] as unknown as { type: string }).type === "session" ? entries[0] as unknown as { id: string; cwd?: string; timestamp: string } : null;
     let modified = header?.timestamp ?? new Date().toISOString();
-    try { modified = statSync(filePath).mtime.toISOString(); } catch { /* use header timestamp */ }
+    try {
+      const fileStat = await stat(filePath);
+      modified = fileStat.mtime.toISOString();
+    } catch { /* use header timestamp */ }
     const allSessions = await listAllSessions();
     const parentSessionId = allSessions.find((s) => s.id === id)?.parentSessionId;
     const info = header ? {
@@ -132,17 +135,20 @@ export async function DELETE(
     // 1. Read parent's first line to get grandparent path
     let parentSessionPath: string | null = null;
     try {
-      const firstLine = readFileSync(filePath, "utf8").split("\n")[0];
-      const header = JSON.parse(firstLine) as { type?: string; parentSession?: string };
-      if (header.type === "session") parentSessionPath = header.parentSession ?? null;
+      const firstLine = await readFirstLineAsync(filePath);
+      if (firstLine) {
+        const header = JSON.parse(firstLine) as { type?: string; parentSession?: string };
+        if (header.type === "session") parentSessionPath = header.parentSession ?? null;
+      }
     } catch { /* malformed parent — grandparent remains null */ }
 
     // 2. Enumerate siblings
     const dir = filePath.replace(/\\/g, "/").split("/").slice(0, -1).join("/");
     const siblingFiles: string[] = [];
     try {
+      const files = await readdir(dir);
       siblingFiles.push(
-        ...readdirSync(dir)
+        ...files
           .filter((f) => f.endsWith(".jsonl"))
           .map((f) => join(dir, f))
           .filter((p) => p !== filePath)
@@ -152,7 +158,7 @@ export async function DELETE(
     // 3. Identify and rewrite children (under per-file lock, atomic write)
     for (const childPath of siblingFiles) {
       let content: string;
-      try { content = readFileSync(childPath, "utf8"); }
+      try { content = await readFile(childPath, "utf8"); }
       catch { continue; /* race: child deleted between readdir and read */ }
 
       const { newContent, changed } = rewriteChildHeader(content, filePath, parentSessionPath);
@@ -166,7 +172,7 @@ export async function DELETE(
 
     // 5. Unlink parent (under lock, swallow race-condition unlink failure)
     await withFileLock(filePath, async () => {
-      try { unlinkSync(filePath); } catch { /* race: already deleted */ }
+      try { await unlink(filePath); } catch { /* race: already deleted */ }
     });
     invalidateSessionPathCache(id);
     return NextResponse.json({ ok: true });
