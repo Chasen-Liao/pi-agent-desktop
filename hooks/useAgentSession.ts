@@ -16,6 +16,11 @@ export interface UseAgentSessionOptions {
   session: SessionInfo | null;
   newSessionCwd: string | null;
   onAgentEnd?: () => void;
+  /** Called inside the agent_end event handler, BEFORE business logic (state updates).
+   *  Use this for side effects that should fire on every agent_end event
+   *  (e.g., notification sounds). Distinct from onAgentEnd which is the
+   *  parent-component-facing callback. */
+  onAgentEndEvent?: () => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string) => void;
   modelsRefreshKey?: number;
@@ -42,7 +47,7 @@ export interface AttachedImage {
 
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
-    session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
+    session, newSessionCwd, onAgentEnd, onAgentEndEvent, onSessionCreated, onSessionForked,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange,
   } = opts;
 
@@ -134,6 +139,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "start" });
         break;
       case "agent_end":
+        onAgentEndEvent?.();
         setAgentRunning(false);
         setAgentPhase(null);
         setRetryInfo(null);
@@ -211,7 +217,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         break;
     }
-  }, [loadSession, onAgentEnd, setMessages]);
+  }, [loadSession, onAgentEnd, onAgentEndEvent, setMessages]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleCompact = useCallback(async () => {
