@@ -22,6 +22,8 @@ test("startRpcSession does not pass a hardcoded default tool allowlist", () => {
 function makeStubInner(overrides: {
   subscribe?: SubscribeFn;
   sessionManager?: unknown;
+  model?: unknown;
+  agent?: unknown;
 } = {}) {
   return {
     sessionId: "stub",
@@ -30,9 +32,9 @@ function makeStubInner(overrides: {
     isCompacting: false,
     autoCompactionEnabled: false,
     autoRetryEnabled: false,
-    model: null,
+    model: overrides.model ?? null,
     getContextUsage: () => null,
-    agent: { state: { systemPrompt: "", thinkingLevel: "off" } },
+    agent: overrides.agent ?? { state: { systemPrompt: "", thinkingLevel: "off" } },
     sessionManager: overrides.sessionManager ?? null,
     modelRegistry: null,
     subscribe: overrides.subscribe ?? ((cb: (event: unknown) => void) => { void cb; return () => {}; }),
@@ -361,4 +363,82 @@ test("destroy() source matches the Task B3 contract", () => {
     source,
     /s\.destroy\(\)\.catch\(\(err\) => console\.error\("Error during exit destroy:", err\)\)/
   );
+});
+
+// ============================================================================
+// Task D3: applyDeepSeekXhighWorkaround
+// Isolated hack that forces state.thinkingLevel back to "xhigh" after
+// setThinkingLevel clamps it to "high" for deepseek-compat models.
+// ============================================================================
+
+// The workaround is a private method; access it via a typed cast for testing.
+function callDeepSeekWorkaround(w: AgentSessionWrapper, level: string): boolean {
+  return (w as unknown as { applyDeepSeekXhighWorkaround(level: string): boolean })
+    .applyDeepSeekXhighWorkaround(level);
+}
+
+test("applyDeepSeekXhighWorkaround: forces state.thinkingLevel back to xhigh on deepseek models", () => {
+  // Simulate the post-clamp state: setThinkingLevel already ran and set "high".
+  const state = { systemPrompt: "", thinkingLevel: "high" };
+  const inner = makeStubInner({
+    model: { id: "deepseek-reasoner", provider: "deepseek", compat: { thinkingFormat: "deepseek" } },
+    agent: { state },
+  });
+  const w = new AgentSessionWrapper(inner);
+
+  assert.equal(callDeepSeekWorkaround(w, "xhigh"), true);
+  assert.equal(state.thinkingLevel, "xhigh", "state.thinkingLevel must be forced back to xhigh");
+});
+
+test("applyDeepSeekXhighWorkaround: no-op for non-deepseek thinking format", () => {
+  const state = { systemPrompt: "", thinkingLevel: "high" };
+  const inner = makeStubInner({
+    model: { id: "gpt-5", provider: "openai", compat: { thinkingFormat: "openai" } },
+    agent: { state },
+  });
+  const w = new AgentSessionWrapper(inner);
+
+  assert.equal(callDeepSeekWorkaround(w, "xhigh"), false);
+  assert.equal(state.thinkingLevel, "high", "state.thinkingLevel must not change for non-deepseek");
+});
+
+test("applyDeepSeekXhighWorkaround: no-op when level is not xhigh", () => {
+  const state = { systemPrompt: "", thinkingLevel: "high" };
+  const inner = makeStubInner({
+    model: { id: "deepseek-reasoner", provider: "deepseek", compat: { thinkingFormat: "deepseek" } },
+    agent: { state },
+  });
+  const w = new AgentSessionWrapper(inner);
+
+  assert.equal(callDeepSeekWorkaround(w, "high"), false);
+  assert.equal(state.thinkingLevel, "high", "state.thinkingLevel must not change for non-xhigh levels");
+});
+
+test("applyDeepSeekXhighWorkaround: no-op when model has no compat field", () => {
+  const state = { systemPrompt: "", thinkingLevel: "high" };
+  const inner = makeStubInner({
+    model: { id: "plain-model", provider: "p" },
+    agent: { state },
+  });
+  const w = new AgentSessionWrapper(inner);
+
+  assert.equal(callDeepSeekWorkaround(w, "xhigh"), false);
+  assert.equal(state.thinkingLevel, "high", "state.thinkingLevel must not change when compat is absent");
+});
+
+test("applyDeepSeekXhighWorkaround: no-op when agent.state is missing", () => {
+  const inner = makeStubInner({
+    model: { id: "deepseek-reasoner", provider: "deepseek", compat: { thinkingFormat: "deepseek" } },
+    agent: { state: undefined },
+  });
+  const w = new AgentSessionWrapper(inner);
+
+  assert.equal(callDeepSeekWorkaround(w, "xhigh"), false);
+});
+
+test("applyDeepSeekXhighWorkaround: no-op when model is null (default stub)", () => {
+  const inner = makeStubInner(); // model defaults to null
+  const w = new AgentSessionWrapper(inner);
+
+  assert.equal(callDeepSeekWorkaround(w, "xhigh"), false);
 });

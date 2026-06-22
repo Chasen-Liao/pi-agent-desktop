@@ -4,6 +4,16 @@ import { cacheSessionPath, invalidateSessionPathCache } from "./session-reader.t
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+// Thinking format identifier used by pi's deepseek compat layer (reasoningEffortMap
+// maps xhigh→max for this format). Centralized as a constant so a pi-side rename
+// only requires editing one location instead of hunting string literals.
+// Tracked for upstream removal — see AgentSessionWrapper.applyDeepSeekXhighWorkaround.
+const DEEPSEEK_THINKING_FORMAT = "deepseek";
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -212,11 +222,9 @@ export class AgentSessionWrapper {
         const level = command.level as string;
         this.inner.setThinkingLevel(level);
         // setThinkingLevel clamps xhigh→high for models where supportsXhigh()===false.
-        // If the model has DeepSeek thinking compat (reasoningEffortMap maps xhigh→max),
-        // force the state back so the compat layer can use it correctly.
-        if (level === "xhigh" && (this.inner.model as { compat?: { thinkingFormat?: string } } | null)?.compat?.thinkingFormat === "deepseek" && this.inner.agent?.state) {
-          this.inner.agent.state.thinkingLevel = "xhigh";
-        }
+        // For deepseek compat models, force xhigh back so the compat layer works.
+        // See applyDeepSeekXhighWorkaround for details and upstream tracking.
+        this.applyDeepSeekXhighWorkaround(level);
         return null;
       }
 
@@ -285,6 +293,31 @@ export class AgentSessionWrapper {
       default:
         throw new Error(`Unsupported command: ${type}`);
     }
+  }
+
+  /**
+   * Workaround for DeepSeek thinking format compat: pi's setThinkingLevel clamps
+   * xhigh→high when supportsXhigh()===false, but for models with deepseek thinking
+   * format, the compat layer (reasoningEffortMap maps xhigh→max) needs the raw
+   * xhigh value. Force the state back.
+   *
+   * This hack is isolated here (not inlined in set_thinking_level case) so it's
+   * easy to remove once pi's setThinkingLevel handles compat internally.
+   * Tracked in upstream pi issue (TODO: link).
+   *
+   * Once pi's setThinkingLevel handles compat internally, remove this method
+   * and the call site in the set_thinking_level case above.
+   *
+   * @returns true if the workaround was applied, false otherwise.
+   */
+  private applyDeepSeekXhighWorkaround(level: string): boolean {
+    if (level !== "xhigh") return false;
+    const model = this.inner.model as { compat?: { thinkingFormat?: string } } | null;
+    if (model?.compat?.thinkingFormat !== DEEPSEEK_THINKING_FORMAT) return false;
+    const state = this.inner.agent?.state as { thinkingLevel?: string } | undefined;
+    if (!state) return false;
+    state.thinkingLevel = "xhigh";
+    return true;
   }
 
   async destroy(): Promise<void> {
