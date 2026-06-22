@@ -64,13 +64,15 @@ CodeGraph provides MCP (Model Context Protocol) tools for efficient symbol searc
 | `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 7 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
 
-### 三个必须存 `globalThis` 的原因
+### 五个必须存 `globalThis` 的原因
 
-Next.js HMR 会丢弃模块级变量，因此以下三个必须挂在 `globalThis` 上：
+Next.js HMR 会丢弃模块级变量，因此以下五个必须挂在 `globalThis` 上：
 
-- `globalThis.__piSessions` — `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表
-- `globalThis.__piSessionPathCache` — `sessionId → .jsonl` 路径缓存
-- `globalThis.__piStartLocks` — 并发启动共享 Promise 锁
+- `globalThis.__piSessions` — `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表（[lib/rpc-manager.ts](lib/rpc-manager.ts)）
+- `globalThis.__piSessionPathCache` — `sessionId → .jsonl` 路径缓存（[lib/session-reader.ts](lib/session-reader.ts)）
+- `globalThis.__piStartLocks` — 并发启动共享 Promise 锁（[lib/rpc-manager.ts](lib/rpc-manager.ts)）
+- `globalThis.__piWriteLocks` — per-file 写入锁（[lib/session-lock.ts](lib/session-lock.ts)）
+- `globalThis.__piAllowedRootsCache` — 文件访问白名单缓存（5s TTL）（[lib/allowed-roots.ts](lib/allowed-roots.ts)）
 
 ---
 
