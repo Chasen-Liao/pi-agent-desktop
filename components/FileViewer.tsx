@@ -663,6 +663,9 @@ function TextFileViewer({ filePath, cwd }: Props) {
   const [wrapLines, setWrapLines] = useState(false);
   const [watching, setWatching] = useState(false);
   const [changeCount, setChangeCount] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const [saving, setSaving] = useState(false);
   const esRef = useRef<EventSource | null>(null);
 
   const fetchContent = useCallback((filePath: string, isRefresh = false) => {
@@ -690,6 +693,49 @@ function TextFileViewer({ filePath, cwd }: Props) {
         return null;
       });
   }, []);
+
+  const handleSave = useCallback(async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const encoded = encodeFilePathForApi(filePath);
+      const res = await fetch(`/api/files/${encoded}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editContent }),
+      });
+      const d = (await res.json()) as { success?: boolean; error?: string };
+      if (d.error) {
+        setError(d.error);
+        return;
+      }
+      setIsEditing(false);
+      setData((prev) => (prev ? { ...prev, content: editContent } : prev));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [filePath, editContent, saving]);
+
+  const handleCancelEdit = useCallback(() => {
+    setIsEditing(false);
+    setEditContent("");
+    setError(null);
+  }, []);
+
+  // Ctrl+S save shortcut
+  useEffect(() => {
+    if (!isEditing) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isEditing, handleSave]);
 
   // Initial load + SSE watch setup
   useEffect(() => {
@@ -862,6 +908,23 @@ function TextFileViewer({ filePath, cwd }: Props) {
           </button>
         )}
 
+        {/* Edit button */}
+        {viewMode === "source" && !previewMode && !isEditing && (
+          <button
+            onClick={() => { setEditContent(content); setIsEditing(true); }}
+            title="Edit file"
+            aria-label="Edit file"
+            style={{
+              padding: "2px 8px", fontSize: 11, cursor: "pointer",
+              background: "var(--bg-hover)", color: "var(--text-muted)",
+              border: "1px solid var(--border)", borderRadius: "var(--radius-control)",
+              fontWeight: 400,
+            }}
+          >
+            Edit
+          </button>
+        )}
+
         {/* HTML source/preview toggle */}
         {isHtml && viewMode === "source" && (
           <div style={{ display: "flex", borderRadius: "var(--radius-control)", overflow: "hidden", border: "1px solid var(--border)" }}>
@@ -924,6 +987,66 @@ function TextFileViewer({ filePath, cwd }: Props) {
       </div>
 
       {/* Content area */}
+      {isEditing ? (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "4px 16px",
+              background: "var(--bg-elevated)",
+              borderBottom: "1px solid var(--divider)",
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>EDITING</span>
+            <span style={{ flex: 1 }} />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              style={{
+                padding: "3px 12px", fontSize: 11, cursor: "pointer",
+                background: "var(--accent)", color: "#fff",
+                border: "none", borderRadius: "var(--radius-control)",
+                fontWeight: 600, opacity: saving ? 0.6 : 1,
+              }}
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button
+              onClick={handleCancelEdit}
+              style={{
+                padding: "3px 12px", fontSize: 11, cursor: "pointer",
+                background: "var(--bg-hover)", color: "var(--text-muted)",
+                border: "1px solid var(--border)", borderRadius: "var(--radius-control)",
+                fontWeight: 400,
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            style={{
+              flex: 1,
+              width: "100%",
+              padding: "12px 16px",
+              border: "none",
+              outline: "none",
+              resize: "none",
+              background: "var(--code-bg)",
+              color: "var(--text)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 13,
+              lineHeight: 1.6,
+              tabSize: 2,
+            }}
+            spellCheck={false}
+          />
+        </div>
+      ) : (
       <div style={{ flex: 1, overflow: isLargeSource ? "hidden" : "auto", background: "var(--bg)" }}>
         {viewMode === "diff" && hasDiff ? (
           <DiffView oldContent={prevContent!} newContent={data.content} language={data.language} />
@@ -970,6 +1093,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
           </SyntaxHighlighter>
         )}
       </div>
+      )}
     </div>
   );
 }

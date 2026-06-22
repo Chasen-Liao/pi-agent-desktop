@@ -13,6 +13,7 @@ const IGNORED_NAMES = new Set([
 const IGNORED_SUFFIXES = [".pyc"];
 
 const TEXT_PREVIEW_MAX_BYTES = 256 * 1024;
+const TEXT_WRITE_MAX_BYTES = 512 * 1024;
 const IMAGE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024;
 
 const IMAGE_EXT_TO_MIME: Record<string, string> = {
@@ -370,6 +371,57 @@ export async function GET(
     return NextResponse.json({ entries, path: filePath });
   } catch (error) {
     logApiError({ route: "/api/files/[...path]", method: "GET", requestId, error });
+    return NextResponse.json(
+      { error: errorMessage(error) },
+      { status: 500, headers: { "x-request-id": requestId } }
+    );
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  const requestId = getRequestId(request);
+  try {
+    const { path: segments } = await params;
+    const filePath = filePathFromSegments(segments);
+
+    const allowedRoots = await getAllowedRoots();
+    if (!isPathAllowed(filePath, allowedRoots)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403, headers: { "x-request-id": requestId } });
+    }
+
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(filePath);
+    } catch {
+      return NextResponse.json({ error: "Not found" }, { status: 404, headers: { "x-request-id": requestId } });
+    }
+
+    if (!stat.isFile()) {
+      return NextResponse.json({ error: "Not a file" }, { status: 400, headers: { "x-request-id": requestId } });
+    }
+
+    const body = await request.json() as { content?: string };
+    if (typeof body.content !== "string") {
+      return NextResponse.json({ error: "content required" }, { status: 400, headers: { "x-request-id": requestId } });
+    }
+
+    const contentBytes = Buffer.byteLength(body.content, "utf-8");
+    if (contentBytes > TEXT_WRITE_MAX_BYTES) {
+      return NextResponse.json(
+        { error: `File too large (>${TEXT_WRITE_MAX_BYTES / 1024}KB)` },
+        { status: 413, headers: { "x-request-id": requestId } }
+      );
+    }
+
+    fs.writeFileSync(filePath, body.content, "utf-8");
+    const newStat = fs.statSync(filePath);
+
+    return NextResponse.json({ success: true, size: newStat.size });
+  } catch (error) {
+    logApiError({ route: "/api/files/[...path]", method: "PUT", requestId, error });
     return NextResponse.json(
       { error: errorMessage(error) },
       { status: 500, headers: { "x-request-id": requestId } }
