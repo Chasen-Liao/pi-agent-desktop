@@ -70,8 +70,8 @@ export function readFirstLineAsync(filePath: string): Promise<string | null> {
     let buffer = "";
     let resolved = false;
 
-    stream.on("data", (chunk: string) => {
-      buffer += chunk;
+    stream.on("data", (chunk: Uint8Array | string) => {
+      buffer += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
       const idx = buffer.indexOf("\n");
       if (idx !== -1) {
         resolved = true;
