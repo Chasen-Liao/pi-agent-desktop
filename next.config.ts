@@ -17,6 +17,17 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_VERSION: version,
     NEXT_PUBLIC_PI_VERSION: piVersion,
   },
+  // Prevent release/ (electron-builder output) and other build artifacts
+  // from being traced into the standalone output. Turbopack's NFT tracer can
+  // include these large binaries (old installers, win-unpacked) which inflate
+  // the NSIS installer with a recursive copy of itself.
+  outputFileTracingExcludes: {
+    "*": [
+      "**/release/**",
+      "**/.next/**",
+      "**/node_modules/.cache/**",
+    ],
+  },
 };
 
 export default nextConfig;
