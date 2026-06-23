@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { isPathAllowedAsync } from "@/lib/allowed-roots";
 
 export const dynamic = "force-dynamic";
 
@@ -130,6 +131,11 @@ export async function GET(req: Request) {
   const cwd = searchParams.get("cwd");
   if (!cwd) {
     return NextResponse.json({ error: "cwd required" }, { status: 400 });
+  }
+
+  const cwdAllowed = await isPathAllowedAsync(cwd);
+  if (!cwdAllowed) {
+    return NextResponse.json({ error: "cwd not in allowed roots" }, { status: 403 });
   }
 
   try {

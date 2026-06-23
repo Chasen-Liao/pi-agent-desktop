@@ -1,6 +1,18 @@
+import { existsSync } from "fs";
+import { unlink } from "fs/promises";
 import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
-import { cacheSessionPath } from "./session-reader.ts";
+import { cacheSessionPath, invalidateSessionPathCache } from "./session-reader.ts";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+// Thinking format identifier used by pi's deepseek compat layer (reasoningEffortMap
+// maps xhigh→max for this format). Centralized as a constant so a pi-side rename
+// only requires editing one location instead of hunting string literals.
+// Tracked for upstream removal — see AgentSessionWrapper.applyDeepSeekXhighWorkaround.
+const DEEPSEEK_THINKING_FORMAT = "deepseek";
 
 // ============================================================================
 // Types
@@ -53,7 +65,9 @@ export class AgentSessionWrapper {
 
   private resetIdleTimer(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.destroy(), 10 * 60 * 1000);
+    this.idleTimer = setTimeout(() => {
+      this.destroy().catch((err) => console.error("Error during idle destroy:", err));
+    }, 10 * 60 * 1000);
   }
 
   onEvent(listener: EventListener): () => void {
@@ -62,6 +76,28 @@ export class AgentSessionWrapper {
       const i = this.listeners.indexOf(listener);
       if (i !== -1) this.listeners.splice(i, 1);
     };
+  }
+
+  /**
+   * Emit an agent_error event to all listeners (SSE subscribers).
+   * Used to surface pi-side prompt/steer/followUp failures to the client,
+   * so the UI can reset agentRunning/agentPhase instead of hanging waiting
+   * for an agent_end that will never come.
+   *
+   * Each listener is invoked inside try/catch so one throwing listener
+   * does not prevent the others from receiving the event.
+   *
+   * NOTE: the message is currently passed through as-is. A sanitization
+   * step (stripping paths / credentials) can be added later.
+   */
+  private emitAgentError(message: string): void {
+    for (const l of this.listeners) {
+      try {
+        l({ type: "agent_error", errorMessage: message });
+      } catch (err) {
+        console.error("Error in agent_error listener:", err);
+      }
+    }
   }
 
   onDestroy(cb: () => void): void {
@@ -78,6 +114,48 @@ export class AgentSessionWrapper {
     this.resetIdleTimer();
   }
 
+  /**
+   * Build the current state snapshot. Shared by `send({ type: "get_state" })`
+   * (which resets the idle timer, since the caller is actively driving the
+   * session) and `peekState()` (which does not, since the caller is only
+   * observing).
+   */
+  private buildStateSnapshot(): Record<string, unknown> {
+    const model = this.inner.model;
+    const contextUsage = this.inner.getContextUsage();
+    return {
+      sessionId: this.inner.sessionId,
+      sessionFile: this.inner.sessionFile ?? "",
+      isStreaming: this.inner.isStreaming,
+      isCompacting: this.inner.isCompacting,
+      autoCompactionEnabled: this.inner.autoCompactionEnabled,
+      autoRetryEnabled: this.inner.autoRetryEnabled,
+      model: model ? { id: model.id, provider: model.provider } : undefined,
+      messageCount: 0,
+      pendingMessageCount: 0,
+      contextUsage: contextUsage
+        ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
+        : null,
+      systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
+      thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
+    };
+  }
+
+  /**
+   * Read-only state snapshot. Returns the same payload as
+   * `send({ type: "get_state" })` but does NOT reset the idle timer.
+   *
+   * Use this from observation endpoints (e.g.
+   * `GET /api/sessions/[id]?includeState=1`) so that polling clients —
+   * sidebar refreshes, stats panels — don't accidentally keep idle sessions
+   * alive forever and prevent the 10-minute idle reclamation. Callers that
+   * are intentionally driving the session should still use
+   * `send({ type: "get_state" })`.
+   */
+  peekState(): Record<string, unknown> {
+    return this.buildStateSnapshot();
+  }
+
   async send(command: Record<string, unknown>): Promise<unknown> {
     this.resetIdleTimer();
     const type = command.type as string;
@@ -86,7 +164,11 @@ export class AgentSessionWrapper {
       case "prompt": {
         // Fire and forget — events come via subscribe
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined).catch((err) => { console.error("pi prompt failed:", err); });
+        this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined)
+          .catch((err) => {
+            console.error("pi prompt failed:", err);
+            this.emitAgentError(err instanceof Error ? err.message : String(err));
+          });
         return null;
       }
 
@@ -95,24 +177,7 @@ export class AgentSessionWrapper {
         return null;
 
       case "get_state": {
-        const model = this.inner.model;
-        const contextUsage = this.inner.getContextUsage();
-        return {
-          sessionId: this.inner.sessionId,
-          sessionFile: this.inner.sessionFile ?? "",
-          isStreaming: this.inner.isStreaming,
-          isCompacting: this.inner.isCompacting,
-          autoCompactionEnabled: this.inner.autoCompactionEnabled,
-          autoRetryEnabled: this.inner.autoRetryEnabled,
-          model: model ? { id: model.id, provider: model.provider } : undefined,
-          messageCount: 0,
-          pendingMessageCount: 0,
-          contextUsage: contextUsage
-            ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
-            : null,
-          systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
-          thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
-        };
+        return this.buildStateSnapshot();
       }
 
       case "set_model": {
@@ -131,6 +196,16 @@ export class AgentSessionWrapper {
 
         if (!sessionManager.isPersisted()) return { cancelled: true };
         if (!currentSessionFile) throw new Error("Persisted session is missing a session file");
+
+        // Guard: refuse to fork if the underlying session file has been deleted
+        // (e.g., a concurrent DELETE racing with this fork — see Task D4).
+        // isPersisted() reflects in-memory state and may still return true while
+        // the file is already gone; without this check, SessionManager.open()
+        // below would throw, or — worse — createBranchedSession would produce a
+        // new .jsonl whose parentSession references a dead path. existsSync is a
+        // synchronous stat; acceptable here because fork is already an async,
+        // user-initiated, infrequent operation.
+        if (!existsSync(currentSessionFile)) return { cancelled: true };
 
         const entry = sessionManager.getEntry(entryId);
         if (!entry) throw new Error("Invalid entry ID for forking");
@@ -156,12 +231,22 @@ export class AgentSessionWrapper {
 
         // Pre-register the new wrapper BEFORE destroying the old.
         // Contract: by the time send() returns, newSessionId is in the registry.
-        // If startRpcSession throws, do NOT destroy — old wrapper stays usable,
-        // new file remains on disk (acceptable; next fork overwrites).
+        // If startRpcSession throws, do NOT destroy — old wrapper stays usable under the old id.
+        // The orphaned new .jsonl file is cleaned up in the catch below (its name is a unique
+        // <timestamp>_<uuid>.jsonl, so it would never be overwritten by future forks).
         const newCwd = sessionManager.getHeader()?.cwd ?? process.cwd();
-        await startRpcSession(newSessionId, newSessionFile, newCwd);
+        try {
+          await startRpcSession(newSessionId, newSessionFile, newCwd);
+        } catch (err) {
+          // startRpcSession failed: clean up the orphan .jsonl file (it uses a unique
+          // <timestamp>_<uuid>.jsonl name, so it would never be overwritten by future forks).
+          // The cached path is also invalidated so future lookups don't find a dead entry.
+          invalidateSessionPathCache(newSessionId);
+          await unlink(newSessionFile).catch(() => { /* best-effort: file may not exist */ });
+          throw err;
+        }
 
-        this.destroy();
+        await this.destroy();
         return { cancelled: false, newSessionId };
       }
 
@@ -174,11 +259,9 @@ export class AgentSessionWrapper {
         const level = command.level as string;
         this.inner.setThinkingLevel(level);
         // setThinkingLevel clamps xhigh→high for models where supportsXhigh()===false.
-        // If the model has DeepSeek thinking compat (reasoningEffortMap maps xhigh→max),
-        // force the state back so the compat layer can use it correctly.
-        if (level === "xhigh" && (this.inner.model as { compat?: { thinkingFormat?: string } } | null)?.compat?.thinkingFormat === "deepseek" && this.inner.agent?.state) {
-          this.inner.agent.state.thinkingLevel = "xhigh";
-        }
+        // For deepseek compat models, force xhigh back so the compat layer works.
+        // See applyDeepSeekXhighWorkaround for details and upstream tracking.
+        this.applyDeepSeekXhighWorkaround(level);
         return null;
       }
 
@@ -209,13 +292,25 @@ export class AgentSessionWrapper {
 
       case "steer": {
         const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
+        try {
+          await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
+        } catch (err) {
+          console.error("pi steer failed:", err);
+          this.emitAgentError(err instanceof Error ? err.message : String(err));
+          throw err;
+        }
         return null;
       }
 
       case "follow_up": {
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
+        try {
+          await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
+        } catch (err) {
+          console.error("pi followUp failed:", err);
+          this.emitAgentError(err instanceof Error ? err.message : String(err));
+          throw err;
+        }
         return null;
       }
 
@@ -249,14 +344,46 @@ export class AgentSessionWrapper {
     }
   }
 
-  destroy(): void {
+  /**
+   * Workaround for DeepSeek thinking format compat: pi's setThinkingLevel clamps
+   * xhigh→high when supportsXhigh()===false, but for models with deepseek thinking
+   * format, the compat layer (reasoningEffortMap maps xhigh→max) needs the raw
+   * xhigh value. Force the state back.
+   *
+   * This hack is isolated here (not inlined in set_thinking_level case) so it's
+   * easy to remove once pi's setThinkingLevel handles compat internally.
+   * Tracked in upstream pi issue (TODO: link).
+   *
+   * Once pi's setThinkingLevel handles compat internally, remove this method
+   * and the call site in the set_thinking_level case above.
+   *
+   * @returns true if the workaround was applied, false otherwise.
+   */
+  private applyDeepSeekXhighWorkaround(level: string): boolean {
+    if (level !== "xhigh") return false;
+    const model = this.inner.model as { compat?: { thinkingFormat?: string } } | null;
+    if (model?.compat?.thinkingFormat !== DEEPSEEK_THINKING_FORMAT) return false;
+    const state = this.inner.agent?.state as { thinkingLevel?: string } | undefined;
+    if (!state) return false;
+    state.thinkingLevel = "xhigh";
+    return true;
+  }
+
+  async destroy(): Promise<void> {
     if (!this._alive) return;
     this._alive = false;
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.unsubscribe?.();
+    // Await unsubscribe in case pi's subscribe() returns an async cleanup fn
+    // in the future. Current type is `() => void` (sync) — awaiting a void
+    // expression is a no-op but future-proof.
+    try {
+      await this.unsubscribe?.();
+    } catch (err) {
+      console.error("Error during unsubscribe:", err);
+    }
     for (const cb of this.onDestroyCallbacks) {
       try {
-        cb();
+        await cb();
       } catch (err) {
         console.error("Error in onDestroy callback:", err);
       }
@@ -277,7 +404,11 @@ declare global {
 function getRegistry(): Map<string, AgentSessionWrapper> {
   if (!globalThis.__piSessions) {
     globalThis.__piSessions = new Map();
-    const cleanup = () => globalThis.__piSessions?.forEach((s) => s.destroy());
+    const cleanup = () => {
+      globalThis.__piSessions?.forEach((s) => {
+        s.destroy().catch((err) => console.error("Error during exit destroy:", err));
+      });
+    };
     process.once("exit", cleanup);
     process.once("SIGINT", cleanup);
     process.once("SIGTERM", cleanup);

@@ -58,6 +58,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [value, setValue] = useState("");
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  // 跟踪最新 attachedImages 供 unmount cleanup 读取（避免捕获 mount 时空数组快照）
+  const attachedImagesRef = useRef<AttachedImage[]>([]);
+  useEffect(() => {
+    attachedImagesRef.current = attachedImages;
+  }, [attachedImages]);
+  // 组件卸载时 revoke 所有残留的 blob previewUrl，防止切换 session / 关窗导致内存泄漏
+  useEffect(() => {
+    return () => {
+      attachedImagesRef.current.forEach((img) => URL.revokeObjectURL(img.previewUrl));
+    };
+  }, []);
   const [inputFocused, setInputFocused] = useState(false);
   const [caretIndex, setCaretIndex] = useState(0);
   const [slashSkills, setSlashSkills] = useState<SlashSkill[]>([]);

@@ -3,6 +3,7 @@ import type { SessionEntry, SessionInfo, SessionContext, SessionTreeNode, Assist
 import type { SessionEntry as PiSessionEntry, SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize.ts";
 import { readFile } from "fs/promises";
+import { createReadStream } from "fs";
 
 export { getAgentDir };
 
@@ -63,9 +64,35 @@ export function invalidateSessionPathCache(sessionId: string): void {
   getPathCache().delete(sessionId);
 }
 
-export function getSessionEntries(filePath: string): SessionEntry[] {
-  const entries = SessionManager.open(filePath).getEntries();
-  return entries as unknown as SessionEntry[];
+export function readFirstLineAsync(filePath: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const stream = createReadStream(filePath, { encoding: "utf8", highWaterMark: 4096 });
+    let buffer = "";
+    let resolved = false;
+
+    stream.on("data", (chunk: Uint8Array | string) => {
+      buffer += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+      const idx = buffer.indexOf("\n");
+      if (idx !== -1) {
+        resolved = true;
+        resolve(buffer.slice(0, idx));
+        stream.destroy();
+      }
+    });
+
+    stream.on("end", () => {
+      if (!resolved) {
+        resolve(buffer || null);
+      }
+    });
+
+    stream.on("error", (err) => {
+      console.error("Error reading first line from", filePath, err);
+      if (!resolved) {
+        resolve(null);
+      }
+    });
+  });
 }
 
 export function buildTree(entries: SessionEntry[]): SessionTreeNode[] {
@@ -207,9 +234,8 @@ export async function getSessionEntriesAsync(filePath: string): Promise<SessionE
 
 export async function getHeaderAsync(filePath: string): Promise<SessionHeader | null> {
   try {
-    const content = await readFile(filePath, "utf8");
-    const firstLine = content.split("\n")[0];
-    if (firstLine.trim()) {
+    const firstLine = await readFirstLineAsync(filePath);
+    if (firstLine && firstLine.trim()) {
       const header = JSON.parse(firstLine);
       if (header.type === "session") {
         return header as SessionHeader;

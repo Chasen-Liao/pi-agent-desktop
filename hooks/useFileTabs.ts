@@ -1,7 +1,24 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { Tab } from "@/components/TabBar";
+
+/**
+ * 纯函数：关闭一个 tab 后，下一个 active tab id 应该是什么。
+ * 不读取任何外层闭包，便于单元测试。
+ *
+ * - 若关闭的不是当前 active，active 不变
+ * - 若关闭的是当前 active，切到剩余 tab 列表的最后一个
+ * - 若剩余 tab 为空，返回 null
+ */
+export function computeNextActiveId(
+  currentActiveId: string | null,
+  closingTabId: string,
+  remainingTabs: Tab[]
+): string | null {
+  if (currentActiveId !== closingTabId) return currentActiveId;
+  return remainingTabs.length > 0 ? remainingTabs[remainingTabs.length - 1].id : null;
+}
 
 export function useFileTabs(onTabOpened?: () => void, onAllTabsClosed?: () => void) {
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
@@ -24,19 +41,25 @@ export function useFileTabs(onTabOpened?: () => void, onAllTabsClosed?: () => vo
     (tabId: string) => {
       setFileTabs((prev) => {
         const next = prev.filter((t) => t.id !== tabId);
-        if (next.length === 0) {
-          onAllTabsClosed?.();
-        }
+        // 在 setFileTabs 的 updater 内同步派生下一个 active id（不读闭包 fileTabs）
+        setActiveFileTabId((cur) => computeNextActiveId(cur, tabId, next));
         return next;
       });
-      setActiveFileTabId((cur) => {
-        if (cur !== tabId) return cur;
-        const remaining = fileTabs.filter((t) => t.id !== tabId);
-        return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
-      });
     },
-    [fileTabs, onAllTabsClosed]
+    []
   );
+
+  // Fire onAllTabsClosed in a useEffect so the callback lives outside the
+  // state updater. React requires updaters to be pure and may double-invoke
+  // them in StrictMode; moving the side effect here ensures single invocation.
+  const prevLengthRef = useRef(fileTabs.length);
+  useEffect(() => {
+    const prev = prevLengthRef.current;
+    prevLengthRef.current = fileTabs.length;
+    if (prev > 0 && fileTabs.length === 0) {
+      onAllTabsClosed?.();
+    }
+  }, [fileTabs.length, onAllTabsClosed]);
 
   return {
     fileTabs,

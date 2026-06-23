@@ -16,6 +16,11 @@ export interface UseAgentSessionOptions {
   session: SessionInfo | null;
   newSessionCwd: string | null;
   onAgentEnd?: () => void;
+  /** Called inside the agent_end event handler, BEFORE business logic (state updates).
+   *  Use this for side effects that should fire on every agent_end event
+   *  (e.g., notification sounds). Distinct from onAgentEnd which is the
+   *  parent-component-facing callback. */
+  onAgentEndEvent?: () => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string) => void;
   modelsRefreshKey?: number;
@@ -42,7 +47,7 @@ export interface AttachedImage {
 
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
-    session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
+    session, newSessionCwd, onAgentEnd, onAgentEndEvent, onSessionCreated, onSessionForked,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange,
   } = opts;
 
@@ -134,6 +139,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "start" });
         break;
       case "agent_end":
+        onAgentEndEvent?.();
         setAgentRunning(false);
         setAgentPhase(null);
         setRetryInfo(null);
@@ -150,9 +156,22 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         onAgentEnd?.();
         break;
+      case "agent_error": {
+        // Server-side pi failure surfaced via SSE. Reset agent state so the UI
+        // doesn't hang waiting for an agent_end that will never come.
+        setAgentRunning(false);
+        setAgentPhase(null);
+        setRetryInfo(null);
+        console.error("Agent error from server:", event.errorMessage);
+        dispatch({ type: "end" });
+        break;
+      }
       case "message_start":
       case "message_update": {
-        const msg = event.message as Partial<AgentMessage> | undefined;
+        // Union narrows to these two variants; `message` is Partial<AgentMessage>.
+        // `msg as AgentMessage` below is a Partial→Full conversion required by
+        // normalizeToolCalls's signature — NOT a union-narrowing cast.
+        const { message: msg } = event;
         if (msg) {
           dispatch({ type: "update", message: normalizeToolCalls(msg as AgentMessage) });
         }
@@ -160,7 +179,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       }
       case "message_end": {
-        const completed = event.message as AgentMessage | undefined;
+        const { message: completed } = event;
         if (completed) {
           setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
         }
@@ -169,18 +188,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       }
       case "tool_execution_start": {
-        const id = event.toolCallId as string;
-        const name = event.toolName as string;
+        const { toolCallId: id, toolName: name } = event;
         setAgentPhase((prev) => addRunningTool(prev, id, name));
         break;
       }
       case "tool_execution_end": {
-        const id = event.toolCallId as string;
+        const { toolCallId: id } = event;
         setAgentPhase((prev) => removeRunningTool(prev, id));
         break;
       }
       case "auto_retry_start":
-        setRetryInfo({ attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
+        setRetryInfo({ attempt: event.attempt, maxAttempts: event.maxAttempts, errorMessage: event.errorMessage });
         break;
       case "auto_retry_end":
         setRetryInfo(null);
@@ -194,13 +212,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "compaction_end":
         setIsCompacting(false);
         if (event.errorMessage) {
-          setCompactError(event.errorMessage as string);
+          setCompactError(event.errorMessage);
         } else if (!event.aborted) {
           if (sessionIdRef.current) loadSession(sessionIdRef.current);
         }
         break;
     }
-  }, [loadSession, onAgentEnd, setMessages]);
+  }, [loadSession, onAgentEnd, onAgentEndEvent, setMessages]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleCompact = useCallback(async () => {

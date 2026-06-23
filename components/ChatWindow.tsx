@@ -92,6 +92,19 @@ function Typewriter({ phrases }: { phrases: string[] }) {
 }
 
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange }: Props) {
+  const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
+  const playDoneSoundRef = useRef(playDoneSound);
+  playDoneSoundRef.current = playDoneSound;
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
+
+  // Play a sound on agent_end — wired via useAgentSession's onAgentEndEvent
+  // option so it runs inside the real event handler (not a stale ref wrapper
+  // that could drift behind the latest business handler on re-render).
+  const handleAgentEndEvent = useCallback(() => {
+    if (soundEnabledRef.current) playDoneSoundRef.current();
+  }, []);
+
   const {
     loading, error, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
@@ -108,6 +121,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange,
+    onAgentEndEvent: handleAgentEndEvent,
   });
 
   const [connectionStatus, setConnectionStatus] = useState<string>("disconnected");
@@ -128,23 +142,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       connectEvents(session.id);
     }
   }, [session, connectEvents]);
-
-  const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
-  const playDoneSoundRef = useRef(playDoneSound);
-  playDoneSoundRef.current = playDoneSound;
-  const soundEnabledRef = useRef(soundEnabled);
-  soundEnabledRef.current = soundEnabled;
-
-  // Wrap agent event handler to play sound on agent_end
-  const origHandler = handleAgentEventRef.current;
-  useEffect(() => {
-    handleAgentEventRef.current = (event) => {
-      if (event.type === "agent_end" && soundEnabledRef.current) {
-        playDoneSoundRef.current();
-      }
-      origHandler?.(event);
-    };
-  }, [origHandler, handleAgentEventRef]);
 
   // Push session stats up to AppShell for the top bar.
   // Compare scalar fields to avoid loops from new object identity each render.
