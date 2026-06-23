@@ -161,6 +161,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // doesn't hang waiting for an agent_end that will never come.
         setAgentRunning(false);
         setAgentPhase(null);
+        setRetryInfo(null);
         console.error("Agent error from server:", event.errorMessage);
         dispatch({ type: "end" });
         break;

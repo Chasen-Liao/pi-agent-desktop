@@ -20,8 +20,13 @@ test("validateSkillsPackage: allows owner-name/repo_name (dash and underscore)",
   assert.equal(validateSkillsPackage("owner-name/repo_name"), null);
 });
 
-test("validateSkillsPackage: allows scoped-style with colon", () => {
-  assert.equal(validateSkillsPackage("owner/repo:branch"), null);
+test("validateSkillsPackage: allows scoped-style with colon after @", () => {
+  assert.equal(validateSkillsPackage("owner/repo@skill:branch"), null);
+});
+
+test("validateSkillsPackage: rejects colon in repo without @", () => {
+  // Colons are only valid in the @skill part per the owner/repo[@skill] contract.
+  assert.match(validateSkillsPackage("owner/repo:branch")!, /Invalid package identifier/);
 });
 
 // ---------- rejected: empty ----------

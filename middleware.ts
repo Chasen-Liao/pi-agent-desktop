@@ -31,18 +31,14 @@ const CSP_HEADER = [
 
 /**
  * Decides whether the middleware should run the Origin check for a given
- * request. Only non-GET requests to /api/* are checked: pages are typically
- * loaded via GET (and are protected by CSP), while API writes (POST/PUT/
- * DELETE/PATCH) are the actual target of DNS-rebinding / cross-origin write
- * attacks against the loopback dev server.
+ * request. All /api/* requests are checked regardless of HTTP method:
+ * sensitive GET endpoints (session data, file reads) are also vulnerable
+ * to DNS-rebinding attacks, not just write operations.
  *
  * Exported for unit testing.
  */
-export function shouldApplyOriginCheck(pathname: string, method: string): boolean {
-  // Defensive: normalize to upper-case so a hypothetical lower-case method
-  // (RFC 7231 & Next.js both uppercase it, but we don't depend on that) is
-  // still treated as the write operation it is.
-  return pathname.startsWith("/api") && method.toUpperCase() !== "GET";
+export function shouldApplyOriginCheck(pathname: string, _method: string): boolean {
+  return pathname.startsWith("/api");
 }
 
 /**

@@ -5,6 +5,25 @@ import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 import { getAllowedRoots, isPathAllowed, isWindowsAbsolutePath, normalizeSlashes } from "@/lib/allowed-roots";
 import { validateWritablePath } from "@/lib/path-policy";
 
+/**
+ * Resolves a path to its canonical form via realpath(3), then re-validates
+ * against allowedRoots. This closes a symlink-bypass vector: string-based
+ * isPathAllowed cannot detect a symlink inside an allowed root pointing
+ * to a forbidden target, but realpath follows the final symlink target.
+ * fs.promises.stat/writeFile also follow symlinks, so the original check
+ * was vulnerable to symlink redirection in all three handlers (GET/PUT/watch).
+ */
+async function resolveAuthorizedPath(
+  filePath: string,
+  allowedRoots: Set<string>,
+): Promise<string> {
+  const realPath = await fs.promises.realpath(filePath);
+  if (!isPathAllowed(realPath, allowedRoots)) {
+    throw new Error("Access denied");
+  }
+  return realPath;
+}
+
 const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
   ".turbo", ".cache", "coverage", ".pytest_cache", ".mypy_cache",
@@ -195,37 +214,44 @@ export async function GET(
     const type = request.nextUrl.searchParams.get("type") ?? "list";
 
     const allowedRoots = await getAllowedRoots();
-    if (!isPathAllowed(filePath, allowedRoots)) {
+    let realPath: string;
+    try {
+      realPath = await resolveAuthorizedPath(filePath, allowedRoots);
+    } catch {
       return NextResponse.json({ error: "Access denied" }, { status: 403, headers: { "x-request-id": requestId } });
     }
 
     let stat: fs.Stats;
     try {
-      stat = await fs.promises.stat(filePath);
+      stat = await fs.promises.lstat(realPath);
     } catch {
       return NextResponse.json({ error: "Not found" }, { status: 404, headers: { "x-request-id": requestId } });
+    }
+
+    if (stat.isSymbolicLink()) {
+      return NextResponse.json({ error: "Symlinks are not accessible" }, { status: 403, headers: { "x-request-id": requestId } });
     }
 
     if (type === "read") {
       if (!stat.isFile()) {
         return NextResponse.json({ error: "Not a file" }, { status: 400, headers: { "x-request-id": requestId } });
       }
-      const imageMime = getImageMime(filePath);
+      const imageMime = getImageMime(realPath);
       if (imageMime) {
         if (stat.size > IMAGE_PREVIEW_MAX_BYTES) {
           return NextResponse.json({ error: "Image too large (>10MB)" }, { status: 413, headers: { "x-request-id": requestId } });
         }
-        return streamFile(filePath, stat, imageMime, request.headers.get("range"));
+        return streamFile(realPath, stat, imageMime, request.headers.get("range"));
       }
-      const audioMime = getAudioMime(filePath);
+      const audioMime = getAudioMime(realPath);
       if (audioMime) {
-        return streamFile(filePath, stat, audioMime, request.headers.get("range"));
+        return streamFile(realPath, stat, audioMime, request.headers.get("range"));
       }
       if (stat.size > TEXT_PREVIEW_MAX_BYTES) {
         return NextResponse.json({ error: "File too large for preview (>256KB)" }, { status: 413, headers: { "x-request-id": requestId } });
       }
-      const content = await fs.promises.readFile(filePath, "utf-8");
-      const language = getLanguage(filePath);
+      const content = await fs.promises.readFile(realPath, "utf-8");
+      const language = getLanguage(realPath);
       return NextResponse.json({ content, language, size: stat.size });
     }
 
@@ -245,10 +271,10 @@ export async function GET(
             }
           };
           // Send initial ping so client knows connection is live
-          send("connected", { filePath });
+          send("connected", { filePath: realPath });
           try {
-            watcher = fs.watch(filePath, () => {
-              fs.promises.stat(filePath)
+            watcher = fs.watch(realPath, () => {
+              fs.promises.stat(realPath)
                 .then((s) => {
                   send("change", { mtime: s.mtime.toISOString(), size: s.size });
                 })
@@ -283,11 +309,11 @@ export async function GET(
       return NextResponse.json({ error: "Not a directory" }, { status: 400, headers: { "x-request-id": requestId } });
     }
 
-    const names = await fs.promises.readdir(filePath);
+    const names = await fs.promises.readdir(realPath);
     const entryPromises = names
       .filter((name) => !IGNORED_NAMES.has(name) && !IGNORED_SUFFIXES.some((s) => name.endsWith(s)))
       .map(async (name) => {
-        const full = path.join(filePath, name);
+        const full = path.join(realPath, name);
         try {
           const s = await fs.promises.stat(full);
           return {
@@ -308,7 +334,7 @@ export async function GET(
         return a!.name.localeCompare(b!.name);
       });
 
-    return NextResponse.json({ entries, path: filePath });
+    return NextResponse.json({ entries, path: realPath });
   } catch (error) {
     logApiError({ route: "/api/files/[...path]", method: "GET", requestId, error });
     return NextResponse.json(
@@ -328,7 +354,13 @@ export async function PUT(
     const filePath = filePathFromSegments(segments);
 
     const allowedRoots = await getAllowedRoots();
-    if (!isPathAllowed(filePath, allowedRoots)) {
+
+    // Resolve symlinks before any operation — symlinks pointing outside
+    // allowed roots bypass string-based isPathAllowed checks.
+    let realPath: string;
+    try {
+      realPath = await resolveAuthorizedPath(filePath, allowedRoots);
+    } catch {
       return NextResponse.json({ error: "Access denied" }, { status: 403, headers: { "x-request-id": requestId } });
     }
 
@@ -336,16 +368,20 @@ export async function PUT(
     // .env files even when the path is inside an allowed root. Prevents a
     // compromised agent from planting a postinstall hook or overwriting
     // .git/config to establish persistence. (GET intentionally not restricted.)
-    const writeError = validateWritablePath(filePath);
+    const writeError = validateWritablePath(realPath);
     if (writeError) {
       return NextResponse.json({ error: writeError }, { status: 403, headers: { "x-request-id": requestId } });
     }
 
     let stat: fs.Stats;
     try {
-      stat = await fs.promises.stat(filePath);
+      stat = await fs.promises.lstat(realPath);
     } catch {
       return NextResponse.json({ error: "Not found" }, { status: 404, headers: { "x-request-id": requestId } });
+    }
+
+    if (stat.isSymbolicLink()) {
+      return NextResponse.json({ error: "Symlink targets are not writable" }, { status: 403, headers: { "x-request-id": requestId } });
     }
 
     if (!stat.isFile()) {
@@ -365,8 +401,8 @@ export async function PUT(
       );
     }
 
-    await fs.promises.writeFile(filePath, body.content, "utf-8");
-    const newStat = await fs.promises.stat(filePath);
+    await fs.promises.writeFile(realPath, body.content, "utf-8");
+    const newStat = await fs.promises.lstat(realPath);
 
     return NextResponse.json({ success: true, size: newStat.size });
   } catch (error) {

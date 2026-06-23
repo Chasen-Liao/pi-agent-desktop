@@ -100,7 +100,7 @@ export function validateWritablePath(filePath: string): string | null {
   // Check for .env files as basename (secrets). Matches /.env or /.env.local
   // at end of path, or a bare ".env" / ".env.local" whole path. The leading
   // (?:^|\/) ensures we don't match e.g. "envelope.env.ts".
-  const envMatch = lower.match(/(?:^|\/)\.env(\.[\w-]+)?$/);
+  const envMatch = lower.match(/(?:^|\/)\.env(?:\.[^\/]+)*$/);
   if (envMatch) {
     return "Writes to .env files are forbidden (may contain secrets)";
   }

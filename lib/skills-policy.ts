@@ -19,7 +19,7 @@ export function validateSkillsPackage(pkg: string): string | null {
   // skills.sh format: owner/repo or owner/repo@skill-name
   // Same charset as the search parser at app/api/skills/search/route.ts:52
   // to ensure install can only be called with packages that search would surface.
-  const re = /^[\w.\-]+\/[\w.\-@:]+$/;
+  const re = /^[\w.-]+\/[\w.-]+(?:@[\w.:-]+)?$/;
   if (!re.test(trimmed)) {
     return `Invalid package identifier (expected owner/repo[@skill] format, allowed chars: word, ".", "-", "@", ":")`;
   }

@@ -532,9 +532,9 @@ app.whenReady().then(async () => {
             const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
             const options = {
               type: "info" as const,
-              title: "更新可用",
-              message: `新版本 ${info.version} 已下载，重启以安装更新。`,
-              buttons: ["立即重启", "稍后"],
+              title: "Update Downloaded",
+              message: `Version ${info.version} has been downloaded. Restart to install the update.`,
+              buttons: ["Restart Now", "Later"],
               defaultId: 0,
             };
             const showPromise = parent

@@ -3,6 +3,7 @@ import { existsSync } from "fs";
 import { startRpcSession } from "@/lib/rpc-manager";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 import { validateAgentCwd } from "@/lib/path-policy";
+import { validateAgentCommand } from "@/lib/agent-commands";
 
 // POST /api/agent/new  body: { cwd: string; type: string; message: string; ... }
 // Spawns a brand-new pi session and immediately sends the first command.
@@ -31,6 +32,14 @@ export async function POST(req: Request) {
 
     // Use a one-time key so startRpcSession's lock doesn't conflict with real session ids
     const { provider, modelId, toolNames, thinkingLevel, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; thinkingLevel?: string; [key: string]: unknown };
+
+    // Validate the command before allocating a session — mirrors /api/agent/[id]
+    // behavior so invalid command types fail with 400 instead of 500 after
+    // unnecessarily consuming session resources.
+    const cmdError = validateAgentCommand(promptCommand);
+    if (cmdError) {
+      return NextResponse.json({ error: cmdError }, { status: 400, headers: { "x-request-id": requestId } });
+    }
 
     const tempKey = `__new__${Date.now()}__${Math.random().toString(36).slice(2, 8)}`;
     const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { Tab } from "@/components/TabBar";
 
 /**
@@ -43,14 +43,23 @@ export function useFileTabs(onTabOpened?: () => void, onAllTabsClosed?: () => vo
         const next = prev.filter((t) => t.id !== tabId);
         // 在 setFileTabs 的 updater 内同步派生下一个 active id（不读闭包 fileTabs）
         setActiveFileTabId((cur) => computeNextActiveId(cur, tabId, next));
-        if (next.length === 0) {
-          onAllTabsClosed?.();
-        }
         return next;
       });
     },
-    [onAllTabsClosed]
+    []
   );
+
+  // Fire onAllTabsClosed in a useEffect so the callback lives outside the
+  // state updater. React requires updaters to be pure and may double-invoke
+  // them in StrictMode; moving the side effect here ensures single invocation.
+  const prevLengthRef = useRef(fileTabs.length);
+  useEffect(() => {
+    const prev = prevLengthRef.current;
+    prevLengthRef.current = fileTabs.length;
+    if (prev > 0 && fileTabs.length === 0) {
+      onAllTabsClosed?.();
+    }
+  }, [fileTabs.length, onAllTabsClosed]);
 
   return {
     fileTabs,

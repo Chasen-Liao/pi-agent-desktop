@@ -159,7 +159,13 @@ export async function DELETE(
 
     // 3. Destroy any active RPC wrapper for this session.
     // Done before unlink so no new commands can race into a half-deleted session.
-    getRpcSession(id)?.destroy().catch((err) => console.error("Error destroying session wrapper:", err));
+    // Awaited so destroy fully completes before unlink executes — fire-and-forget
+    // would leave a race window where new commands could still execute during cleanup.
+    try {
+      await getRpcSession(id)?.destroy();
+    } catch (err) {
+      console.error("Error destroying session wrapper:", err);
+    }
 
     // 4. Unlink parent FIRST, before rewriting children (Task D4).
     // Rationale: a concurrent fork calls `SessionManager.open(currentSessionFile)`

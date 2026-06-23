@@ -86,30 +86,26 @@ test("isAllowedOrigin: scheme/host are matched case-insensitively", () => {
 // ---------------------------------------------------------------------------
 // shouldApplyOriginCheck — request routing policy
 // ---------------------------------------------------------------------------
-// Decides which requests the middleware origin-checks. Only non-GET requests
-// to /api/* are checked — pages are GET-loaded and covered by CSP, while API
-// writes are the actual DNS-rebinding target.
+// All /api/* requests are checked regardless of HTTP method: sensitive GET
+// endpoints (session data, file reads) are also vulnerable to DNS-rebinding.
 
 test("shouldApplyOriginCheck: POST to /api/agent/:id is checked", () => {
   assert.equal(shouldApplyOriginCheck("/api/agent/abc-123", "POST"), true);
 });
 
-test("shouldApplyOriginCheck: GET to /api/health is NOT checked", () => {
-  assert.equal(shouldApplyOriginCheck("/api/health", "GET"), false);
+test("shouldApplyOriginCheck: GET to /api/health is checked", () => {
+  assert.equal(shouldApplyOriginCheck("/api/health", "GET"), true);
 });
 
 test("shouldApplyOriginCheck: GET to / is NOT checked (page loads)", () => {
   assert.equal(shouldApplyOriginCheck("/", "GET"), false);
 });
 
-test("shouldApplyOriginCheck: all non-GET methods on /api/* are checked", () => {
+test("shouldApplyOriginCheck: all methods on /api/* are checked", () => {
   assert.equal(shouldApplyOriginCheck("/api/agent/x", "PUT"), true);
   assert.equal(shouldApplyOriginCheck("/api/agent/x", "DELETE"), true);
   assert.equal(shouldApplyOriginCheck("/api/agent/x", "PATCH"), true);
-});
-
-test("shouldApplyOriginCheck: GET to /api/agent/:id is NOT checked (read-only)", () => {
-  assert.equal(shouldApplyOriginCheck("/api/agent/abc-123", "GET"), false);
+  assert.equal(shouldApplyOriginCheck("/api/agent/x", "GET"), true);
 });
 
 test("shouldApplyOriginCheck: non-API POST is NOT checked (handled by CSP instead)", () => {
@@ -119,9 +115,7 @@ test("shouldApplyOriginCheck: non-API POST is NOT checked (handled by CSP instea
   assert.equal(shouldApplyOriginCheck("/some-page", "GET"), false);
 });
 
-test("shouldApplyOriginCheck: lower-case method is normalized before the GET check", () => {
-  // Defensive: even though RFC 7231 & Next.js both uppercase methods, a
-  // lower-case method should still be recognized as a write operation.
+test("shouldApplyOriginCheck: all method variants on /api/* are checked", () => {
   assert.equal(shouldApplyOriginCheck("/api/x", "post"), true);
-  assert.equal(shouldApplyOriginCheck("/api/x", "get"), false);
+  assert.equal(shouldApplyOriginCheck("/api/x", "get"), true);
 });

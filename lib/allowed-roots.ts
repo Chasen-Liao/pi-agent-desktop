@@ -1,5 +1,6 @@
 import path from "path";
 import { listAllSessions } from "./session-reader";
+import { validateAgentCwd } from "./path-policy";
 
 // Short-TTL cache for the allowed-roots set. Without this, every file list/read
 // request re-scans every pi session on disk just to check access. 5s is short
@@ -28,7 +29,10 @@ export async function getAllowedRoots(): Promise<Set<string>> {
   const sessions = await listAllSessions();
   const roots = new Set<string>();
   for (const s of sessions) {
-    if (s.cwd) roots.add(s.cwd);
+    // Apply the same safety policy as /api/agent/new so that tampered or
+    // legacy session headers with cwd="/" or "C:\" cannot re-grant broad
+    // disk access through the allowedRoots cache.
+    if (s.cwd && !validateAgentCwd(s.cwd)) roots.add(s.cwd);
   }
   // Also allow ~/pi-cwd-* directories created by the default-cwd endpoint
   const home = (await import("os")).homedir();

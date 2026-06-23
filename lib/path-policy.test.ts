@@ -82,6 +82,8 @@ test("validateWritablePath: rejects .env files (basename only)", () => {
   assert.match(validateWritablePath("/proj/.env")!, /Writes to \.env files are forbidden/);
   assert.match(validateWritablePath("/proj/.env.local")!, /Writes to \.env files are forbidden/);
   assert.match(validateWritablePath("/proj/.env.production")!, /Writes to \.env files are forbidden/);
+  // Multi-layer suffixes (e.g. .env.production.local) were previously bypassed.
+  assert.match(validateWritablePath("/proj/.env.production.local")!, /Writes to \.env files are forbidden/);
   assert.match(validateWritablePath("/proj/sub/.env")!, /Writes to \.env files are forbidden/);
   // bare filename
   assert.match(validateWritablePath(".env")!, /Writes to \.env files are forbidden/);
