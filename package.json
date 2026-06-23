@@ -21,7 +21,7 @@
   "scripts": {
     "dev": "next dev -p 30141",
     "build": "npm run build:standalone",
-    "build:standalone": "next build --webpack",
+    "build:standalone": "next build",
     "start": "next start -p 30141",
     "lint": "eslint .",
     "test": "node --test --test-force-exit \"lib/**/*.test.ts\" \"lib/**/*.test.mjs\" \"electron/**/*.test.ts\" \"app/**/*.test.ts\" \"hooks/**/*.test.ts\" \"components/**/*.test.ts\" \"package.test.ts\"",
