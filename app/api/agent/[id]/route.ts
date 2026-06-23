@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveSessionPath, getHeaderAsync } from "@/lib/session-reader";
 import { startRpcSession, getRpcSession } from "@/lib/rpc-manager";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { validateAgentCommand } from "@/lib/agent-commands";
 
 // POST /api/agent/[id] - Send a command to an existing session
 export async function POST(
@@ -13,6 +14,17 @@ export async function POST(
 
   try {
     const body = await req.json() as { type: string; [key: string]: unknown };
+
+    // Defense in depth: reject unknown/malformed command types at the route
+    // boundary (400) rather than letting them fall through to pi's internal
+    // throw (500, which could leak details via errorMessage).
+    const cmdError = validateAgentCommand(body);
+    if (cmdError) {
+      return NextResponse.json(
+        { error: cmdError },
+        { status: 400, headers: { "x-request-id": requestId } }
+      );
+    }
 
     // Fast path: already-running session
     const existing = getRpcSession(id);

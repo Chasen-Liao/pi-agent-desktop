@@ -1,4 +1,5 @@
 import { AuthStorage } from "@earendil-works/pi-coding-agent";
+import { validateProviderName } from "@/lib/auth-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,10 @@ export async function POST(
   { params }: { params: Promise<{ provider: string }> }
 ) {
   const { provider } = await params;
+  const providerError = validateProviderName(provider);
+  if (providerError) {
+    return Response.json({ error: providerError }, { status: 400 });
+  }
   const { token, code } = (await req.json()) as { token?: string; code?: string };
 
   if (!token || !code) {
@@ -45,6 +50,13 @@ export async function GET(
   { params }: { params: Promise<{ provider: string }> }
 ) {
   const { provider } = await params;
+  const providerError = validateProviderName(provider);
+  if (providerError) {
+    return new Response(JSON.stringify({ error: providerError }), {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    });
+  }
 
   const encoder = new TextEncoder();
   const send = (controller: ReadableStreamDefaultController, data: unknown) => {
@@ -54,6 +66,9 @@ export async function GET(
   // AbortController propagates client disconnect into authStorage.login()
   const abort = new AbortController();
   req.signal.addEventListener("abort", () => abort.abort());
+
+  // Ref so the ReadableStream cancel() can invoke the cleanup defined inside start().
+  let cleanupRef: (() => void) | null = null;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -104,14 +119,19 @@ export async function GET(
         return pendingManualRequest;
       };
 
-      // Cleanup: remove pending token and abort any waiting promise
+      // Cleanup: remove pending token and abort any waiting promise.
+      // Idempotent — safe to call from abort.signal, finally block, and stream cancel().
+      let cleaned = false;
       const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
         for (const token of activeTokens) {
           registry.get(token)?.reject(new Error("Login cancelled"));
           registry.delete(token);
         }
         activeTokens.clear();
       };
+      cleanupRef = cleanup;
 
       // Also cancel on client disconnect
       abort.signal.addEventListener("abort", cleanup);
@@ -185,6 +205,7 @@ export async function GET(
     },
     cancel() {
       abort.abort();
+      cleanupRef?.();
     },
   });
 

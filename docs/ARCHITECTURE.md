@@ -320,13 +320,15 @@ stateDiagram-v2
     Destroyed --> [*]
 ```
 
-**三个必须存 `globalThis` 的原因**（Next.js HMR 会丢弃模块级变量）：
+**五个必须存 `globalThis` 的原因**（Next.js HMR 会丢弃模块级变量）：
 
-| 全局变量 | 用途 |
-|---|---|
-| `globalThis.__piSessions` | `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表 |
-| `globalThis.__piSessionPathCache` | `sessionId → .jsonl` 绝对路径缓存 |
-| `globalThis.__piStartLocks` | `Map<sessionId, Promise>` 并发启动共享锁 |
+| 全局变量 | 用途 | 定义位置 | 回收策略 |
+|---|---|---|---|
+| `globalThis.__piSessions` | `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | wrapper.destroy() 时 delete；process.once("exit") 全清 |
+| `globalThis.__piSessionPathCache` | `sessionId → .jsonl` 绝对路径缓存 | [lib/session-reader.ts](../lib/session-reader.ts) | invalidateSessionPathCache(id) 单条删；fork 失败 / DELETE 后主动清 |
+| `globalThis.__piStartLocks` | `Map<sessionId, Promise>` 并发启动共享锁 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | startRpcSession finally 块自动清 |
+| `globalThis.__piWriteLocks` | `Map<filePath, Promise>` per-file 写入锁 | [lib/session-lock.ts](../lib/session-lock.ts) | withFileLock finally 块自动清 |
+| `globalThis.__piAllowedRootsCache` | `{ roots: Set<string>; expiresAt: number }` 文件访问白名单缓存 | [lib/allowed-roots.ts](../lib/allowed-roots.ts) | 5s TTL 自动过期；POST /api/agent/new 时主动 add |
 
 **Fork 注册顺序陷阱**（详见 §14.2）：fork 在**文件层**通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）完成，**不修改旧 wrapper 内部状态**。但 `send("fork")` 仍需先 `startRpcSession(newSessionId, ...)` 预注册新 wrapper，再 `this.destroy()` 旧 wrapper，以满足"返回时 newSessionId 已在注册表"的契约。
 
@@ -567,7 +569,7 @@ resources/
 
 Next.js 热重载（HMR）会丢弃模块级变量。若把 `Map<sessionId, AgentSessionWrapper>` 放在模块顶层，每次 HMR 后所有活跃 session 都会丢失。
 
-**解决**：存到 `globalThis.__piSessions`、`globalThis.__piSessionPathCache`、`globalThis.__piStartLocks`。
+**解决**：存到五个 globalThis 变量（详见 §7 表格）：`globalThis.__piSessions`、`globalThis.__piSessionPathCache`、`globalThis.__piStartLocks`、`globalThis.__piWriteLocks`、`globalThis.__piAllowedRootsCache`。
 
 ### 14.2 Fork 的执行顺序：预注册 → 销毁旧 wrapper
 

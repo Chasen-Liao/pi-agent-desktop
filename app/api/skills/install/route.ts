@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runNpx } from "@/lib/npx";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { validateSkillsPackage } from "@/lib/skills-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,14 @@ export async function POST(req: Request) {
   try {
     ({ package: pkg, scope, cwd } = await req.json() as { package?: string; scope?: string; cwd?: string });
     if (!pkg?.trim()) return NextResponse.json({ error: "package required" }, { status: 400, headers: { "x-request-id": requestId } });
+
+    // Reject anything that isn't a valid skills.sh package identifier (owner/repo[@skill]).
+    // Prevents shell metacharacter / path traversal / arbitrary-npm-package RCE surface
+    // even though runNpx uses execFile (defense in depth).
+    const pkgError = validateSkillsPackage(pkg);
+    if (pkgError) {
+      return NextResponse.json({ error: pkgError }, { status: 400, headers: { "x-request-id": requestId } });
+    }
 
     const isGlobal = scope !== "project";
     const args = ["skills", "add", pkg.trim(), "-y", "--agent", "pi"];

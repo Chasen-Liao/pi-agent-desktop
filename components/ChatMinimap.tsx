@@ -190,10 +190,36 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
 
 
 
+  // Measure minimap height reactively. Reading containerRef.current.clientHeight
+  // directly during render would return null on first mount (falling back to 600
+  // and causing tooltip miscalculation on the first hover). useState + useEffect
+  // gives us the real value after mount, and ResizeObserver keeps it in sync on
+  // window resize / sidebar toggle.
+  const [minimapHeightPx, setMinimapHeightPx] = useState(600);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    // Measure immediately so the second render already uses the real height.
+    setMinimapHeightPx(el.clientHeight);
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height;
+        if (height > 0) setMinimapHeightPx(height);
+      }
+    });
+    observer.observe(el);
+
+    return () => observer.disconnect();
+    // mount-only: containerRef is a stable object
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Compute collision-free tooltip positions for all nodes
   const TOOLTIP_HEIGHT = 22;
   const TOOLTIP_GAP = 2;
-  const minimapHeightPx = containerRef.current?.clientHeight ?? 600;
 
   const tooltipPositions = useMemo(() => {
     if (!minimapHovered || nodes.length === 0) return [];
