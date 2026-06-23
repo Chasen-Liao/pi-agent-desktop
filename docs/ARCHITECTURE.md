@@ -5,7 +5,7 @@
 >
 > - **项目**：`@chasen-liao/pi-agent-desktop` v0.7.13
 > - **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.79.8 / `@earendil-works/pi-ai` ^0.79.8
-> - **更新日期**：2026-06-22
+> - **更新日期**：2026-06-23
 
 ---
 
@@ -320,13 +320,14 @@ stateDiagram-v2
     Destroyed --> [*]
 ```
 
-**三个必须存 `globalThis` 的原因**（Next.js HMR 会丢弃模块级变量）：
+**存 `globalThis` 的变量**（Next.js HMR 会丢弃模块级变量）：
 
 | 全局变量 | 用途 |
 |---|---|
 | `globalThis.__piSessions` | `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表 |
 | `globalThis.__piSessionPathCache` | `sessionId → .jsonl` 绝对路径缓存 |
 | `globalThis.__piStartLocks` | `Map<sessionId, Promise>` 并发启动共享锁 |
+| `globalThis.__piAllowedRootsCache` | 文件访问允许根集合 + 5s TTL（见 §14.11），避免每次文件请求都全盘扫描 session
 
 **Fork 注册顺序陷阱**（详见 §14.2）：fork 在**文件层**通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）完成，**不修改旧 wrapper 内部状态**。但 `send("fork")` 仍需先 `startRpcSession(newSessionId, ...)` 预注册新 wrapper，再 `this.destroy()` 旧 wrapper，以满足"返回时 newSessionId 已在注册表"的契约。
 
@@ -479,7 +480,7 @@ components/models-config/     模型配置弹窗的子组件
 
 | 路由 | 方法 | 用途 |
 |---|---|---|
-| `app/api/files/[...path]/route.ts` | GET | 文件内容（安全根限制） |
+| `app/api/files/[...path]/route.ts` | GET / PUT | 安全文件访问：GET `?type=list\|read\|watch`（目录列表 / 文件读取 / SSE 监听变更）；PUT 写入文件。**allowed-roots 鉴权**，仅允许 session cwd 与 `~/pi-cwd-*` 下的路径（详见 §14.11） |
 | `app/api/home/route.ts` | GET | 用户主目录路径 |
 | `app/api/default-cwd/route.ts` | POST | 创建并返回默认项目目录 |
 | `app/api/select-directory/route.ts` | POST | 原生 Windows 文件夹选择器（仅桌面端） |
@@ -567,7 +568,7 @@ resources/
 
 Next.js 热重载（HMR）会丢弃模块级变量。若把 `Map<sessionId, AgentSessionWrapper>` 放在模块顶层，每次 HMR 后所有活跃 session 都会丢失。
 
-**解决**：存到 `globalThis.__piSessions`、`globalThis.__piSessionPathCache`、`globalThis.__piStartLocks`。
+**解决**：存到 `globalThis.__piSessions`、`globalThis.__piSessionPathCache`、`globalThis.__piStartLocks`、`globalThis.__piAllowedRootsCache`（见 §14.11）。
 
 ### 14.2 Fork 的执行顺序：预注册 → 销毁旧 wrapper
 
@@ -655,6 +656,44 @@ serverExternalPackages: [
 ```
 
 把两个 pi 包设为 server external，避免 webpack 打包它们（它们依赖 Node 原生模块）。
+
+### 14.11 安全文件访问：allowed-roots 鉴权模型
+
+`app/api/files/[...path]/route.ts` 是 FileExplorer / FileViewer 的后端，直接读用户磁盘，必须防止任意路径访问。
+
+**允许的根目录**（`getAllowedRoots()`）：
+
+1. 所有 pi session 的 `cwd`（来自 `listAllSessions()`）
+2. `~/pi-cwd-*`（`default-cwd` 端点创建的目录，命名 `pi-cwd-YYYYMMDD`）
+
+**路径穿越防护**（`isPathAllowed()`）：
+
+- 逐根比较：`path.resolve(target)` 必须等于某根或以 `根 + 分隔符` 为前缀，否则 403
+- **Windows / POSIX 双规则**：当 target 或 root 看起来是 Windows 绝对路径（`C:\` / `\\`）时用 `path.win32` 解析并做大小写不敏感比较；否则用宿主 `path`。避免跨平台路径分隔符和盘符大小写导致的误判
+- Windows 绝对路径判定：`/^[a-zA-Z]:[\\/]/` 或 `\\` / `//` 开头
+
+**`globalThis.__piAllowedRootsCache`（5s TTL）**：每次请求都调 `listAllSessions()` 全盘扫描代价高；缓存允许根集合 5 秒，新创建的 cwd 也能 promptly 出现。必须存 globalThis 以存活 HMR（与 §14.1 同理）。
+
+**三种 GET 模式**（`?type=`）：
+
+| type | 行为 |
+|---|---|
+| `list`（默认） | 目录列表：过滤 `node_modules`/`.git`/`.next` 等 `IGNORED_NAMES` 与 `.pyc` 后缀，目录在前字母序 |
+| `read` | 文件读取：图片/音频走流式 `streamFile`（支持 HTTP Range），文本返回 `{ content, language, size }` |
+| `watch` | SSE：`fs.watch` 监听文件变更，发射 `change` 事件（mtime + size） |
+
+**大小限制**：
+
+| 场景 | 上限 | 超限返回 |
+|---|---|---|
+| 文本预览（read） | 256 KB | 413 |
+| 文本写入（PUT） | 512 KB | 413 |
+| 图片预览 | 10 MB | 413 |
+| 音频流式 | 无上限（Range 分块） | — |
+
+**`streamFile` 的连接清理**：用 `ReadableStream` 包装 `fs.createReadStream`，`cancel()` 时 `fileStream.destroy()`。浏览器媒体探针常提前断开，`controller.enqueue/close/error` 全部 try-catch 以容忍客户端已放弃的响应。
+
+**PUT 写入**：`{ content: string }` 覆盖写文件，同样受 allowed-roots 鉴权与 512 KB 上限约束。
 
 ---
 
