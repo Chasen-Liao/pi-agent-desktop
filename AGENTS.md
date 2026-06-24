@@ -131,6 +131,13 @@ electron-builder's `extraResources` with `filter: ["**/*"]` **silently excludes 
 
 In production, `electron/main.ts` spawns `process.execPath` (the Electron binary itself) with `ELECTRON_RUN_AS_NODE=1` to run `server.js` as a plain Node.js process. The main process then opens a `BrowserWindow` pointing at `http://127.0.0.1:PORT`. The child process is killed on `before-quit`. See [docs/ARCHITECTURE.md §13](docs/ARCHITECTURE.md#13-electron-桌面端) for the full Electron module map.
 
+### Electron packaging size bloat & Next.js standalone "matryoshka" trap
+
+Two critical rules to prevent massive (`1GB+`) installer sizes:
+1. **Frontend dependencies MUST be `devDependencies`**: `electron-builder` blindly copies everything in `dependencies` into `app.asar`. Since Next.js `standalone` mode already extracts what the frontend needs into `.next/standalone/node_modules`, leave **only** the dependencies used by `electron/main.ts` (e.g. `electron-updater`) in the main `dependencies`. Move Next, React, and heavy UI libraries to `devDependencies`.
+2. **Next.js Output File Tracing (NFT) Trap**: If Next.js encounters dynamic imports or `path.join(process.cwd(), ...)`, NFT will conservatively trace and copy the **entire project root** into `.next/standalone`. This pulls the `release/` directory (containing the previous `.exe` installer) into the new build, creating an exponentially growing "matryoshka" (套娃) installer.
+   **Fix**: Always explicitly exclude `release/**/*` and `.git/**/*` via `outputFileTracingExcludes` in `next.config.ts` (at the top level of the config object in Next 15+).
+
 ---
 
 ## Pi Session File Format
