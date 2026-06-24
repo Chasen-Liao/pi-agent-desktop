@@ -2,22 +2,32 @@
 
 :root {
   color-scheme: dark;
-  --bg: #030304;
-  --bg-grid: #09090b;
+  --bg: #05080c;
+  --bg-grid: #090b10;
   --text: #f3f4f6;
   --text-muted: #8e9aab;
   --text-dim: #4b5563;
-  --accent: #10b981;
-  --accent-rgb: 16, 185, 129;
-  --accent-cyan: #06b6d4;
-  --accent-cyan-rgb: 6, 182, 212;
+  --accent: #ff8f40;
+  --accent-rgb: 255, 143, 64;
+  --accent-cyan: #00e5ff;
+  --accent-cyan-rgb: 0, 229, 255;
   --border: rgba(255, 255, 255, 0.08);
   --border-active: rgba(255, 255, 255, 0.16);
-  --glass-bg: rgba(10, 10, 12, 0.7);
+  --glass-bg: rgba(10, 12, 16, 0.7);
   --glass-border: rgba(255, 255, 255, 0.06);
   --shadow: 0 30px 100px rgba(0, 0, 0, 0.8);
   --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+@keyframes float-blob-1 {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(30px, 20px) scale(1.1); }
+}
+
+@keyframes float-blob-2 {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-30px, -20px) scale(1.08); }
 }
 
 * {
@@ -46,9 +56,39 @@ body {
   z-index: -1;
   pointer-events: none;
   background: 
-    radial-gradient(circle at 10% 10%, rgba(16, 185, 129, 0.03) 0%, transparent 40%),
-    radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.03) 0%, transparent 40%),
-    #030304;
+    radial-gradient(circle at 10% 10%, rgba(255, 143, 64, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(0, 229, 255, 0.03) 0%, transparent 40%),
+    var(--bg);
+}
+
+.bg-glow-blobs {
+  position: fixed;
+  inset: 0;
+  z-index: -1.5;
+  pointer-events: none;
+  overflow: hidden;
+}
+.glow-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.8;
+}
+.glow-orange {
+  top: -10%;
+  left: -10%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.06) 0%, transparent 70%);
+  animation: float-blob-1 20s ease-in-out infinite alternate;
+}
+.glow-blue {
+  bottom: -10%;
+  right: -10%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(var(--accent-cyan-rgb), 0.04) 0%, transparent 70%);
+  animation: float-blob-2 25s ease-in-out infinite alternate;
 }
 
 body::before {
@@ -116,17 +156,23 @@ button {
   font-size: 1.1rem;
 }
 
+.brand:hover .brand-mark {
+  transform: rotate(6deg) scale(1.05);
+  box-shadow: 0 0 22px rgba(var(--accent-rgb), 0.35);
+}
+
 .brand-mark {
   display: grid;
   width: 32px;
   height: 32px;
   place-items: center;
-  color: #030304;
+  color: var(--bg);
   background: linear-gradient(135deg, var(--accent), var(--accent-cyan));
-  border-radius: 6px;
+  border-radius: 8px;
   font-weight: 800;
   font-size: 1.2rem;
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
+  box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.2);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
 }
 
 .nav-links {
@@ -196,7 +242,15 @@ h1 span {
   color: transparent;
   -webkit-background-clip: text;
   background-clip: text;
-  background-image: linear-gradient(to right, var(--text), var(--text-muted));
+  background-image: linear-gradient(to right, var(--text) 30%, var(--text-muted));
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-cyan) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 40px rgba(var(--accent-rgb), 0.1);
 }
 
 .hero-text {
@@ -233,7 +287,7 @@ h1 span {
 
 .button.primary:hover {
   background-color: var(--accent);
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.4);
 }
 
 .button.secondary {
@@ -244,8 +298,9 @@ h1 span {
 }
 
 .button.secondary:hover {
-  border-color: var(--border-active);
-  background-color: rgba(255, 255, 255, 0.04);
+  border-color: var(--accent);
+  background-color: rgba(var(--accent-rgb), 0.02);
+  box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.05);
 }
 
 .status-strip {
@@ -294,6 +349,13 @@ h1 span {
   height: 480px;
   display: flex;
   flex-direction: column;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.workspace-mockup:hover {
+  transform: translateY(-4px) scale(1.005);
+  border-color: rgba(var(--accent-rgb), 0.25);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.9), 0 0 40px rgba(var(--accent-rgb), 0.05);
 }
 
 .workspace-bar {
@@ -386,7 +448,7 @@ h1 span {
 
 .tree-node.active {
   color: var(--accent);
-  background-color: rgba(16, 185, 129, 0.08);
+  background-color: rgba(var(--accent-rgb), 0.08);
   border-left: 2px solid var(--accent);
 }
 
@@ -467,9 +529,9 @@ h1 span {
   white-space: pre;
 }
 
-.code-keyword { color: #f43f5e; }
-.code-entity { color: #60a5fa; }
-.code-string { color: #34d399; }
+.code-keyword { color: #ff7b72; }
+.code-entity { color: #79c0ff; }
+.code-string { color: #a5d6ff; }
 .code-comment { color: var(--text-dim); }
 
 /* Mock Workspace - Chat Window */
@@ -516,8 +578,8 @@ h1 span {
 }
 
 .chat-msg.agent {
-  background-color: rgba(16, 185, 129, 0.03);
-  border-color: rgba(16, 185, 129, 0.15);
+  background-color: rgba(var(--accent-rgb), 0.03);
+  border-color: rgba(var(--accent-rgb), 0.15);
   align-self: flex-start;
   color: var(--text-muted);
 }
@@ -596,9 +658,9 @@ h2 {
 }
 
 .feature-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(16, 185, 129, 0.3);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  transform: translateY(-4px);
+  border-color: rgba(var(--accent-rgb), 0.35);
+  box-shadow: 0 16px 48px -12px rgba(var(--accent-rgb), 0.25);
 }
 
 .feature-num {
@@ -701,8 +763,9 @@ h3 {
 }
 
 .cmd-line:hover {
-  border-color: var(--border-active);
-  background-color: rgba(255, 255, 255, 0.04);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background-color: rgba(var(--accent-rgb), 0.02);
+  box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.04);
 }
 
 .cmd-text {
@@ -723,7 +786,7 @@ h3 {
 
 .cmd-line.copied {
   border-color: var(--accent);
-  background-color: rgba(16, 185, 129, 0.05);
+  background-color: rgba(var(--accent-rgb), 0.05);
 }
 
 .cmd-line.copied .cmd-copy-btn {

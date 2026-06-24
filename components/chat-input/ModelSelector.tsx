@@ -86,17 +86,8 @@ export function ModelSelector({
           cursor: isStreaming ? "not-allowed" : "pointer",
           fontSize: 12,
           opacity: isStreaming ? 0.5 : 1,
-          transition: "background 0.12s, color 0.12s",
         }}
-        onMouseEnter={(e) => {
-          if (isStreaming) return;
-          e.currentTarget.style.background = "var(--bg-hover)";
-          e.currentTarget.style.color = "var(--text)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = modelDropdownOpen ? "var(--bg-hover)" : "none";
-          e.currentTarget.style.color = "var(--text-muted)";
-        }}
+        className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-all duration-150"}
       >
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="4" y="4" width="16" height="16" rx="2" />
@@ -148,8 +139,7 @@ export function ModelSelector({
                         fontWeight: isActive ? 600 : 400,
                         whiteSpace: "nowrap",
                       }}
-                      onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                      onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                      className={isActive ? "" : "hover:bg-[var(--bg-hover)] transition-colors duration-150"}
                     >
                       {isActive
                         ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>

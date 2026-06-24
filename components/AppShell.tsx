@@ -359,10 +359,10 @@ export function AppShell() {
             disabled={disabled}
             title={label}
             aria-label={label}
-            className={`flex-1 flex items-center justify-center gap-1.5 h-control-height p-0 bg-transparent border-none rounded-control text-[12px] transition-colors duration-120 ${
+            className={`flex-1 flex items-center justify-center gap-1.5 h-control-height p-0 bg-transparent border-none rounded-control text-[12px] transition-all duration-120 ${
               disabled
                 ? "cursor-default opacity-35 text-text-muted"
-                : "cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text"
+                : "cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text active:scale-95"
             }`}
           >
             {icon}

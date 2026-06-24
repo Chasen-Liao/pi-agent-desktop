@@ -618,8 +618,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 fontWeight: 600,
                 letterSpacing: 0,
                 boxShadow: (value.trim() || attachedImages.length) ? "0 1px 8px var(--focus-ring)" : "none",
-                transition: "background 0.15s, box-shadow 0.15s",
               }}
+              className="transition-all duration-150 active:scale-95"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="2" y1="7" x2="11" y2="7" />
@@ -649,17 +649,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
                 cursor: isStreaming ? "not-allowed" : "pointer",
                 opacity: isStreaming ? 0.5 : 1,
-                transition: "background 0.12s, color 0.12s",
               }}
-              onMouseEnter={(e) => {
-                if (isStreaming) return;
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "none";
-                e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text-muted)";
-              }}
+              className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-all duration-150"}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -700,17 +691,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     cursor: isStreaming ? "not-allowed" : "pointer",
                     fontSize: 12,
                     opacity: isStreaming ? 0.5 : 1,
-                    transition: "background 0.12s, color 0.12s",
                   }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming) return;
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = thinkingDropdownOpen ? "var(--bg-hover)" : "none";
-                    e.currentTarget.style.color = "var(--text-muted)";
-                  }}
+                  className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-all duration-150"}
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
@@ -755,8 +737,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             fontWeight: isActive ? 600 : 400,
                             whiteSpace: "nowrap",
                           }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                          className={isActive ? "" : "hover:bg-[var(--bg-hover)] transition-colors duration-150"}
                         >
                           {isActive
                             ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>

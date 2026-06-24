@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
-import { Noto_Sans_Mono } from "next/font/google";
+import { Noto_Sans_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
 const notoSansMono = Noto_Sans_Mono({
   subsets: ["latin", "cyrillic"],
   variable: "--font-noto-mono",
+  display: "swap",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
   display: "swap",
 });
 
@@ -19,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={notoSansMono.variable} suppressHydrationWarning>
+    <html lang="en" className={`${notoSansMono.variable} ${inter.variable}`} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

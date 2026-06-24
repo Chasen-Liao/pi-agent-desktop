@@ -598,7 +598,8 @@ export function SkillsConfig({
     >
       <div
         style={{
-          width: 860,
+          width: "100%",
+          maxWidth: 860,
           height: "78vh",
           background: "var(--bg)",
           border: "1px solid var(--border)",

@@ -123,7 +123,7 @@ if (canvas) {
           ctx.beginPath();
           ctx.moveTo(p1.x, p1.y);
           ctx.lineTo(p2.x, p2.y);
-          ctx.strokeStyle = `rgba(16, 185, 129, ${alpha})`;
+          ctx.strokeStyle = `rgba(255, 143, 64, ${alpha * 0.8})`;
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }
@@ -139,7 +139,7 @@ if (canvas) {
           ctx.beginPath();
           ctx.moveTo(p1.x, p1.y);
           ctx.lineTo(mouse.x, mouse.y);
-          ctx.strokeStyle = `rgba(6, 182, 212, ${alpha})`;
+          ctx.strokeStyle = `rgba(0, 229, 255, ${alpha * 0.9})`;
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }

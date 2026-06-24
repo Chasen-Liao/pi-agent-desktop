@@ -48,19 +48,25 @@ export function SessionTreeItem({
           onToggleCollapse={() => setCollapsed((v) => !v)}
         />
       </div>
-      {hasChildren && !collapsed && (
-        <div>
-          {node.children.map((child) => (
-            <SessionTreeItem
-              key={child.session.id}
-              node={child}
-              selectedSessionId={selectedSessionId}
-              onSelectSession={onSelectSession}
-              onRenamed={onRenamed}
-              onSessionDeleted={onSessionDeleted}
-              depth={depth + 1}
-            />
-          ))}
+      {hasChildren && (
+        <div
+          className={`grid transition-all duration-200 ease-in-out ${
+            collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+          }`}
+        >
+          <div className="overflow-hidden">
+            {node.children.map((child) => (
+              <SessionTreeItem
+                key={child.session.id}
+                node={child}
+                selectedSessionId={selectedSessionId}
+                onSelectSession={onSelectSession}
+                onRenamed={onRenamed}
+                onSessionDeleted={onSessionDeleted}
+                depth={depth + 1}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -199,7 +205,7 @@ function SessionItem({
           <div className="flex gap-1.25 shrink-0">
             <button
               onClick={handleDeleteConfirm}
-              className="flex items-center justify-center gap-1 h-[30px] px-[11px] bg-danger border-none rounded-control text-accent-contrast cursor-pointer text-[12px] font-semibold whitespace-nowrap"
+              className="flex items-center justify-center gap-1 h-[30px] px-[11px] bg-danger border-none rounded-control text-accent-contrast cursor-pointer text-[12px] font-semibold whitespace-nowrap active:scale-95 transition-all duration-150"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
@@ -211,7 +217,7 @@ function SessionItem({
             </button>
             <button
               onClick={handleDeleteCancel}
-              className="flex items-center justify-center h-[30px] px-[11px] bg-bg hover:bg-bg-hover border border-border rounded-control text-text-muted cursor-pointer text-[12px] font-medium whitespace-nowrap"
+              className="flex items-center justify-center h-[30px] px-[11px] bg-bg hover:bg-bg-hover border border-border rounded-control text-text-muted cursor-pointer text-[12px] font-medium whitespace-nowrap active:scale-95 transition-all duration-150"
             >
               Cancel
             </button>
@@ -288,7 +294,7 @@ function SessionItem({
               title="Rename"
               aria-label="Rename session"
               tabIndex={actionsVisible ? 0 : -1}
-              className="flex items-center justify-center w-7 h-7 p-0 bg-chrome-button-bg hover:bg-chrome-button-hover border border-border hover:border-focus-ring rounded-control text-text-muted hover:text-accent cursor-pointer shrink-0 transition-all duration-120"
+              className="flex items-center justify-center w-7 h-7 p-0 bg-chrome-button-bg hover:bg-chrome-button-hover border border-border hover:border-focus-ring rounded-control text-text-muted hover:text-accent cursor-pointer shrink-0 transition-all duration-120 active:scale-95"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
@@ -299,7 +305,7 @@ function SessionItem({
               title="Delete"
               aria-label="Delete session"
               tabIndex={actionsVisible ? 0 : -1}
-              className="flex items-center justify-center w-7 h-7 p-0 bg-chrome-button-bg hover:bg-danger-bg border border-border hover:border-danger-border rounded-control text-text-muted hover:text-danger cursor-pointer shrink-0 transition-all duration-120"
+              className="flex items-center justify-center w-7 h-7 p-0 bg-chrome-button-bg hover:bg-danger-bg border border-border hover:border-danger-border rounded-control text-text-muted hover:text-danger cursor-pointer shrink-0 transition-all duration-120 active:scale-95"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />

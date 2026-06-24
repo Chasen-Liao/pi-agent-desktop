@@ -54,17 +54,8 @@ export function PresetSelector({
           cursor: isStreaming ? "not-allowed" : "pointer",
           fontSize: 12,
           opacity: isStreaming ? 0.5 : 1,
-          transition: "background 0.12s, color 0.12s",
         }}
-        onMouseEnter={(e) => {
-          if (isStreaming) return;
-          e.currentTarget.style.background = "var(--bg-hover)";
-          e.currentTarget.style.color = "var(--text)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
-          e.currentTarget.style.color = "var(--text-muted)";
-        }}
+        className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-all duration-150"}
       >
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
@@ -96,8 +87,7 @@ export function PresetSelector({
                   fontWeight: isActive ? 600 : 400,
                   whiteSpace: "nowrap",
                 }}
-                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                className={isActive ? "" : "hover:bg-[var(--bg-hover)] transition-colors duration-150"}
               >
                 {isActive
                   ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
