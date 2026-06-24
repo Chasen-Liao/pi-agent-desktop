@@ -78,65 +78,29 @@ Next.js HMR 会丢弃模块级变量，因此以下五个必须挂在 `globalThi
 
 ## Key Design Decisions & Traps
 
-### AgentSession lifecycle (`lib/rpc-manager.ts`)
+> 📖 完整的设计决策与陷阱列表已在 [docs/ARCHITECTURE.md §14](docs/ARCHITECTURE.md#14-关键设计决策与陷阱) 归档。
+> 本节仅保留**最频繁踩坑**的 5 个要点速查。
 
-- One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`
-- `globalThis` survives Next.js hot-reload; plain module-level Map does not
-- Idle timeout: 10 minutes. Concurrent `startRpcSession()` calls share a single start Promise (`globalThis.__piStartLocks`)
+### 1. Fork 的预注册顺序
 
-### Fork must pre-register the new wrapper before destroying the old one
+`send("fork")` 先创建新 `.jsonl` 文件，然后 `await startRpcSession(newSessionId, ...)` **预注册**新 wrapper，最后 `this.destroy()` 旧 wrapper。若中间抛错，旧 wrapper **不销毁**（保持可用），孤儿文件可接受（下次覆盖）。
 
-Fork happens at the **file layer** via `SessionManager.createBranchedSession(entry.parentId)` (or `SessionManager.create()` before the first message) — it creates a brand-new `.jsonl` file. Then `startRpcSession(newSessionId, newSessionFile, newCwd)` builds a **fresh `AgentSession` instance** for that file (the old wrapper's inner state is NOT mutated).
+### 2. 两种分支别搞混
 
-**Order**: `send("fork")` first creates the new session file, then `await startRpcSession(newSessionId, ...)` to **pre-register the new wrapper while the old one is still alive**, then calls `this.destroy()` (releases the old wrapper's subscriptions / idle timer immediately rather than waiting for the 10-min timeout), then returns `newSessionId`. Contract: by the time `send()` returns, `newSessionId` is already in the registry. If `startRpcSession` throws, the old wrapper is **not** destroyed — it stays usable under the old id (the orphaned new `.jsonl` file on disk is acceptable; the next fork will overwrite it).
+- **Fork**（用户消息 Fork 按钮）→ 创建新的 `.jsonl` 文件，侧边栏显示为子节点
+- **会话内分支**（Continue / BranchNavigator）→ 同一文件内 `navigate_tree`，切换调 `?leafId=`
 
-### Two kinds of branching — don't confuse them
+### 3. ToolCall 字段归一化
 
-- **Fork** (Fork button on user message): creates a new independent `.jsonl` file. Shown as a child in the sidebar tree via `parentSession` header field.
-- **In-session branch** (Continue button / BranchNavigator): calls `navigate_tree` within the same file. Multiple entries share the same `parentId`. Switching between them calls `/api/sessions/[id]/context?leafId=`.
+Pi SDK 存 `{id, name, arguments}`，前端用 `{toolCallId, toolName, input}`。`normalizeToolCalls()` 在文件加载和 SSE 流两处都做转换。
 
-### Session files can be fully rewritten
+### 4. Electron extraResources 必须单独含 node_modules
 
-`parentSession` in the header is **display metadata only** — has zero effect on chat content. Safe to `writeFileSync` the entire file (pi does this itself during migrations). Used when cascade-reparenting children on delete.
+`filter: ["**/*"]` **静默排除** `node_modules` 目录。必须另加一条 extraResources 单拉 `node_modules`——详见 [ARCHITECTURE.md §14.6](docs/ARCHITECTURE.md#146-electron-builder-extraresources-必须单独包含-node_modules)。
 
-### ToolCall field normalization
+### 5. Electron 打包大小 & Next.js NFT 套娃陷阱
 
-Pi stores toolCall blocks as `{type:"toolCall", id, name, arguments}` but `ToolCallContent` uses `{toolCallId, toolName, input}`. `normalizeToolCalls()` in `lib/normalize.ts` handles this — called in both `session-reader.ts` (file load) and `ChatWindow.handleAgentEvent()` (streaming).
-
-### New session tool preset
-
-Tool names are passed at session creation (`POST /api/agent/new` → `toolNames[]`). For existing sessions, the active preset is inferred on mount via `get_tools` → `getPresetFromTools()`. When tools are fully disabled (`toolNames = []`), `rpc-manager.ts` clears the system prompt entirely in the AgentSession state.
-
-### Model defaults for new sessions
-
-`GET /api/models` returns `defaultModel` read from `~/.pi/agent/settings.json`. `ChatWindow` pre-selects this on mount for new sessions.
-
-### SSE reconnect on page refresh mid-stream
-
-On `ChatWindow` mount, `GET /api/agent/[id]` is called. If `state.isStreaming === true`, SSE is reconnected automatically. `thinkingLevel` and `isCompacting` are also synced from this response.
-
-### Compaction SSE events
-
-Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `auto_compaction_start` / `auto_compaction_end`. `handleAgentEvent` accepts both sets to keep `isCompacting` in sync. Manual compact is a blocking POST — the button stays disabled until the response returns.
-
-### Orphaned sessions
-
-Sessions whose first line can't be parsed as a valid header are marked `orphaned: true` in the API response — displayed with an "incomplete" badge in the sidebar and not clickable.
-
-### Electron extraResources must include node_modules separately
-
-electron-builder's `extraResources` with `filter: ["**/*"]` **silently excludes `node_modules` directories**, even from `.next/standalone`. The standalone `server.js` does `require("next")` which fails without `node_modules/next`. **Fix**: add a separate `extraResources` entry for `node_modules` — see [docs/ARCHITECTURE.md §14.6](docs/ARCHITECTURE.md#146-electron-builder-extraresources-必须单独包含-node_modules) for the full YAML.
-
-### Electron main process spawns Next.js as a child
-
-In production, `electron/main.ts` spawns `process.execPath` (the Electron binary itself) with `ELECTRON_RUN_AS_NODE=1` to run `server.js` as a plain Node.js process. The main process then opens a `BrowserWindow` pointing at `http://127.0.0.1:PORT`. The child process is killed on `before-quit`. See [docs/ARCHITECTURE.md §13](docs/ARCHITECTURE.md#13-electron-桌面端) for the full Electron module map.
-
-### Electron packaging size bloat & Next.js standalone "matryoshka" trap
-
-Two critical rules to prevent massive (`1GB+`) installer sizes:
-1. **Frontend dependencies MUST be `devDependencies`**: `electron-builder` blindly copies everything in `dependencies` into `app.asar`. Since Next.js `standalone` mode already extracts what the frontend needs into `.next/standalone/node_modules`, leave **only** the dependencies used by `electron/main.ts` (e.g. `electron-updater`) in the main `dependencies`. Move Next, React, and heavy UI libraries to `devDependencies`.
-2. **Next.js Output File Tracing (NFT) Trap**: If Next.js encounters dynamic imports or `path.join(process.cwd(), ...)`, NFT will conservatively trace and copy the **entire project root** into `.next/standalone`. This pulls the `release/` directory (containing the previous `.exe` installer) into the new build, creating an exponentially growing "matryoshka" (套娃) installer.
-   **Fix**: Always explicitly exclude `release/**/*` and `.git/**/*` via `outputFileTracingExcludes` in `next.config.ts` (at the top level of the config object in Next 15+).
+Frontend 依赖必须放 `devDependencies`（否则 electron-builder 盲目打包进 app.asar）。`next.config.ts` 必须加上 `outputFileTracingExcludes: { "/": ["release/**/*", ".git/**/*"] }` 防止 NFT 把旧安装包拉进 build，造成指数级套娃膨胀。详见 [ARCHITECTURE.md §14.12](docs/ARCHITECTURE.md#1412-electron-打包大小--nextjs-nft-套娃陷阱)。
 
 ---
 

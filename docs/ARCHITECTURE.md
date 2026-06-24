@@ -3,9 +3,9 @@
 > 本文档是项目的**权威架构参考**，由 CodeGraph 静态分析 + 源码核对生成。
 > 若与 `AGENTS.md` / `CLAUDE.md` 中的简要描述冲突，以本文档为准。
 >
-> - **项目**：`@chasen-liao/pi-agent-desktop` v0.7.13
+> - **项目**：`@chasen-liao/pi-agent-desktop` v0.7.16
 > - **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.79.8 / `@earendil-works/pi-ai` ^0.79.8
-> - **更新日期**：2026-06-23
+> - **更新日期**：2026-06-24
 
 ---
 
@@ -141,7 +141,7 @@ flowchart TD
 
 ```text
 pi-agent-desktop/
-├── package.json                  @chasen-liao/pi-agent-desktop v0.7.13
+├── package.json                  @chasen-liao/pi-agent-desktop v0.7.16
 ├── next.config.ts                output:"standalone" + server external packages
 ├── tailwind.config.ts            Tailwind 4 配置
 ├── tsconfig.json                 strict + bundler resolution
@@ -212,6 +212,11 @@ pi-agent-desktop/
 │   ├── session-lock.ts           会话文件并发锁
 │   ├── normalize.ts              ToolCall 字段归一化
 │   ├── agent-client.ts           浏览器 → /api/agent/[id] 的 SSE 客户端封装
+│   ├── agent-commands.ts         客户端 agent 命令帮助函数
+│   ├── allowed-roots.ts          文件访问白名单鉴权（5s TTL 缓存）
+│   ├── auth-policy.ts            API 鉴权策略
+│   ├── path-policy.ts            路径安全检查
+│   ├── skills-policy.ts          技能鉴权策略
 │   ├── slash-commands.ts         客户端 / 斜杠命令解析
 │   ├── types.ts                  共享 TypeScript 类型
 │   ├── pi-types.ts               pi-coding-agent SDK 接口封装
