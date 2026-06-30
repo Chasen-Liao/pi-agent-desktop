@@ -1,0 +1,12 @@
+{
+  "rules": [
+    "nextjs",
+    "react",
+    "typescript",
+    "nodejs"
+  ],
+  "targets": [
+    "cursor",
+    "claude"
+  ]
+}

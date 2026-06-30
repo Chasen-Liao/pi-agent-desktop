@@ -8,15 +8,19 @@
     <style>
       :root {
         color-scheme: dark;
-        --bg: #0b1220;
-        --card: rgba(15, 23, 42, 0.92);
-        --border: rgba(148, 163, 184, 0.16);
-        --text: #e2e8f0;
-        --muted: #94a3b8;
-        --accent: #3b82f6;
-        --accent-soft: rgba(59, 130, 246, 0.2);
-        --danger: #ef4444;
-        --danger-soft: rgba(239, 68, 68, 0.2);
+        --bg: #0f1419; /* Ayu Dark 经典底色 */
+        --text-strong: #ffb454; /* Ayu 经典金色/橘黄用于强强调 */
+        --text-error: #ffb4b4; /* 错误状态下的柔和粉红标题 */
+        --muted: #abb2bf; /* Ayu 经典中性灰 */
+        
+        /* 启动状态：Ayu 经典的金橘色 */
+        --accent: #ffb454;
+        --accent-soft: rgba(255, 180, 84, 0.035);
+        --glow-color: rgba(255, 180, 84, 0.05);
+        
+        /* 错误/停止状态：Ayu 经典亮红 */
+        --danger: #ff3333;
+        --danger-soft: rgba(255, 51, 51, 0.08);
       }
 
       * {
@@ -28,103 +32,295 @@
         width: 100%;
         height: 100%;
         margin: 0;
+        overflow: hidden;
       }
 
       body {
-        display: grid;
-        place-items: center;
-        background:
-          radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 35%),
-          var(--bg);
-        color: var(--text);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        background: var(--bg);
+        color: var(--muted);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        animation: page-enter 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      @keyframes page-enter {
+        0% {
+          opacity: 0;
+          transform: scale(0.98);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
       }
 
       main {
-        width: min(560px, calc(100vw - 32px));
-        padding: 32px;
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        background: var(--card);
-        box-shadow: 0 24px 80px rgba(2, 6, 23, 0.55);
-      }
-
-      .row {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
         display: flex;
-        gap: 16px;
-        align-items: flex-start;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
       }
 
-      .dot {
-        width: 14px;
-        height: 14px;
-        margin-top: 8px;
-        border-radius: 999px;
+      /* 全屏背景环境光呼吸动画，挂载在 main 上享受 CSS 变量的局部继承 */
+      main::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: radial-gradient(circle at center, var(--glow-color) 0%, transparent 65%);
+        opacity: 0.8;
+        pointer-events: none;
+        z-index: -1;
+        animation: ambient-glow 8s ease-in-out infinite;
+        transition: background 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      @keyframes ambient-glow {
+        0%, 100% {
+          transform: scale(0.9);
+          opacity: 0.6;
+        }
+        50% {
+          transform: scale(1.15);
+          opacity: 1.0;
+        }
+      }
+
+      /* 状态切换时的样式覆盖 */
+      #panel.error,
+      #panel.stopped {
+        --accent: var(--danger);
+        --accent-soft: var(--danger-soft);
+        --glow-color: rgba(255, 51, 51, 0.03);
+      }
+
+      /* 中央指示器容器及弹性入场动画 */
+      .indicator-wrapper {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        display: grid;
+        place-items: center;
+        animation: indicator-entry 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      @keyframes indicator-entry {
+        0% {
+          transform: scale(0.7);
+          opacity: 0;
+        }
+        50% {
+          transform: scale(1.1);
+          opacity: 0.9;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      /* 具有果冻般弹性缩放感的中心圆点 */
+      .dot-core {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
         background: var(--accent);
-        box-shadow: 0 0 0 0 var(--accent-soft);
-        animation: pulse 1.8s infinite;
-        flex: 0 0 auto;
+        position: absolute;
+        z-index: 2;
+        box-shadow: 
+          0 0 12px var(--accent),
+          0 0 24px var(--accent-soft);
+        animation: core-pulsate 3s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+        transition: background 0.6s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.6s cubic-bezier(0.16, 1, 0.3, 1);
       }
 
-      .error .dot,
-      .stopped .dot {
-        background: var(--danger);
-        box-shadow: 0 0 0 0 var(--danger-soft);
+      @keyframes core-pulsate {
+        0% {
+          transform: scale(0.85);
+          box-shadow: 0 0 12px var(--accent), 0 0 20px var(--accent-soft);
+        }
+        40% {
+          transform: scale(1.28);
+          box-shadow: 0 0 22px var(--accent), 0 0 40px var(--accent);
+        }
+        60% {
+          transform: scale(1.08);
+          box-shadow: 0 0 16px var(--accent), 0 0 30px var(--accent-soft);
+        }
+        100% {
+          transform: scale(0.85);
+          box-shadow: 0 0 12px var(--accent), 0 0 20px var(--accent-soft);
+        }
+      }
+
+      /* 错误和停止状态下圆点静止且带警告发光 */
+      #panel.error .dot-core,
+      #panel.stopped .dot-core {
         animation: none;
+        transform: scale(1);
+        box-shadow: 
+          0 0 16px var(--danger),
+          0 0 32px var(--danger-soft);
+      }
+
+      /* 覆盖全屏的水波荡漾涟漪（三层交错） */
+      .dot-ripple,
+      .dot-ripple2,
+      .dot-ripple3 {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        border: 1px solid var(--accent);
+        background: radial-gradient(circle, var(--accent-soft) 0%, transparent 80%);
+        opacity: 0;
+        transform: scale(0.1);
+        pointer-events: none;
+        z-index: 1;
+        mix-blend-mode: screen;
+        transition: border-color 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .dot-ripple {
+        animation: ripple-fullscreen 6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite;
+      }
+
+      .dot-ripple2 {
+        animation: ripple-fullscreen 6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite;
+        animation-delay: 2s;
+      }
+
+      .dot-ripple3 {
+        animation: ripple-fullscreen 6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite;
+        animation-delay: 4s;
+      }
+
+      /* 错误和停止状态下关闭水波纹扩散 */
+      #panel.error .dot-ripple,
+      #panel.error .dot-ripple2,
+      #panel.error .dot-ripple3,
+      #panel.stopped .dot-ripple,
+      #panel.stopped .dot-ripple2,
+      #panel.stopped .dot-ripple3 {
+        animation: none;
+        opacity: 0;
+      }
+
+      @keyframes ripple-fullscreen {
+        0% {
+          transform: scale(0.1);
+          opacity: 0.9;
+          border-width: 2px;
+        }
+        10% {
+          opacity: 0.65;
+        }
+        80% {
+          border-width: 1px;
+        }
+        100% {
+          transform: scale(18);
+          opacity: 0;
+          border-width: 0.5px;
+        }
+      }
+
+      /* 错误详情面板：正常启动时完全隐藏，发生错误或停止时平滑向下展开并淡入 */
+      .error-details {
+        max-height: 0;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(24px);
+        transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        margin-top: 0;
+        text-align: center;
+        padding: 0 24px;
+        width: min(450px, calc(100vw - 32px));
+      }
+
+      #panel.error .error-details,
+      #panel.stopped .error-details {
+        max-height: 320px;
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        margin-top: 40px;
+      }
+
+      /* 磨砂质感卡片承载警告文本 */
+      .error-box {
+        padding: 28px 32px;
+        border-radius: 20px;
+        background: rgba(255, 51, 51, 0.03);
+        border: 1px solid rgba(255, 51, 51, 0.08);
+        box-shadow: 
+          0 24px 48px rgba(0, 0, 0, 0.65),
+          0 1px 2px rgba(255, 51, 51, 0.04) inset;
       }
 
       h1 {
         margin: 0 0 12px;
-        font-size: 24px;
-        line-height: 1.35;
-        font-weight: 700;
+        font-size: 20px;
+        line-height: 1.4;
+        font-weight: 500;
+        color: var(--text-error);
+        letter-spacing: -0.01em;
       }
 
       p {
-        margin: 0;
+        margin: 0 0 24px;
         color: var(--muted);
-        line-height: 1.7;
-        font-size: 15px;
+        line-height: 1.6;
+        font-size: 13.5px;
+      }
+
+      /* 状态胶囊 */
+      .state-container {
+        display: flex;
+        justify-content: center;
       }
 
       .state {
-        margin-top: 18px;
-        padding: 12px 14px;
-        border-radius: 12px;
-        background: rgba(15, 23, 42, 0.7);
-        border: 1px solid rgba(148, 163, 184, 0.12);
-        color: var(--text);
-        font-size: 14px;
-        line-height: 1.6;
-      }
-
-      .error .state,
-      .stopped .state {
-        border-color: rgba(239, 68, 68, 0.22);
-        background: rgba(127, 29, 29, 0.24);
-      }
-
-      @keyframes pulse {
-        0% {
-          box-shadow: 0 0 0 0 var(--accent-soft);
-        }
-        70% {
-          box-shadow: 0 0 0 12px rgba(59, 130, 246, 0);
-        }
-        100% {
-          box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-        }
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 18px;
+        border-radius: 20px;
+        background: rgba(255, 51, 51, 0.06);
+        border: 1px solid rgba(255, 51, 51, 0.15);
+        color: var(--danger);
+        font-size: 12px;
+        font-weight: 400;
+        letter-spacing: 0.01em;
+        line-height: 1.5;
+        min-height: 32px;
       }
     </style>
   </head>
   <body>
     <main id="panel">
-      <div class="row">
-        <div class="dot" aria-hidden="true"></div>
-        <div>
+      <!-- 包含弹性缩放核心点与全屏荡漾波纹的指示器 -->
+      <div class="indicator-wrapper">
+        <div class="dot-ripple"></div>
+        <div class="dot-ripple2"></div>
+        <div class="dot-ripple3"></div>
+        <div class="dot-core" aria-hidden="true"></div>
+      </div>
+      
+      <!-- 正常启动时不可见，仅在 Error 或 Stopped 状态下向下平滑展开并淡入的警告卡片 -->
+      <div class="error-details">
+        <div class="error-box">
           <h1 id="title">正在启动 Pi Agent Desktop…</h1>
           <p id="description">正在启动本地服务，完成后会自动进入应用。</p>
-          <div class="state" id="stateText">正在准备本地 Next.js 服务</div>
+          <div class="state-container">
+            <div class="state" id="stateText">正在准备本地 Next.js 服务</div>
+          </div>
         </div>
       </div>
     </main>
