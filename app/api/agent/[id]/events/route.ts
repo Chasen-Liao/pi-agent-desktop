@@ -1,6 +1,7 @@
 import { resolveSessionPath, getHeaderAsync } from "@/lib/session-reader";
-import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
+import { getRpcSession, startRpcSession, getSessionOnlyTrustMap } from "@/lib/rpc-manager";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { evaluateProjectTrust } from "@/lib/project-trust-desktop";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,16 @@ export async function GET(
     }
     const header = await getHeaderAsync(filePath);
     const cwd = header?.cwd ?? process.cwd();
+    const trustGate = evaluateProjectTrust(cwd, { sessionOnlyTrust: getSessionOnlyTrustMap() });
+    if (trustGate.action === "prompt") {
+      return new Response(JSON.stringify(trustGate.payload), {
+        status: 409,
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": requestId,
+        },
+      });
+    }
     try {
       ({ session } = await startRpcSession(id, filePath, cwd));
     } catch (error) {

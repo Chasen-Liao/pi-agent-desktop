@@ -9,6 +9,24 @@ import type { AgentMessage } from "@/lib/types";
  * a separate, broader type — the server only forwards pi's events without
  * narrowing, and the two runtimes should not share a type.
  */
+export type ExtensionUiRequestEvent = {
+  type: "extension_ui_request";
+  id: string;
+  method: "confirm" | "select" | "input" | "editor";
+  title: string;
+  message?: string;
+  options?: string[];
+  placeholder?: string;
+  prefill?: string;
+  timeout?: number;
+};
+
+export type ExtensionUiNotifyEvent = {
+  type: "extension_ui_notify";
+  message: string;
+  notifyType?: "info" | "warning" | "error";
+};
+
 export type AgentEvent =
   | { type: "connected"; sessionId: string }
   | { type: "agent_start" }
@@ -24,7 +42,9 @@ export type AgentEvent =
   | { type: "auto_compaction_start" }
   | { type: "compaction_start" }
   | { type: "auto_compaction_end"; errorMessage?: string; aborted?: boolean }
-  | { type: "compaction_end"; errorMessage?: string; aborted?: boolean };
+  | { type: "compaction_end"; errorMessage?: string; aborted?: boolean }
+  | ExtensionUiRequestEvent
+  | ExtensionUiNotifyEvent;
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "failed";
 

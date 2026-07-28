@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
-import { startRpcSession } from "@/lib/rpc-manager";
+import { getSessionOnlyTrustMap, startRpcSession } from "@/lib/rpc-manager";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 import { validateAgentCwd } from "@/lib/path-policy";
 import { validateAgentCommand } from "@/lib/agent-commands";
+import { evaluateProjectTrust } from "@/lib/project-trust-desktop";
+import { isAgentMode, isToolPreset } from "@/lib/approval-policy";
 
 // POST /api/agent/new  body: { cwd: string; type: string; message: string; ... }
 // Spawns a brand-new pi session and immediately sends the first command.
@@ -30,8 +32,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: cwdError }, { status: 400, headers: { "x-request-id": requestId } });
     }
 
+    const trustGate = evaluateProjectTrust(cwd, { sessionOnlyTrust: getSessionOnlyTrustMap() });
+    if (trustGate.action === "prompt") {
+      return NextResponse.json(trustGate.payload, {
+        status: 409,
+        headers: { "x-request-id": requestId },
+      });
+    }
+
     // Use a one-time key so startRpcSession's lock doesn't conflict with real session ids
-    const { provider, modelId, toolNames, thinkingLevel, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; thinkingLevel?: string; [key: string]: unknown };
+    const { provider, modelId, toolNames, thinkingLevel, agentMode, toolPreset, ...promptCommand } = command as {
+      provider?: string;
+      modelId?: string;
+      toolNames?: string[];
+      thinkingLevel?: string;
+      agentMode?: string;
+      toolPreset?: string;
+      [key: string]: unknown;
+    };
 
     // Validate the command before allocating a session — mirrors /api/agent/[id]
     // behavior so invalid command types fail with 400 instead of 500 after
@@ -42,7 +60,11 @@ export async function POST(req: Request) {
     }
 
     const tempKey = `__new__${Date.now()}__${Math.random().toString(36).slice(2, 8)}`;
-    const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames);
+    const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, {
+      toolNames,
+      agentMode: isAgentMode(agentMode) ? agentMode : undefined,
+      toolPreset: isToolPreset(toolPreset) ? toolPreset : undefined,
+    });
 
     // Keep the files-route allowed-roots cache (see app/api/files/[...path]/route.ts)
     // in sync so the new cwd is immediately readable via /api/files. Without this,

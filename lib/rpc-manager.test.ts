@@ -15,8 +15,9 @@ const flushMicrotasks = (): Promise<void> => new Promise((r) => setImmediate(r))
 
 test("startRpcSession does not pass a hardcoded default tool allowlist", () => {
   assert.doesNotMatch(source, /const allCodingToolNames = \[[^\]]+\]/);
-  assert.match(source, /toolNames\?\.length === 0 \? \{ noTools: "all" as const \} : \{\}/);
-  assert.match(source, /inner\.setActiveToolsByName\(toolNames\)/);
+  assert.match(source, /effectiveTools\.length === 0 \? \{ noTools: "all" as const \}/);
+  assert.match(source, /effectiveToolsForMode/);
+  assert.match(source, /setActiveToolsByName\(effectiveTools\)/);
 });
 
 function makeStubInner(overrides: {
@@ -27,6 +28,7 @@ function makeStubInner(overrides: {
   prompt?: (msg: string, opts?: unknown) => Promise<unknown>;
   steer?: (msg: string, imgs?: unknown) => Promise<unknown>;
   followUp?: (msg: string, imgs?: unknown) => Promise<unknown>;
+  setActiveToolsByName?: (names: string[]) => void;
 } = {}) {
   return {
     sessionId: "stub",
@@ -43,6 +45,9 @@ function makeStubInner(overrides: {
     prompt: overrides.prompt ?? (() => Promise.resolve()),
     steer: overrides.steer ?? (() => Promise.resolve()),
     followUp: overrides.followUp ?? (() => Promise.resolve()),
+    setActiveToolsByName: overrides.setActiveToolsByName ?? (() => {}),
+    getAllTools: () => [],
+    getActiveToolNames: () => [],
     subscribe: overrides.subscribe ?? ((cb: (event: unknown) => void) => { void cb; return () => {}; }),
   } as never;
 }
@@ -551,4 +556,35 @@ test("non-Error prompt rejection is stringified in agent_error", async () => {
 
   assert.equal(events.length, 1);
   assert.deepEqual(events[0], { type: "agent_error", errorMessage: "string error" });
+});
+
+test("set_agent_mode plan forces read tools", async () => {
+  const applied: string[][] = [];
+  const w = new AgentSessionWrapper(makeStubInner({
+    setActiveToolsByName: (names) => { applied.push([...names]); },
+  }));
+  w.initPolicy("ask", "default");
+  const result = await w.send({ type: "set_agent_mode", mode: "plan" }) as { agentMode: string };
+  assert.equal(result.agentMode, "plan");
+  assert.deepEqual(applied.at(-1)?.slice().sort(), ["find", "grep", "ls", "read"]);
+});
+
+test("get_state includes agentMode", async () => {
+  const w = new AgentSessionWrapper(makeStubInner());
+  w.initPolicy("full", "full");
+  const state = await w.send({ type: "get_state" }) as { agentMode: string; toolPreset: string };
+  assert.equal(state.agentMode, "full");
+  assert.equal(state.toolPreset, "full");
+});
+
+test("extension_ui_response resolves bridge confirm", async () => {
+  const { ExtensionUiBridge } = await import("./extension-ui-bridge.ts");
+  const w = new AgentSessionWrapper(makeStubInner());
+  const events: unknown[] = [];
+  const bridge = new ExtensionUiBridge((e) => { events.push(e); });
+  w.attachUiBridge(bridge);
+  const p = bridge.confirm("t", "m");
+  const req = events[0] as { id: string };
+  await w.send({ type: "extension_ui_response", id: req.id, confirmed: true });
+  assert.equal(await p, true);
 });

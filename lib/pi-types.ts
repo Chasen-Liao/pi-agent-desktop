@@ -52,4 +52,7 @@ export interface AgentSessionLike {
   setActiveToolsByName(names: string[]): void;
   abortCompaction(): void;
   getContextUsage(): ContextUsage | undefined;
+  /** Pi extension bindings (desktop UI bridge). Optional on stubs. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  bindExtensions?(bindings: { uiContext?: any; mode?: string }): Promise<void>;
 }

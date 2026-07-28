@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath, getHeaderAsync } from "@/lib/session-reader";
-import { startRpcSession, getRpcSession } from "@/lib/rpc-manager";
+import { startRpcSession, getRpcSession, getSessionOnlyTrustMap } from "@/lib/rpc-manager";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 import { validateAgentCommand } from "@/lib/agent-commands";
+import { evaluateProjectTrust } from "@/lib/project-trust-desktop";
 
 // POST /api/agent/[id] - Send a command to an existing session
 export async function POST(
@@ -40,6 +41,14 @@ export async function POST(
 
     const header = await getHeaderAsync(filePath);
     const cwd = header?.cwd ?? process.cwd();
+
+    const trustGate = evaluateProjectTrust(cwd, { sessionOnlyTrust: getSessionOnlyTrustMap() });
+    if (trustGate.action === "prompt") {
+      return NextResponse.json(trustGate.payload, {
+        status: 409,
+        headers: { "x-request-id": requestId },
+      });
+    }
 
     const { session } = await startRpcSession(id, filePath, cwd);
     const result = await session.send(body);

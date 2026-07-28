@@ -5,10 +5,10 @@ import {
   validateAgentCommand,
 } from "./agent-commands.ts";
 
-test("AGENT_COMMAND_TYPES covers all 15 send() cases", () => {
+test("AGENT_COMMAND_TYPES covers all send() cases", () => {
   // Must stay in sync with the switch in lib/rpc-manager.ts. If either side
   // adds/removes a case, this test forces an explicit update here too.
-  assert.equal(AGENT_COMMAND_TYPES.size, 15);
+  assert.equal(AGENT_COMMAND_TYPES.size, 17);
   for (const t of [
     "prompt",
     "abort",
@@ -25,6 +25,8 @@ test("AGENT_COMMAND_TYPES covers all 15 send() cases", () => {
     "set_tools",
     "abort_compaction",
     "set_auto_retry",
+    "set_agent_mode",
+    "extension_ui_response",
   ]) {
     assert.ok(AGENT_COMMAND_TYPES.has(t as never), `missing ${t}`);
   }

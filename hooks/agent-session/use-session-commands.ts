@@ -6,6 +6,10 @@ import { sendAgentCommand } from "@/lib/agent-client";
 import type { StreamAction } from "./stream-state";
 import type { AgentPhase } from "./agent-phase";
 import type { ThinkingLevelOption } from "./session-lifecycle-reset";
+import type { AgentMode } from "@/lib/approval-policy";
+import { EXECUTE_PLAN_PROMPT } from "@/lib/approval-policy";
+import { ensureTrustThenFetch } from "@/lib/trust-fetch";
+import type { NeedsTrustPayload } from "@/components/ProjectTrustDialog";
 
 export type AttachedImage = {
   data: string;
@@ -20,6 +24,8 @@ export type UseSessionCommandsOptions = {
   agentRunning: boolean;
   isCompacting: boolean;
   toolPreset: "none" | "default" | "full";
+  agentMode: AgentMode;
+  setAgentMode: (mode: AgentMode) => void;
   thinkingLevel: ThinkingLevelOption;
   newSessionModel: { provider: string; modelId: string } | null;
   sessionIdRef: MutableRefObject<string | null>;
@@ -33,6 +39,8 @@ export type UseSessionCommandsOptions = {
   setCompactError: (v: string | null) => void;
   setForkingEntryId: (v: string | null) => void;
   setActiveLeafId: (v: string | null) => void;
+  setCanExecutePlan: (v: boolean) => void;
+  promptTrust: (payload: NeedsTrustPayload) => Promise<string | null>;
   loadSession: (sid: string, showLoading?: boolean, includeState?: boolean) => Promise<unknown>;
   loadContext: (sid: string, leafId: string) => Promise<unknown>;
   connectEvents: (sid: string) => void;
@@ -48,6 +56,8 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
     agentRunning,
     isCompacting,
     toolPreset,
+    agentMode,
+    setAgentMode,
     thinkingLevel,
     newSessionModel,
     sessionIdRef,
@@ -61,6 +71,8 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
     setCompactError,
     setForkingEntryId,
     setActiveLeafId,
+    setCanExecutePlan,
+    promptTrust,
     loadSession,
     loadContext,
     connectEvents,
@@ -191,22 +203,35 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
               : toolPreset === "default"
                 ? PRESET_DEFAULT
                 : PRESET_FULL;
-          const res = await fetch("/api/agent/new", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              cwd: newSessionCwd,
-              type: "prompt",
-              message,
-              toolNames,
-              ...(piImages?.length ? { images: piImages } : {}),
-              ...(selectedModel
-                ? { provider: selectedModel.provider, modelId: selectedModel.modelId }
-                : {}),
-              ...(thinkingLevel !== "auto" ? { thinkingLevel } : {}),
-            }),
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const res = await ensureTrustThenFetch(
+            "/api/agent/new",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                cwd: newSessionCwd,
+                type: "prompt",
+                message,
+                toolNames,
+                agentMode,
+                toolPreset,
+                ...(piImages?.length ? { images: piImages } : {}),
+                ...(selectedModel
+                  ? { provider: selectedModel.provider, modelId: selectedModel.modelId }
+                  : {}),
+                ...(thinkingLevel !== "auto" ? { thinkingLevel } : {}),
+              }),
+            },
+            promptTrust
+          );
+          if (!res.ok) {
+            let errMsg = `HTTP ${res.status}`;
+            try {
+              const j = (await res.json()) as { error?: string };
+              if (j.error) errMsg = j.error;
+            } catch { /* ignore */ }
+            throw new Error(errMsg);
+          }
           const result = (await res.json()) as { sessionId: string };
           const realId = result.sessionId;
           sessionIdRef.current = realId;
@@ -241,6 +266,7 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
       newSessionCwd,
       newSessionModel,
       toolPreset,
+      agentMode,
       thinkingLevel,
       session,
       agentRunning,
@@ -254,8 +280,37 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
       dispatch,
       setPendingModel,
       sessionIdRef,
+      promptTrust,
     ]
   );
+
+  const handleAgentModeChange = useCallback(
+    async (mode: AgentMode) => {
+      setAgentMode(mode);
+      setCanExecutePlan(false);
+      const sid = sessionIdRef.current;
+      if (!sid || isNew) return;
+      try {
+        await sendAgentCommand(sid, { type: "set_agent_mode", mode });
+      } catch (e) {
+        console.error("Failed to set agent mode:", e);
+      }
+    },
+    [isNew, sessionIdRef, setAgentMode, setCanExecutePlan]
+  );
+
+  const handleExecutePlan = useCallback(async () => {
+    const sid = sessionIdRef.current;
+    if (!sid || agentRunning) return;
+    setCanExecutePlan(false);
+    setAgentMode("ask");
+    try {
+      await sendAgentCommand(sid, { type: "set_agent_mode", mode: "ask" });
+    } catch (e) {
+      console.error("Failed to switch to ask for execute plan:", e);
+    }
+    await handleSend(EXECUTE_PLAN_PROMPT);
+  }, [agentRunning, handleSend, sessionIdRef, setAgentMode, setCanExecutePlan]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -398,5 +453,7 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
     handleSteer,
     handleFollowUp,
     handleAbortCompaction,
+    handleAgentModeChange,
+    handleExecutePlan,
   };
 }

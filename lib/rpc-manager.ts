@@ -3,6 +3,19 @@ import { unlink } from "fs/promises";
 import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionPathCache } from "./session-reader.ts";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
+import {
+  DEFAULT_AGENT_MODE,
+  DEFAULT_TOOL_PRESET,
+  effectiveToolsForMode,
+  isAgentMode,
+  isToolPreset,
+  type AgentMode,
+  type ToolPreset,
+  toolNamesForPreset,
+} from "./approval-policy.ts";
+import { ExtensionUiBridge } from "./extension-ui-bridge.ts";
+import { desktopApprovalInlineExtension, type AgentModeRef } from "./desktop-approval-extension.ts";
+import { readDesktopSettings } from "./desktop-settings.ts";
 
 // ============================================================================
 // Constants
@@ -36,11 +49,83 @@ export class AgentSessionWrapper {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallbacks: Array<() => void> = [];
   private _alive = true;
+  private _agentMode: AgentMode = DEFAULT_AGENT_MODE;
+  private _toolPreset: ToolPreset = DEFAULT_TOOL_PRESET;
+  private _toolPresetBeforePlan: ToolPreset | null = null;
+  private _modeRef: AgentModeRef = { current: DEFAULT_AGENT_MODE };
+  private _uiBridge: ExtensionUiBridge | null = null;
 
   readonly inner: AgentSessionLike;
 
-  constructor(inner: AgentSessionLike) {
+  constructor(inner: AgentSessionLike, options?: { modeRef?: AgentModeRef }) {
     this.inner = inner;
+    if (options?.modeRef) {
+      this._modeRef = options.modeRef;
+      this._agentMode = options.modeRef.current;
+    }
+  }
+
+  get agentMode(): AgentMode {
+    return this._agentMode;
+  }
+
+  get toolPreset(): ToolPreset {
+    return this._toolPreset;
+  }
+
+  /** Emit a synthetic event to SSE subscribers (extension UI, errors). */
+  emitEvent(event: AgentEvent): void {
+    for (const l of this.listeners) {
+      try {
+        l(event);
+      } catch (err) {
+        console.error("Error in event listener:", err);
+      }
+    }
+  }
+
+  attachUiBridge(bridge: ExtensionUiBridge): void {
+    this._uiBridge = bridge;
+  }
+
+  get modeRef(): AgentModeRef {
+    return this._modeRef;
+  }
+
+  initPolicy(mode: AgentMode, preset: ToolPreset): void {
+    this._agentMode = mode;
+    this._toolPreset = preset;
+    this._modeRef.current = mode;
+    if (mode === "plan") {
+      this._toolPresetBeforePlan = preset;
+    }
+  }
+
+  applyAgentMode(mode: AgentMode): void {
+    if (mode === "plan" && this._agentMode !== "plan") {
+      this._toolPresetBeforePlan = this._toolPreset;
+    }
+    if (mode !== "plan" && this._agentMode === "plan" && this._toolPresetBeforePlan) {
+      this._toolPreset = this._toolPresetBeforePlan;
+      this._toolPresetBeforePlan = null;
+    }
+    this._agentMode = mode;
+    this._modeRef.current = mode;
+    const tools = effectiveToolsForMode(mode, this._toolPreset);
+    this.inner.setActiveToolsByName(tools);
+    if (tools.length === 0) {
+      const state = this.inner.agent?.state as { systemPrompt?: string } | undefined;
+      if (state) state.systemPrompt = "";
+    }
+  }
+
+  /** Infer preset from tool name list when client calls set_tools. */
+  private inferPresetFromTools(names: string[]): ToolPreset {
+    const key = [...names].sort().join(",");
+    if (key === "") return "none";
+    if (key === [...toolNamesForPreset("default")].sort().join(",")) return "default";
+    if (key === [...toolNamesForPreset("full")].sort().join(",")) return "full";
+    return "default";
   }
 
   get sessionId(): string {
@@ -138,6 +223,9 @@ export class AgentSessionWrapper {
         : null,
       systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
       thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
+      agentMode: this._agentMode,
+      toolPreset: this._toolPreset,
+      pendingUiRequestCount: this._uiBridge?.pendingCount ?? 0,
     };
   }
 
@@ -324,7 +412,35 @@ export class AgentSessionWrapper {
       }
 
       case "set_tools": {
-        this.inner.setActiveToolsByName(command.toolNames as string[]);
+        const toolNames = (command.toolNames as string[]) ?? [];
+        this._toolPreset = this.inferPresetFromTools(toolNames);
+        if (this._agentMode === "plan") {
+          this._toolPresetBeforePlan = this._toolPreset;
+          this.inner.setActiveToolsByName([...effectiveToolsForMode("plan", this._toolPreset)]);
+        } else {
+          this.inner.setActiveToolsByName(toolNames);
+        }
+        return null;
+      }
+
+      case "set_agent_mode": {
+        const mode = command.mode;
+        if (!isAgentMode(mode)) throw new Error(`Invalid agent mode: ${String(mode)}`);
+        this.applyAgentMode(mode);
+        return { agentMode: this._agentMode, toolPreset: this._toolPreset };
+      }
+
+      case "extension_ui_response": {
+        if (!this._uiBridge) throw new Error("No extension UI bridge");
+        const id = command.id as string;
+        if (typeof id !== "string" || !id) throw new Error("extension_ui_response requires id");
+        const err = this._uiBridge.respond({
+          id,
+          confirmed: command.confirmed as boolean | undefined,
+          value: command.value as string | undefined,
+          cancelled: command.cancelled as boolean | undefined,
+        });
+        if (err) throw new Error(err);
         return null;
       }
 
@@ -372,6 +488,12 @@ export class AgentSessionWrapper {
     if (!this._alive) return;
     this._alive = false;
     if (this.idleTimer) clearTimeout(this.idleTimer);
+    try {
+      this._uiBridge?.destroy();
+    } catch (err) {
+      console.error("Error destroying UI bridge:", err);
+    }
+    this._uiBridge = null;
     // Await unsubscribe in case pi's subscribe() returns an async cleanup fn
     // in the future. Current type is `() => void` (sync) — awaiting a void
     // expression is a no-op but future-proof.
@@ -398,6 +520,25 @@ export class AgentSessionWrapper {
 declare global {
   var __piSessions: Map<string, AgentSessionWrapper> | undefined;
   var __piStartLocks: Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>> | undefined;
+  var __piSessionOnlyTrust: Map<string, boolean> | undefined;
+}
+
+export function getSessionOnlyTrustMap(): Map<string, boolean> {
+  if (!globalThis.__piSessionOnlyTrust) globalThis.__piSessionOnlyTrust = new Map();
+  return globalThis.__piSessionOnlyTrust;
+}
+
+export type StartRpcSessionOptions = {
+  toolNames?: string[];
+  agentMode?: AgentMode;
+  toolPreset?: ToolPreset;
+};
+
+function normalizeStartOptions(
+  toolNamesOrOpts?: string[] | StartRpcSessionOptions
+): StartRpcSessionOptions {
+  if (Array.isArray(toolNamesOrOpts)) return { toolNames: toolNamesOrOpts };
+  return toolNamesOrOpts ?? {};
 }
 
 function getRegistry(): Map<string, AgentSessionWrapper> {
@@ -433,10 +574,11 @@ export async function startRpcSession(
   sessionId: string,
   sessionFile: string,
   cwd: string,
-  toolNames?: string[]
+  toolNamesOrOpts?: string[] | StartRpcSessionOptions
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
   const registry = getRegistry();
   const locks = getLocks();
+  const opts = normalizeStartOptions(toolNamesOrOpts);
 
   const existing = registry.get(sessionId);
   if (existing?.isAlive()) return { session: existing, realSessionId: sessionId };
@@ -445,35 +587,81 @@ export async function startRpcSession(
   if (inflight) return inflight;
 
   const starting = (async () => {
-    const { SessionManager, getAgentDir } = await import("@earendil-works/pi-coding-agent");
+    const {
+      SessionManager,
+      getAgentDir,
+      DefaultResourceLoader,
+    } = await import("@earendil-works/pi-coding-agent");
     const agentDir = getAgentDir();
+    const desktop = readDesktopSettings(agentDir);
+
+    let agentMode: AgentMode = isAgentMode(opts.agentMode) ? opts.agentMode : desktop.defaultAgentMode;
+    let toolPreset: ToolPreset = isToolPreset(opts.toolPreset)
+      ? opts.toolPreset
+      : desktop.defaultToolPreset;
+
+    // If caller passed explicit toolNames (legacy), infer preset when possible.
+    if (opts.toolNames && !opts.toolPreset) {
+      const key = [...opts.toolNames].sort().join(",");
+      if (key === "") toolPreset = "none";
+      else if (key === [...toolNamesForPreset("default")].sort().join(",")) toolPreset = "default";
+      else if (key === [...toolNamesForPreset("full")].sort().join(",")) toolPreset = "full";
+    }
+
+    const effectiveTools = effectiveToolsForMode(agentMode, toolPreset);
 
     const sessionManager = sessionFile
       ? SessionManager.open(sessionFile, undefined)
       : SessionManager.create(cwd, undefined);
 
+    const modeRef: AgentModeRef = { current: agentMode };
+    const resourceLoader = new DefaultResourceLoader({
+      cwd,
+      agentDir,
+      extensionFactories: [desktopApprovalInlineExtension(modeRef)],
+    });
+    await resourceLoader.reload();
+
     // Pi 0.82+: empty tools allowlist is expressed via noTools: "all"
-    const createOptions = toolNames?.length === 0 ? { noTools: "all" as const } : {};
+    const createOptions =
+      effectiveTools.length === 0 ? { noTools: "all" as const } : { tools: effectiveTools };
 
     const { session: inner } = await createAgentSession({
       cwd,
       agentDir,
       sessionManager,
+      resourceLoader,
       ...createOptions,
     });
 
-    if (toolNames && toolNames.length > 0) {
-      inner.setActiveToolsByName(toolNames);
+    if (effectiveTools.length > 0) {
+      inner.setActiveToolsByName(effectiveTools);
     }
 
     // When all tools are disabled, clear the system prompt entirely.
     // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
     // the only way to truly clear it is to call agent.setSystemPrompt directly.
-    if (toolNames?.length === 0) {
+    if (effectiveTools.length === 0) {
       inner.agent.state.systemPrompt = "";
     }
 
-    const wrapper = new AgentSessionWrapper(inner);
+    // AgentSession is structurally compatible with AgentSessionLike; cast keeps
+    // our thin facade free of full ExtensionUIContext coupling.
+    const wrapper = new AgentSessionWrapper(inner as unknown as AgentSessionLike, { modeRef });
+    wrapper.initPolicy(agentMode, toolPreset);
+
+    const bridge = new ExtensionUiBridge((event) => {
+      wrapper.emitEvent(event);
+    });
+    wrapper.attachUiBridge(bridge);
+
+    if (typeof inner.bindExtensions === "function") {
+      await inner.bindExtensions({
+        uiContext: bridge as unknown as Parameters<NonNullable<AgentSessionLike["bindExtensions"]>>[0]["uiContext"],
+        mode: "rpc",
+      });
+    }
+
     wrapper.start();
 
     const realSessionId = inner.sessionId as string;

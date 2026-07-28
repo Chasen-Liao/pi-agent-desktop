@@ -25,7 +25,9 @@ export type AgentEventSideEffect =
   | { type: "onAgentEnd" }
   | { type: "reloadSession" }
   | { type: "fetchAgentState" }
-  | { type: "consoleError"; message: string };
+  | { type: "consoleError"; message: string }
+  | { type: "extensionUiRequest"; request: import("./agent-events-manager").ExtensionUiRequestEvent }
+  | { type: "extensionUiNotify"; message: string; notifyType: "info" | "warning" | "error" };
 
 export type AgentPhaseOp =
   | { type: "set"; phase: AgentPhase }
@@ -181,6 +183,18 @@ export function applyAgentEvent(
       }
       return result;
     }
+
+    case "extension_ui_request":
+      effects.push({ type: "extensionUiRequest", request: event });
+      return { effects };
+
+    case "extension_ui_notify":
+      effects.push({
+        type: "extensionUiNotify",
+        message: event.message,
+        notifyType: event.notifyType ?? "info",
+      });
+      return { effects };
 
     default:
       // Connected / unknown variants: no-op (connected is handled by EventSource layer).

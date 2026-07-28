@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
 import { MessageList } from "./MessageList";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
+import { ExtensionUiDialog } from "./ExtensionUiDialog";
+import { ProjectTrustDialog } from "./ProjectTrustDialog";
+import { ExecutePlanBar } from "./ExecutePlanBar";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import type { AgentPhase } from "@/hooks/agent-session/agent-phase";
@@ -155,11 +158,19 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     isCompacting, compactError, displayModel: displayModelValue, sessionStats,
     agentPhase,
     isNew,
+    agentMode,
+    canExecutePlan,
+    extensionUiRequest,
+    extensionUiNotify,
+    trustPrompt,
+    resolveTrustPrompt,
+    handleExtensionUiRespond,
     messagesEndRef, scrollContainerRef,
     lastUserMsgRef,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handleAbortCompaction,
     handleToolPresetChange, handleThinkingLevelChange, handleAgentEventRef,
+    handleAgentModeChange, handleExecutePlan,
     connectEvents, connectionStatus,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
@@ -247,32 +258,41 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     : null;
 
   const chatInputElement = (
-    <ChatInput
-      ref={chatInputRef}
-      onSend={handleSend}
-      onAbort={handleAbort}
-      onSteer={agentRunning ? handleSteer : undefined}
-      onFollowUp={agentRunning ? handleFollowUp : undefined}
-      isStreaming={agentRunning}
-      currentCwd={session?.cwd ?? newSessionCwd}
-      model={displayModelValue}
-      modelNames={modelNames}
-      modelList={modelList}
-      onModelChange={handleModelChange}
-      onCompact={session || isNew ? handleCompact : undefined}
-      onAbortCompaction={handleAbortCompaction}
-      isCompacting={isCompacting}
-      compactError={compactError}
-      toolPreset={toolPreset}
-      onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
-      thinkingLevel={thinkingLevel}
-      onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
-      availableThinkingLevels={availableThinkingLevels}
-      thinkingLevelMap={currentThinkingLevelMap}
-      retryInfo={retryInfo}
-      soundEnabled={soundEnabled}
-      onSoundToggle={onSoundToggle}
-    />
+    <>
+      <ExecutePlanBar
+        visible={canExecutePlan && agentMode === "plan" && !agentRunning}
+        disabled={agentRunning}
+        onExecute={handleExecutePlan}
+      />
+      <ChatInput
+        ref={chatInputRef}
+        onSend={handleSend}
+        onAbort={handleAbort}
+        onSteer={agentRunning ? handleSteer : undefined}
+        onFollowUp={agentRunning ? handleFollowUp : undefined}
+        isStreaming={agentRunning}
+        currentCwd={session?.cwd ?? newSessionCwd}
+        model={displayModelValue}
+        modelNames={modelNames}
+        modelList={modelList}
+        onModelChange={handleModelChange}
+        onCompact={session || isNew ? handleCompact : undefined}
+        onAbortCompaction={handleAbortCompaction}
+        isCompacting={isCompacting}
+        compactError={compactError}
+        toolPreset={toolPreset}
+        onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
+        agentMode={agentMode}
+        onAgentModeChange={session || isNew ? handleAgentModeChange : undefined}
+        thinkingLevel={thinkingLevel}
+        onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
+        availableThinkingLevels={availableThinkingLevels}
+        thinkingLevelMap={currentThinkingLevelMap}
+        retryInfo={retryInfo}
+        soundEnabled={soundEnabled}
+        onSoundToggle={onSoundToggle}
+      />
+    </>
   );
 
   if (loading) {
@@ -299,6 +319,20 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      <ExtensionUiDialog request={extensionUiRequest} onRespond={handleExtensionUiRespond} />
+      <ProjectTrustDialog
+        payload={trustPrompt}
+        onChoose={(id) => resolveTrustPrompt(id)}
+        onCancel={() => resolveTrustPrompt(null)}
+      />
+      {extensionUiNotify && (
+        <div
+          className="absolute top-3 left-1/2 z-[60] -translate-x-1/2 rounded-panel border border-border bg-bg-panel px-3 py-2 text-[12px] text-text shadow-lg"
+          role="status"
+        >
+          {extensionUiNotify.message}
+        </div>
+      )}
       {connectionStatus === "failed" && (
         <div className="bg-danger-bg border-b border-danger-border px-4 py-2.5 flex items-center justify-between text-[12px] text-danger shrink-0 z-50">
           <div className="flex items-center gap-2">

@@ -177,6 +177,31 @@ test("contract: message_update normalizes legacy toolCall id/name/arguments fiel
   assert.deepEqual(content[0].input, { cmd: "ls" });
 });
 
+test("contract: extension_ui_request and notify produce side effects", () => {
+  const r1 = applyAgentEvent({
+    type: "extension_ui_request",
+    id: "u1",
+    method: "confirm",
+    title: "Allow?",
+    message: "bash ls",
+  });
+  assert.equal(r1.effects[0]?.type, "extensionUiRequest");
+  if (r1.effects[0]?.type === "extensionUiRequest") {
+    assert.equal(r1.effects[0].request.id, "u1");
+  }
+
+  const r2 = applyAgentEvent({
+    type: "extension_ui_notify",
+    message: "hi",
+    notifyType: "warning",
+  });
+  assert.equal(r2.effects[0]?.type, "extensionUiNotify");
+  if (r2.effects[0]?.type === "extensionUiNotify") {
+    assert.equal(r2.effects[0].message, "hi");
+    assert.equal(r2.effects[0].notifyType, "warning");
+  }
+});
+
 test("applyPhaseOp set/add/remove matches agent-phase helpers", () => {
   let phase: AgentPhase = null;
   phase = applyPhaseOp(phase, { type: "set", phase: { kind: "waiting_model" } });

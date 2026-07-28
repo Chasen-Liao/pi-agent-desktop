@@ -21,6 +21,8 @@ const AGENT_COMMAND_TYPE_LIST = [
   "set_tools",
   "abort_compaction",
   "set_auto_retry",
+  "set_agent_mode",
+  "extension_ui_response",
 ] as const;
 
 export type AgentCommandType = (typeof AGENT_COMMAND_TYPE_LIST)[number];

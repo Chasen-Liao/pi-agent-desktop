@@ -9,6 +9,8 @@ export type { ChatInputHandle };
 import { AttachmentPreview } from "./chat-input/AttachmentPreview";
 import { ModelSelector } from "./chat-input/ModelSelector";
 import { PresetSelector } from "./chat-input/PresetSelector";
+import { AgentModeSelector } from "./AgentModeSelector";
+import type { AgentMode } from "@/lib/approval-policy";
 
 interface Props {
   onSend: (message: string, images?: AttachedImage[]) => void;
@@ -27,6 +29,8 @@ interface Props {
   compactError?: string | null;
   toolPreset?: "none" | "default" | "full";
   onToolPresetChange?: (preset: "none" | "default" | "full") => void;
+  agentMode?: AgentMode;
+  onAgentModeChange?: (mode: AgentMode) => void;
   thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
   availableThinkingLevels?: string[] | null;
@@ -51,6 +55,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
   currentCwd,
   onCompact, onAbortCompaction, isCompacting, compactError, toolPreset, onToolPresetChange,
+  agentMode, onAgentModeChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   soundEnabled, onSoundToggle,
@@ -755,7 +760,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             )}
 
-            {/* Preset selector */}
+            {/* Agent mode + tool preset */}
+            {!isStreaming && onAgentModeChange && agentMode && (
+              <AgentModeSelector
+                mode={agentMode}
+                disabled={isStreaming}
+                onChange={onAgentModeChange}
+              />
+            )}
             {!isStreaming && onToolPresetChange && (
               <PresetSelector
                 isStreaming={isStreaming}

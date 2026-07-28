@@ -24,6 +24,11 @@ import {
   useSessionCommands,
   type AttachedImage,
 } from "./agent-session/use-session-commands";
+import type { AgentMode } from "@/lib/approval-policy";
+import { DEFAULT_AGENT_MODE } from "@/lib/approval-policy";
+import type { ExtensionUiRequestEvent } from "./agent-session/agent-events-manager";
+import type { NeedsTrustPayload } from "@/components/ProjectTrustDialog";
+import { sendAgentCommand } from "@/lib/agent-client";
 
 export type { ThinkingLevelOption };
 export type { AttachedImage };
@@ -96,6 +101,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [isCompacting, setIsCompacting] = useState(false);
   const [compactError, setCompactError] = useState<string | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
+  const [agentMode, setAgentMode] = useState<AgentMode>(DEFAULT_AGENT_MODE);
+  const [canExecutePlan, setCanExecutePlan] = useState(false);
+  const [extensionUiRequest, setExtensionUiRequest] = useState<ExtensionUiRequestEvent | null>(null);
+  const [extensionUiNotify, setExtensionUiNotify] = useState<{
+    message: string;
+    notifyType: "info" | "warning" | "error";
+  } | null>(null);
+  const [trustPrompt, setTrustPrompt] = useState<NeedsTrustPayload | null>(null);
+  const trustResolverRef = useRef<((optionId: string | null) => void) | null>(null);
+  const agentModeRef = useRef(agentMode);
+  agentModeRef.current = agentMode;
 
   const {
     messagesEndRef,
@@ -160,6 +176,39 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     [loadSessionFromApi, setCurrentModelOverride]
   );
 
+  const promptTrust = useCallback((payload: NeedsTrustPayload) => {
+    return new Promise<string | null>((resolve) => {
+      trustResolverRef.current = resolve;
+      setTrustPrompt(payload);
+    });
+  }, []);
+
+  const resolveTrustPrompt = useCallback((optionId: string | null) => {
+    setTrustPrompt(null);
+    const r = trustResolverRef.current;
+    trustResolverRef.current = null;
+    r?.(optionId);
+  }, []);
+
+  const handleExtensionUiRespond = useCallback(
+    async (payload: {
+      id: string;
+      confirmed?: boolean;
+      value?: string;
+      cancelled?: boolean;
+    }) => {
+      setExtensionUiRequest(null);
+      const sid = sessionIdRef.current;
+      if (!sid) return;
+      try {
+        await sendAgentCommand(sid, { type: "extension_ui_response", ...payload });
+      } catch (e) {
+        console.error("extension_ui_response failed:", e);
+      }
+    },
+    []
+  );
+
   const handleAgentEvent = useCallback(
     (event: Parameters<typeof applyAgentEvent>[0]) => {
       const result = applyAgentEvent(event);
@@ -173,7 +222,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (result.isCompacting !== undefined) setIsCompacting(result.isCompacting);
       if (result.compactError !== undefined) setCompactError(result.compactError);
       if (result.appendMessages?.length) {
-        setMessages((prev) => [...prev, ...result.appendMessages!]);
+        setMessages((prev) => {
+          const next = [...prev, ...result.appendMessages!];
+          if (agentModeRef.current === "plan") {
+            const last = result.appendMessages![result.appendMessages!.length - 1];
+            if (last && last.role === "assistant") {
+              const text =
+                typeof last.content === "string"
+                  ? last.content
+                  : Array.isArray(last.content)
+                    ? last.content
+                        .filter((b): b is { type: "text"; text: string } => b.type === "text")
+                        .map((b) => b.text)
+                        .join("")
+                    : "";
+              if (text.trim()) setCanExecutePlan(true);
+            }
+          }
+          return next;
+        });
       }
 
       for (const effect of result.effects) {
@@ -196,6 +263,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                     state?: {
                       contextUsage?: ContextUsage | null;
                       systemPrompt?: string;
+                      agentMode?: AgentMode;
                     };
                   }) => {
                     if (d.state?.contextUsage !== undefined) {
@@ -204,6 +272,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                     if (d.state?.systemPrompt !== undefined) {
                       setSystemPrompt(d.state.systemPrompt ?? null);
                     }
+                    if (d.state?.agentMode) setAgentMode(d.state.agentMode);
                   }
                 )
                 .catch((err) => {
@@ -213,6 +282,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             break;
           case "consoleError":
             console.error("Agent error from server:", effect.message);
+            break;
+          case "extensionUiRequest":
+            setExtensionUiRequest(effect.request);
+            break;
+          case "extensionUiNotify":
+            setExtensionUiNotify({
+              message: effect.message,
+              notifyType: effect.notifyType,
+            });
             break;
         }
       }
@@ -228,6 +306,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentRunning,
     isCompacting,
     toolPreset,
+    agentMode,
+    setAgentMode,
     thinkingLevel,
     newSessionModel,
     sessionIdRef,
@@ -241,6 +321,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setCompactError,
     setForkingEntryId,
     setActiveLeafId,
+    setCanExecutePlan,
+    promptTrust,
     loadSession,
     loadContext,
     connectEvents,
@@ -278,6 +360,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setCompactError(reset.compactError);
     setCurrentModelOverride(reset.currentModelOverride);
     setPendingModel(reset.pendingModel);
+    setAgentMode(DEFAULT_AGENT_MODE);
+    setCanExecutePlan(false);
+    setExtensionUiRequest(null);
+
+    fetch("/api/desktop-settings")
+      .then((r) => r.json())
+      .then((d: { defaultAgentMode?: AgentMode }) => {
+        if (!cancelled && d.defaultAgentMode) setAgentMode(d.defaultAgentMode);
+      })
+      .catch(() => {});
 
     loadSessionFromApi(sid, true, true).then((loaded) => {
       if (cancelled) return;
@@ -320,6 +412,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return () => clearTimeout(t);
   }, [compactError]);
 
+  // Load global default mode for brand-new sessions
+  useEffect(() => {
+    if (!isNew) return;
+    fetch("/api/desktop-settings")
+      .then((r) => r.json())
+      .then((d: { defaultAgentMode?: AgentMode; defaultToolPreset?: "none" | "default" | "full" }) => {
+        if (d.defaultAgentMode) setAgentMode(d.defaultAgentMode);
+        if (d.defaultToolPreset) setToolPreset(d.defaultToolPreset);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew]);
+
+  // Auto-clear notify toast
+  useEffect(() => {
+    if (!extensionUiNotify) return;
+    const t = setTimeout(() => setExtensionUiNotify(null), 4000);
+    return () => clearTimeout(t);
+  }, [extensionUiNotify]);
+
   return {
     // State
     data,
@@ -335,6 +447,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     modelThinkingLevels,
     modelThinkingLevelMaps,
     newSessionModel,
+    agentMode,
+    canExecutePlan,
+    extensionUiRequest,
+    extensionUiNotify,
+    trustPrompt,
+    resolveTrustPrompt,
+    handleExtensionUiRespond,
     toolPreset,
     thinkingLevel,
     retryInfo,
@@ -358,6 +477,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     initialScrollDoneRef,
     // Actions
     handleSend: commands.handleSend,
+    handleAgentModeChange: commands.handleAgentModeChange,
+    handleExecutePlan: commands.handleExecutePlan,
     handleAbort: commands.handleAbort,
     handleFork: commands.handleFork,
     handleNavigate: commands.handleNavigate,
