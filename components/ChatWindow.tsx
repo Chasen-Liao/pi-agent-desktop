@@ -8,11 +8,13 @@ import { ExtensionUiDialog } from "./ExtensionUiDialog";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { ExecutePlanBar } from "./ExecutePlanBar";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
+import { ExtensionsConfigModal } from "./ExtensionsConfigModal";
+import { SessionExportModal } from "./SessionExportModal";
+import { BranchCloneModal, type BranchCloneMode } from "./BranchCloneModal";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import type { AgentPhase } from "@/hooks/agent-session/agent-phase";
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
-
 interface Props {
   session: SessionInfo | null;
   newSessionCwd: string | null;
@@ -178,6 +180,17 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     onAgentEndEvent: handleAgentEndEvent,
   });
 
+  const [extensionsModalOpen, setExtensionsModalOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [branchCloneModal, setBranchCloneModal] = useState<{
+    isOpen: boolean;
+    mode: BranchCloneMode;
+    targetEntryId?: string;
+  }>({ isOpen: false, mode: "branch" });
+
+  const handleBranchMessage = useCallback((entryId: string) => {
+    setBranchCloneModal({ isOpen: true, mode: "branch", targetEntryId: entryId });
+  }, []);
   const handleReconnect = useCallback(() => {
     if (session) {
       connectEvents(session.id);
@@ -484,6 +497,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               forkingEntryId={forkingEntryId}
               onFork={handleFork}
               onNavigate={handleNavigate}
+              onBranchMessage={handleBranchMessage}
               onEditContent={handleEditContent}
               messageRefs={messageRefs}
               lastUserMsgRef={lastUserMsgRef}
@@ -516,6 +530,28 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       </div>
       </>
       )}
+      {/* Modals mounted inside ChatWindow */}
+      <ExtensionsConfigModal
+        isOpen={extensionsModalOpen}
+        onClose={() => setExtensionsModalOpen(false)}
+        cwd={session?.cwd ?? newSessionCwd ?? undefined}
+      />
+      <SessionExportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        sessionId={session?.id ?? null}
+      />
+      <BranchCloneModal
+        isOpen={branchCloneModal.isOpen}
+        onClose={() => setBranchCloneModal((prev) => ({ ...prev, isOpen: false }))}
+        mode={branchCloneModal.mode}
+        sessionId={session?.id ?? null}
+        targetEntryId={branchCloneModal.targetEntryId}
+        cwd={session?.cwd ?? newSessionCwd ?? undefined}
+        onSuccess={(newSessionId) => {
+          onSessionForked?.(newSessionId);
+        }}
+      />
     </div>
   );
 }

@@ -15,6 +15,9 @@ interface Props {
   onInitialRestoreDone?: () => void;
   refreshKey?: number;
   onSessionDeleted?: (sessionId: string) => void;
+  onBranchSession?: (session: SessionInfo) => void;
+  onCloneSession?: (session: SessionInfo) => void;
+  onExportSession?: (session: SessionInfo) => void;
   selectedCwd?: string | null;
   onCwdChange?: (cwd: string | null) => void;
   onOpenFile?: (filePath: string, fileName: string) => void;
@@ -30,6 +33,9 @@ export function SessionSidebar({
   onInitialRestoreDone,
   refreshKey,
   onSessionDeleted,
+  onBranchSession,
+  onCloneSession,
+  onExportSession,
   selectedCwd: selectedCwdProp,
   onCwdChange,
   onOpenFile,
@@ -166,6 +172,9 @@ export function SessionSidebar({
               onSessionDeleted?.(id);
               loadSessions();
             }}
+            onBranchSession={onBranchSession}
+            onCloneSession={onCloneSession}
+            onExportSession={onExportSession}
             depth={0}
           />
         ))}

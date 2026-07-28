@@ -28,6 +28,7 @@ interface Props {
   onFork?: (entryId: string) => void;
   forking?: boolean;
   onNavigate?: (entryId: string) => void;
+  onBranchMessage?: (entryId: string) => void;
   prevAssistantEntryId?: string;
   onEditContent?: (content: string) => void;
   showTimestamp?: boolean;
@@ -80,6 +81,7 @@ export const MessageView = React.memo(function MessageView({
   onFork,
   forking,
   onNavigate,
+  onBranchMessage,
   prevAssistantEntryId,
   onEditContent,
   showTimestamp,
@@ -93,6 +95,7 @@ export const MessageView = React.memo(function MessageView({
         onFork={onFork}
         forking={forking}
         onNavigate={onNavigate}
+        onBranchMessage={onBranchMessage}
         prevAssistantEntryId={prevAssistantEntryId}
         onEditContent={onEditContent}
       />
@@ -105,6 +108,8 @@ export const MessageView = React.memo(function MessageView({
         isStreaming={isStreaming}
         toolResults={toolResults}
         modelNames={modelNames}
+        entryId={entryId}
+        onBranchMessage={onBranchMessage}
         showTimestamp={showTimestamp}
         prevTimestamp={prevTimestamp}
       />
@@ -164,6 +169,7 @@ const UserMessageView = React.memo(function UserMessageView({
   onFork,
   forking,
   onNavigate,
+  onBranchMessage,
   prevAssistantEntryId,
   onEditContent,
 }: {
@@ -172,6 +178,7 @@ const UserMessageView = React.memo(function UserMessageView({
   onFork?: (entryId: string) => void;
   forking?: boolean;
   onNavigate?: (entryId: string) => void;
+  onBranchMessage?: (entryId: string) => void;
   prevAssistantEntryId?: string;
   onEditContent?: (content: string) => void;
 }) {
@@ -266,7 +273,7 @@ const UserMessageView = React.memo(function UserMessageView({
               {copied ? "Copied" : "Copy"}
             </button>
           </div>
-          {(canFork || canNavigate) && (
+          {(canFork || canNavigate || (!!entryId && !!onBranchMessage)) && (
             <div
               className={`flex gap-[3px] transition-opacity duration-120 opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto group-focus-within/msg:opacity-100 group-focus-within/msg:pointer-events-auto ${
                 hovered || forking ? "opacity-100 pointer-events-auto" : ""
@@ -310,6 +317,22 @@ const UserMessageView = React.memo(function UserMessageView({
                   {forking ? "Creating…" : "New session"}
                 </button>
               )}
+              {entryId && onBranchMessage && (
+                <button
+                  onClick={() => onBranchMessage(entryId)}
+                  title="Branch session from this message"
+                  aria-label="Branch session from this message"
+                  className="flex items-center gap-1 px-2 py-[3px] h-[22px] bg-transparent border-none rounded-control cursor-pointer text-[11px] font-normal text-text-dim hover:text-accent whitespace-nowrap transition-colors duration-120"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="6" y1="3" x2="6" y2="15" />
+                    <circle cx="18" cy="6" r="3" />
+                    <circle cx="6" cy="18" r="3" />
+                    <path d="M18 9a9 9 0 0 1-9 9" />
+                  </svg>
+                  Branch from message
+                </button>
+              )}
             </div>
           )}
           {time && <span className="text-[10px] text-text-dim">{time}</span>}
@@ -324,6 +347,8 @@ const AssistantMessageView = React.memo(function AssistantMessageView({
   isStreaming,
   toolResults,
   modelNames,
+  entryId,
+  onBranchMessage,
   showTimestamp,
   prevTimestamp,
 }: {
@@ -331,6 +356,8 @@ const AssistantMessageView = React.memo(function AssistantMessageView({
   isStreaming?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
   modelNames?: Record<string, string>;
+  entryId?: string;
+  onBranchMessage?: (entryId: string) => void;
   showTimestamp?: boolean;
   prevTimestamp?: number;
 }) {
@@ -531,6 +558,24 @@ const AssistantMessageView = React.memo(function AssistantMessageView({
               </svg>
             )}
             {copied ? "Copied" : "Copy"}
+          </button>
+        )}
+        {entryId && onBranchMessage && !isStreaming && (
+          <button
+            onClick={() => onBranchMessage(entryId)}
+            title="Branch session from this message"
+            aria-label="Branch session from this message"
+            className={`flex items-center gap-1 px-2 py-[3px] h-[22px] bg-transparent border-none rounded-control cursor-pointer text-[11px] font-normal text-text-dim hover:text-accent whitespace-nowrap transition-colors duration-120 opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto group-focus-within/msg:opacity-100 group-focus-within/msg:pointer-events-auto ${
+              hovered ? "opacity-100 pointer-events-auto" : ""
+            }`}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="6" y1="3" x2="6" y2="15" />
+              <circle cx="18" cy="6" r="3" />
+              <circle cx="6" cy="18" r="3" />
+              <path d="M18 9a9 9 0 0 1-9 9" />
+            </svg>
+            Branch
           </button>
         )}
         {time && !isStreaming && (

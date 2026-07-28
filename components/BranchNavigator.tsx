@@ -7,6 +7,10 @@ interface Props {
   tree: SessionTreeNode[];
   activeLeafId: string | null;
   onLeafChange: (leafId: string | null) => void;
+  /** Action callback to open Branch modal */
+  onBranch?: () => void;
+  /** Action callback to open Clone modal */
+  onClone?: () => void;
   /** When true, renders as a compact inline button for embedding in a top bar */
   inline?: boolean;
   /** When inline, use this ref's bounding rect to size/position the dropdown */
@@ -211,7 +215,7 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
   );
 }
 
-export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, containerRef, open: openProp, onToggle, hasSession }: Props) {
+export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, onClone, inline, containerRef, open: openProp, onToggle, hasSession }: Props) {
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp !== undefined ? openProp : openInternal;
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -307,6 +311,44 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
             boxShadow: "var(--shadow-popover)",
             zIndex: 500,
           }}>
+            {(onBranch || onClone) && (
+              <div className="flex items-center gap-2 px-3 py-1.5 border-b border-divider bg-bg-panel">
+                {onBranch && (
+                  <button
+                    onClick={() => {
+                      onBranch();
+                      if (!inline) setOpenInternal(false);
+                    }}
+                    title="Create a new branch from active entry"
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-control border border-border bg-bg-elevated text-text hover:bg-bg-hover hover:border-focus-ring cursor-pointer transition-all"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="6" y1="3" x2="6" y2="15" />
+                      <circle cx="18" cy="6" r="3" />
+                      <circle cx="6" cy="18" r="3" />
+                      <path d="M18 9a9 9 0 0 1-9 9" />
+                    </svg>
+                    Branch
+                  </button>
+                )}
+                {onClone && (
+                  <button
+                    onClick={() => {
+                      onClone();
+                      if (!inline) setOpenInternal(false);
+                    }}
+                    title="Clone session"
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-control border border-border bg-bg-elevated text-text hover:bg-bg-hover hover:border-focus-ring cursor-pointer transition-all"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    Clone
+                  </button>
+                )}
+              </div>
+            )}
             {hasContent && firstNode ? (
               <div style={{ padding: "4px 12px 8px 12px", maxHeight: 260, overflowY: "auto" }}>
                 {firstNode.children.map((child, idx) => (
@@ -368,6 +410,44 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
           boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
           zIndex: 100,
         }}>
+          {(onBranch || onClone) && (
+            <div className="flex items-center gap-2 px-3 py-1.5 border-b border-divider bg-bg-panel">
+              {onBranch && (
+                <button
+                  onClick={() => {
+                    onBranch();
+                    setOpenInternal(false);
+                  }}
+                  title="Create a new branch from active entry"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-control border border-border bg-bg-elevated text-text hover:bg-bg-hover hover:border-focus-ring cursor-pointer transition-all"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="6" y1="3" x2="6" y2="15" />
+                    <circle cx="18" cy="6" r="3" />
+                    <circle cx="6" cy="18" r="3" />
+                    <path d="M18 9a9 9 0 0 1-9 9" />
+                  </svg>
+                  Branch
+                </button>
+              )}
+              {onClone && (
+                <button
+                  onClick={() => {
+                    onClone();
+                    setOpenInternal(false);
+                  }}
+                  title="Clone session"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-control border border-border bg-bg-elevated text-text hover:bg-bg-hover hover:border-focus-ring cursor-pointer transition-all"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  Clone
+                </button>
+              )}
+            </div>
+          )}
           {hasContent && firstNode ? (
             <div style={{ padding: "4px 12px 8px 12px", maxHeight: 260, overflowY: "auto" }}>
               {firstNode.children.map((child, idx) => (

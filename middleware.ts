@@ -1,20 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildWebCspHeader } from "@/lib/csp";
+import { isAllowedOrigin } from "@/lib/auth-policy";
 
-// Allowed origins: localhost / 127.0.0.1 on http or https, with optional port.
-// LAN IPs (e.g. 192.168.x.x) are intentionally NOT allowed — they cannot reach
-// the dev server in browser mode and only broaden the DNS-rebinding surface.
-// The `i` flag makes the scheme/host match case-insensitive (Origin headers
-// are technically case-insensitive per RFC 6454).
-const ALLOWED_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
-
-/**
- * Returns true if the given Origin header value points at localhost or the
- * loopback address. Exported for unit testing.
- */
-export function isAllowedOrigin(origin: string): boolean {
-  return ALLOWED_ORIGIN_RE.test(origin);
-}
+export { isAllowedOrigin };
 
 // CSP for HTML page responses — shared builder with Electron (lib/csp.ts).
 // API responses skip CSP (JSON; CSP is meaningless there).

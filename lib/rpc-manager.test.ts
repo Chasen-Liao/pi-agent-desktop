@@ -1,7 +1,7 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { AgentSessionWrapper } from "./rpc-manager.ts";
+import { AgentSessionWrapper, startRpcSession } from "./rpc-manager.ts";
 
 type SubscribeFn = (cb: (event: unknown) => void) => () => void;
 
@@ -587,4 +587,62 @@ test("extension_ui_response resolves bridge confirm", async () => {
   const req = events[0] as { id: string };
   await w.send({ type: "extension_ui_response", id: req.id, confirmed: true });
   assert.equal(await p, true);
+});
+test("setAgentMode appends custom entry to sessionManager", () => {
+  const customEntries: Array<{ customType: string; data: unknown }> = [];
+  const stubSessionManager = {
+    appendCustomEntry: (customType: string, data: unknown) => {
+      customEntries.push({ customType, data });
+      return "entry-id-1";
+    },
+  };
+  const w = new AgentSessionWrapper(makeStubInner({ sessionManager: stubSessionManager }));
+  w.setAgentMode("plan");
+
+  assert.equal(w.agentMode, "plan");
+  assert.equal(customEntries.length, 1);
+  assert.equal(customEntries[0].customType, "desktop_agent_mode");
+  assert.deepEqual(customEntries[0].data, { mode: "plan" });
+});
+
+test("send set_agent_mode appends custom entry to sessionManager", async () => {
+  const customEntries: Array<{ customType: string; data: unknown }> = [];
+  const stubSessionManager = {
+    appendCustomEntry: (customType: string, data: unknown) => {
+      customEntries.push({ customType, data });
+      return "entry-id-2";
+    },
+  };
+  const w = new AgentSessionWrapper(makeStubInner({ sessionManager: stubSessionManager }));
+  await w.send({ type: "set_agent_mode", mode: "ask" });
+
+  assert.equal(w.agentMode, "ask");
+  assert.equal(customEntries.length, 1);
+  assert.equal(customEntries[0].customType, "desktop_agent_mode");
+  assert.deepEqual(customEntries[0].data, { mode: "ask" });
+});
+
+test("startRpcSession restores historical agentMode from session entries when not explicitly specified", async () => {
+  const { SessionManager } = await import("@earendil-works/pi-coding-agent");
+  const { mkdtempSync, rmSync } = await import("fs");
+  const { tmpdir } = await import("os");
+  const { join } = await import("path");
+
+  const dir = mkdtempSync(join(tmpdir(), "pi-rpc-mode-test-"));
+  try {
+    const sm = SessionManager.create(dir, dir);
+    sm.appendMessage({ role: "user", content: "hello" } as never);
+    sm.appendCustomEntry("desktop_agent_mode", { mode: "plan" });
+    (sm as unknown as { _rewriteFile?: () => void })._rewriteFile?.();
+
+    const file = sm.getSessionFile()!;
+    const id = sm.getSessionId();
+
+    const { session, realSessionId } = await startRpcSession(id, file, dir);
+    assert.equal(realSessionId, id);
+    assert.equal(session.agentMode, "plan");
+    await session.destroy();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

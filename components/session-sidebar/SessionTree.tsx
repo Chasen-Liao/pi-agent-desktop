@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { SessionInfo } from "@/lib/types";
 import { formatRelativeTime, type SessionTreeNode } from "./helpers";
 
@@ -10,6 +10,9 @@ interface SessionTreeItemProps {
   onSelectSession: (s: SessionInfo) => void;
   onRenamed?: () => void;
   onSessionDeleted?: (id: string) => void;
+  onBranchSession?: (s: SessionInfo) => void;
+  onCloneSession?: (s: SessionInfo) => void;
+  onExportSession?: (s: SessionInfo) => void;
   depth: number;
 }
 
@@ -19,6 +22,9 @@ export function SessionTreeItem({
   onSelectSession,
   onRenamed,
   onSessionDeleted,
+  onBranchSession,
+  onCloneSession,
+  onExportSession,
   depth,
 }: SessionTreeItemProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -42,6 +48,9 @@ export function SessionTreeItem({
           onClick={() => onSelectSession(node.session)}
           onRenamed={onRenamed}
           onDeleted={(id) => onSessionDeleted?.(id)}
+          onBranchSession={onBranchSession}
+          onCloneSession={onCloneSession}
+          onExportSession={onExportSession}
           depth={depth}
           hasChildren={hasChildren}
           collapsed={collapsed}
@@ -63,6 +72,9 @@ export function SessionTreeItem({
                 onSelectSession={onSelectSession}
                 onRenamed={onRenamed}
                 onSessionDeleted={onSessionDeleted}
+                onBranchSession={onBranchSession}
+                onCloneSession={onCloneSession}
+                onExportSession={onExportSession}
                 depth={depth + 1}
               />
             ))}
@@ -79,6 +91,9 @@ interface SessionItemProps {
   onClick: () => void;
   onRenamed?: () => void;
   onDeleted?: (id: string) => void;
+  onBranchSession?: (s: SessionInfo) => void;
+  onCloneSession?: (s: SessionInfo) => void;
+  onExportSession?: (s: SessionInfo) => void;
   depth?: number;
   hasChildren?: boolean;
   collapsed?: boolean;
@@ -91,6 +106,9 @@ function SessionItem({
   onClick,
   onRenamed,
   onDeleted,
+  onBranchSession,
+  onCloneSession,
+  onExportSession,
   depth = 0,
   hasChildren = false,
   collapsed = false,
@@ -102,8 +120,11 @@ function SessionItem({
   const [renameValue, setRenameValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const title = session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
   const actionsVisible = hovered || rowFocused;
@@ -152,7 +173,30 @@ function SessionItem({
     e.stopPropagation();
     setConfirmDelete(false);
   }, []);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuPos({ x: e.clientX, y: e.clientY });
+    setMenuOpen(true);
+  }, []);
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
 
   const bgClass = confirmDelete
@@ -175,12 +219,12 @@ function SessionItem({
       tabIndex={confirmDelete || renaming ? undefined : 0}
       onClick={confirmDelete || renaming ? undefined : onClick}
       onKeyDown={(e) => {
-        if (confirmDelete || renaming || e.target !== e.currentTarget) return;
-        if (e.key === "Enter" || e.key === " ") {
+        if ((e.key === "Enter" || e.key === " ") && !confirmDelete && !renaming) {
           e.preventDefault();
-          onClick();
+          onClick?.();
         }
       }}
+      onContextMenu={handleContextMenu}
       onFocus={() => setRowFocused(true)}
       onBlur={(e) => {
         const next = e.relatedTarget;
@@ -189,7 +233,7 @@ function SessionItem({
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={`h-[52px] flex items-center pr-2 transition-all duration-120 gap-1.5 overflow-hidden ${bgClass} ${borderClass} ${
+      className={`relative h-[52px] flex items-center pr-2 transition-all duration-120 gap-1.5 overflow-hidden ${bgClass} ${borderClass} ${
         confirmDelete || renaming ? "cursor-default" : "cursor-pointer"
       } ${deleting ? "opacity-50" : "opacity-100"}`}
       style={{
@@ -286,9 +330,27 @@ function SessionItem({
           {/* Action buttons keep their width reserved so hover does not shift text. */}
           <div
             className={`flex gap-1 shrink-0 transition-opacity duration-120 ${
-              actionsVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+              actionsVisible || menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
             }`}
           >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                setMenuPos({ x: rect.left, y: rect.bottom + 4 });
+                setMenuOpen(true);
+              }}
+              title="More actions"
+              aria-label="More actions"
+              tabIndex={actionsVisible ? 0 : -1}
+              className="flex items-center justify-center w-7 h-7 p-0 bg-chrome-button-bg hover:bg-chrome-button-hover border border-border hover:border-focus-ring rounded-control text-text-muted hover:text-text cursor-pointer shrink-0 transition-all duration-120 active:scale-95"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="1" />
+                <circle cx="12" cy="5" r="1" />
+                <circle cx="12" cy="19" r="1" />
+              </svg>
+            </button>
             <button
               onClick={startRename}
               title="Rename"
@@ -315,6 +377,102 @@ function SessionItem({
               </svg>
             </button>
           </div>
+
+          {/* Context Menu Dropdown */}
+          {menuOpen && menuPos && (
+            <div
+              ref={menuRef}
+              style={{
+                position: "fixed",
+                top: menuPos.y,
+                left: menuPos.x,
+                zIndex: 1000,
+              }}
+              className="w-44 bg-bg-elevated border border-divider rounded-panel shadow-popover py-1 text-[12px] text-text"
+            >
+              {onBranchSession && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    onBranchSession(session);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-bg-hover text-left cursor-pointer transition-colors border-none bg-transparent text-text"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted">
+                    <line x1="6" y1="3" x2="6" y2="15" />
+                    <circle cx="18" cy="6" r="3" />
+                    <circle cx="6" cy="18" r="3" />
+                    <path d="M18 9a9 9 0 0 1-9 9" />
+                  </svg>
+                  Branch Session
+                </button>
+              )}
+              {onCloneSession && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    onCloneSession(session);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-bg-hover text-left cursor-pointer transition-colors border-none bg-transparent text-text"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  Clone Session
+                </button>
+              )}
+              {onExportSession && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    onExportSession(session);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-bg-hover text-left cursor-pointer transition-colors border-none bg-transparent text-text"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Export Session
+                </button>
+              )}
+              <div className="my-1 border-t border-divider" />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  startRename(e);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-bg-hover text-left cursor-pointer transition-colors border-none bg-transparent text-text"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                </svg>
+                Rename
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  handleDeleteClick(e);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-bg-hover text-left cursor-pointer transition-colors border-none bg-transparent text-danger"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-danger">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6M14 11v6" />
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                </svg>
+                Delete
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

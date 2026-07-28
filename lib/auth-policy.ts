@@ -21,3 +21,24 @@ export function validateProviderName(provider: string): string | null {
   }
   return null;
 }
+const ALLOWED_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+
+/**
+ * Returns true if the given Origin header value points at localhost or the
+ * loopback address.
+ */
+export function isAllowedOrigin(origin: string): boolean {
+  return ALLOWED_ORIGIN_RE.test(origin);
+}
+
+/**
+ * Validates the Origin header on incoming API requests against loopback allowlist.
+ * Returns an error message string if rejected (403), or null if allowed.
+ */
+export function validateRequestOrigin(req: Request): string | null {
+  const origin = req.headers.get("origin");
+  if (origin !== null && !isAllowedOrigin(origin)) {
+    return "forbidden origin";
+  }
+  return null;
+}

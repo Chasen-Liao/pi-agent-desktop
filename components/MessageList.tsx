@@ -15,6 +15,7 @@ interface MessageListProps {
   forkingEntryId: string | null;
   onFork: (entryId: string) => void;
   onNavigate: (entryId: string) => void;
+  onBranchMessage?: (entryId: string) => void;
   onEditContent: (content: string) => void;
   messageRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
   lastUserMsgRef: React.MutableRefObject<HTMLDivElement | null>;
@@ -24,7 +25,7 @@ interface MessageListProps {
 export const MessageList = React.memo(function MessageList({
   messages, entryIds, toolResultsMap, nextUserIdx, nextAssistantIdx,
   isStreaming, streamingMessage, isNew, agentRunning, forkingEntryId,
-  onFork, onNavigate, onEditContent, messageRefs, lastUserMsgRef,
+  onFork, onNavigate, onBranchMessage, onEditContent, messageRefs, lastUserMsgRef,
   modelNames,
 }: MessageListProps) {
   const lastUserIdx = useMemo(() => {
@@ -63,6 +64,7 @@ export const MessageList = React.memo(function MessageList({
             onFork={canFork ? onFork : undefined}
             forking={forkingEntryId === entryIds[idx]}
             onNavigate={canNavigate ? onNavigate : undefined}
+            onBranchMessage={canNavigate ? onBranchMessage : undefined}
             prevAssistantEntryId={prevAssistantEntryId}
             onEditContent={onEditContent}
             showTimestamp={finalShowTimestamp}

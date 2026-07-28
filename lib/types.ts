@@ -7,6 +7,7 @@ export interface SessionHeader {
   timestamp: string;
   cwd: string;
   parentSession?: string;
+  name?: string;
 }
 
 export interface SessionEntryBase {
@@ -181,6 +182,7 @@ export interface SessionInfo {
   messageCount: number;
   firstMessage: string;
   parentSessionId?: string; // set if this session was forked from another
+  leafEntryId?: string;
 }
 
 export interface SessionContext {

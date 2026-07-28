@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateProviderName } from "./auth-policy.ts";
+import { isAllowedOrigin, validateProviderName, validateRequestOrigin } from "./auth-policy.ts";
 
 test("validateProviderName: allows typical provider slugs", () => {
   for (const p of ["anthropic", "openai", "google", "openrouter"]) {
@@ -56,4 +56,26 @@ test("validateProviderName: rejects names exceeding 64 chars", () => {
 test("validateProviderName: allows exactly 64 chars", () => {
   const exact = "a".repeat(64);
   assert.equal(validateProviderName(exact), null);
+});
+test("isAllowedOrigin and validateRequestOrigin: allows localhost and loopback origins", () => {
+  assert.equal(isAllowedOrigin("http://localhost:3000"), true);
+  assert.equal(isAllowedOrigin("http://127.0.0.1:8080"), true);
+  assert.equal(isAllowedOrigin("https://localhost"), true);
+
+  const validReq = new Request("http://localhost:3000/api/mcp/test", {
+    headers: { origin: "http://localhost:3000" },
+  });
+  assert.equal(validateRequestOrigin(validReq), null);
+});
+
+test("validateRequestOrigin: rejects forbidden origin", () => {
+  const invalidReq = new Request("http://localhost:3000/api/mcp/test", {
+    headers: { origin: "https://evil.com" },
+  });
+  assert.equal(validateRequestOrigin(invalidReq), "forbidden origin");
+});
+
+test("validateRequestOrigin: allows request without origin header", () => {
+  const noOriginReq = new Request("http://localhost:3000/api/mcp/test");
+  assert.equal(validateRequestOrigin(noOriginReq), null);
 });

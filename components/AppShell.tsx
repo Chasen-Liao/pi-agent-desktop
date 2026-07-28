@@ -9,6 +9,9 @@ import { TabBar } from "./TabBar";
 import { ModelsConfig } from "./ModelsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { BranchNavigator } from "./BranchNavigator";
+import { ExtensionsConfigModal } from "./ExtensionsConfigModal";
+import { SessionExportModal } from "./SessionExportModal";
+import { BranchCloneModal, type BranchCloneMode } from "./BranchCloneModal";
 import { useTheme } from "@/hooks/useTheme";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
@@ -35,9 +38,17 @@ export function AppShell() {
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
+  const [extensionsModalOpen, setExtensionsModalOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportSessionId, setExportSessionId] = useState<string | null>(null);
+  const [branchCloneModal, setBranchCloneModal] = useState<{
+    isOpen: boolean;
+    mode: BranchCloneMode;
+    sessionId: string | null;
+    targetEntryId?: string;
+  }>({ isOpen: false, mode: "branch", sessionId: null });
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
-
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -330,6 +341,31 @@ export function AppShell() {
         onInitialRestoreDone={handleInitialRestoreDone}
         refreshKey={refreshKey}
         onSessionDeleted={handleSessionDeleted}
+        onBranchSession={async (s) => {
+          let targetEntryId = s.leafEntryId;
+          if (!targetEntryId && s.id === selectedSession?.id) {
+            targetEntryId = selectedSession.leafEntryId ?? branchActiveLeafId ?? undefined;
+          }
+          if (!targetEntryId) {
+            try {
+              const res = await fetch(`/api/sessions/${encodeURIComponent(s.id)}`);
+              if (res.ok) {
+                const data = (await res.json()) as { context?: { entryIds?: string[] } };
+                if (data.context?.entryIds?.length) {
+                  targetEntryId = data.context.entryIds[data.context.entryIds.length - 1];
+                }
+              }
+            } catch {}
+          }
+          setBranchCloneModal({
+            isOpen: true,
+            mode: "branch",
+            sessionId: s.id,
+            targetEntryId,
+          });
+        }}
+        onCloneSession={(s) => setBranchCloneModal({ isOpen: true, mode: "clone", sessionId: s.id })}
+        onExportSession={(s) => { setExportSessionId(s.id); setExportModalOpen(true); }}
         selectedCwd={activeCwd ?? selectedSession?.cwd ?? newSessionCwd ?? null}
         onCwdChange={handleCwdChange}
         onOpenFile={handleOpenFile}
@@ -482,11 +518,30 @@ export function AppShell() {
                   tree={branchTree}
                   activeLeafId={branchActiveLeafId}
                   onLeafChange={handleBranchLeafChange}
+                  onBranch={() => {
+                    if (selectedSession) {
+                      setBranchCloneModal({
+                        isOpen: true,
+                        mode: "branch",
+                        sessionId: selectedSession.id,
+                        targetEntryId: branchActiveLeafId ?? undefined,
+                      });
+                    }
+                  }}
+                  onClone={() => {
+                    if (selectedSession) {
+                      setBranchCloneModal({
+                        isOpen: true,
+                        mode: "clone",
+                        sessionId: selectedSession.id,
+                      });
+                    }
+                  }}
                   inline
                   containerRef={topBarRef}
                   open={activeTopPanel === "branches"}
                   onToggle={() => toggleTopPanel("branches")}
-                  hasSession
+                  hasSession={!!selectedSession}
                 />
                 <button
                   ref={systemBtnRef}
@@ -518,6 +573,43 @@ export function AppShell() {
               </div>
             )}
             <div className="flex-1" />
+            {/* Extensions & Export Toolbar Actions */}
+            <div className="flex items-center h-full border-r border-divider [-webkit-app-region:no-drag]">
+              <button
+                onClick={() => setExtensionsModalOpen(true)}
+                title="Extensions & MCP Servers"
+                aria-label="Extensions & MCP Servers"
+                className="flex items-center gap-1.5 h-full px-2.5 bg-transparent border-none text-text-muted hover:text-text cursor-pointer text-[11px] font-medium transition-colors duration-120"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-accent">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
+                <span>Extensions & MCP</span>
+              </button>
+              <button
+                onClick={() => {
+                  setExportSessionId(selectedSession?.id ?? null);
+                  setExportModalOpen(true);
+                }}
+                disabled={!selectedSession}
+                title={selectedSession ? "Export Session (HTML/MD)" : "Select a session to export"}
+                aria-label="Export Session"
+                className={`flex items-center gap-1.5 h-full px-2.5 bg-transparent border-none text-[11px] font-medium transition-colors duration-120 ${
+                  selectedSession
+                    ? "text-text-muted hover:text-text cursor-pointer"
+                    : "text-text-dim cursor-not-allowed opacity-40"
+                }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span>Export</span>
+              </button>
+            </div>
             <StatsBar showChat={showChat} sessionStats={sessionStats} contextUsage={contextUsage} />
             {!rightPanelOpen && (
               <>
@@ -685,6 +777,26 @@ export function AppShell() {
           onClose={() => setSkillsConfigOpen(false)}
         />
       )}
+      {/* Wave 2 Modals */}
+      <ExtensionsConfigModal
+        isOpen={extensionsModalOpen}
+        onClose={() => setExtensionsModalOpen(false)}
+        cwd={activeCwd ?? selectedSession?.cwd ?? newSessionCwd ?? undefined}
+      />
+      <SessionExportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        sessionId={exportSessionId ?? selectedSession?.id ?? null}
+      />
+      <BranchCloneModal
+        isOpen={branchCloneModal.isOpen}
+        onClose={() => setBranchCloneModal((prev) => ({ ...prev, isOpen: false }))}
+        mode={branchCloneModal.mode}
+        sessionId={branchCloneModal.sessionId}
+        targetEntryId={branchCloneModal.targetEntryId}
+        cwd={activeCwd ?? selectedSession?.cwd ?? undefined}
+        onSuccess={(newId) => handleSessionForked(newId)}
+      />
     </>
   );
 }

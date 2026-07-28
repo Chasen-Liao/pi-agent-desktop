@@ -48,6 +48,10 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
   return piSessions.map((s) => {
     // Populate path cache so resolveSessionPath works without a full scan
     cacheSessionPathEntry(state, s.id, s.path);
+    const leafEntryId =
+      typeof s === "object" && s !== null && "leafEntryId" in s && typeof s.leafEntryId === "string"
+        ? s.leafEntryId
+        : undefined;
     return {
       path: s.path,
       id: s.id,
@@ -58,6 +62,7 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
       messageCount: s.messageCount,
       firstMessage: s.firstMessage || "(no messages)",
       parentSessionId: s.parentSessionPath ? pathToId.get(s.parentSessionPath) : undefined,
+      leafEntryId,
     };
   });
 }

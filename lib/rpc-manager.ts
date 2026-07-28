@@ -16,6 +16,7 @@ import {
 import { ExtensionUiBridge } from "./extension-ui-bridge.ts";
 import { desktopApprovalInlineExtension, type AgentModeRef } from "./desktop-approval-extension.ts";
 import { readDesktopSettings } from "./desktop-settings.ts";
+import { findLastAgentMode } from "./agent-mode-persistence.ts";
 
 // ============================================================================
 // Constants
@@ -116,6 +117,13 @@ export class AgentSessionWrapper {
     if (tools.length === 0) {
       const state = this.inner.agent?.state as { systemPrompt?: string } | undefined;
       if (state) state.systemPrompt = "";
+    }
+  }
+  setAgentMode(mode: AgentMode): void {
+    if (!isAgentMode(mode)) throw new Error(`Invalid agent mode: ${String(mode)}`);
+    this.applyAgentMode(mode);
+    if (this.inner.sessionManager && typeof this.inner.sessionManager.appendCustomEntry === "function") {
+      this.inner.sessionManager.appendCustomEntry("desktop_agent_mode", { mode });
     }
   }
 
@@ -426,7 +434,7 @@ export class AgentSessionWrapper {
       case "set_agent_mode": {
         const mode = command.mode;
         if (!isAgentMode(mode)) throw new Error(`Invalid agent mode: ${String(mode)}`);
-        this.applyAgentMode(mode);
+        this.setAgentMode(mode);
         return { agentMode: this._agentMode, toolPreset: this._toolPreset };
       }
 
@@ -595,7 +603,14 @@ export async function startRpcSession(
     const agentDir = getAgentDir();
     const desktop = readDesktopSettings(agentDir);
 
-    let agentMode: AgentMode = isAgentMode(opts.agentMode) ? opts.agentMode : desktop.defaultAgentMode;
+    const sessionManager = sessionFile
+      ? SessionManager.open(sessionFile, undefined)
+      : SessionManager.create(cwd, undefined);
+
+    const storedMode = findLastAgentMode(sessionManager.getEntries() as never);
+    let agentMode: AgentMode = isAgentMode(opts.agentMode)
+      ? opts.agentMode
+      : (storedMode ?? desktop.defaultAgentMode);
     let toolPreset: ToolPreset = isToolPreset(opts.toolPreset)
       ? opts.toolPreset
       : desktop.defaultToolPreset;
@@ -609,10 +624,6 @@ export async function startRpcSession(
     }
 
     const effectiveTools = effectiveToolsForMode(agentMode, toolPreset);
-
-    const sessionManager = sessionFile
-      ? SessionManager.open(sessionFile, undefined)
-      : SessionManager.create(cwd, undefined);
 
     const modeRef: AgentModeRef = { current: agentMode };
     const resourceLoader = new DefaultResourceLoader({
