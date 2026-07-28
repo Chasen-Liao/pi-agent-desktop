@@ -1,6 +1,7 @@
 /**
  * Project trust helpers for desktop session start (HTTP 409 handshake).
  * Uses pi's ProjectTrustStore + hasTrustRequiringProjectResources when available.
+ * Server-only — do not import from client components (use lib/trust-types.ts).
  */
 import { dirname } from "path";
 import {
@@ -8,24 +9,10 @@ import {
   ProjectTrustStore,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
+import type { NeedsTrustPayload, TrustOptionDto, TrustOptionId } from "./trust-types.ts";
 
-export type TrustOptionId = "trust" | "trust-parent" | "trust-session" | "deny" | "deny-session";
-
-export interface TrustOptionDto {
-  id: TrustOptionId;
-  label: string;
-  trusted: boolean;
-  /** Empty updates = session-only (not persisted). */
-  persist: boolean;
-  path?: string;
-  parentPath?: string;
-}
-
-export interface NeedsTrustPayload {
-  needsTrust: true;
-  cwd: string;
-  options: TrustOptionDto[];
-}
+export type { NeedsTrustPayload, TrustOptionDto, TrustOptionId } from "./trust-types.ts";
+export { isTrustOptionId } from "./trust-types.ts";
 
 export function getTrustParentPath(cwd: string): string | undefined {
   const parent = dirname(cwd);
@@ -158,12 +145,3 @@ export function applyTrustDecision(
   }
 }
 
-export function isTrustOptionId(value: unknown): value is TrustOptionId {
-  return (
-    value === "trust" ||
-    value === "trust-parent" ||
-    value === "trust-session" ||
-    value === "deny" ||
-    value === "deny-session"
-  );
-}

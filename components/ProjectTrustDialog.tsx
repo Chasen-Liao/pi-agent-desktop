@@ -1,13 +1,9 @@
 "use client";
 
 import React from "react";
-import type { TrustOptionDto } from "@/lib/project-trust-desktop";
+import type { NeedsTrustPayload, TrustOptionDto } from "@/lib/trust-types";
 
-export type NeedsTrustPayload = {
-  needsTrust: true;
-  cwd: string;
-  options: TrustOptionDto[];
-};
+export type { NeedsTrustPayload };
 
 interface Props {
   payload: NeedsTrustPayload | null;

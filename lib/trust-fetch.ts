@@ -1,7 +1,7 @@
 /**
  * Retry helper for agent APIs that may return 409 needsTrust.
  */
-import type { NeedsTrustPayload } from "@/components/ProjectTrustDialog";
+import type { NeedsTrustPayload } from "@/lib/trust-types";
 
 export async function ensureTrustThenFetch(
   input: RequestInfo | URL,

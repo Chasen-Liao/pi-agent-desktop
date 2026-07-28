@@ -27,7 +27,7 @@ import {
 import type { AgentMode } from "@/lib/approval-policy";
 import { DEFAULT_AGENT_MODE } from "@/lib/approval-policy";
 import type { ExtensionUiRequestEvent } from "./agent-session/agent-events-manager";
-import type { NeedsTrustPayload } from "@/components/ProjectTrustDialog";
+import type { NeedsTrustPayload } from "@/lib/trust-types";
 import { sendAgentCommand } from "@/lib/agent-client";
 
 export type { ThinkingLevelOption };

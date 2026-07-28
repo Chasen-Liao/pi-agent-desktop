@@ -9,7 +9,7 @@ import type { ThinkingLevelOption } from "./session-lifecycle-reset";
 import type { AgentMode } from "@/lib/approval-policy";
 import { EXECUTE_PLAN_PROMPT } from "@/lib/approval-policy";
 import { ensureTrustThenFetch } from "@/lib/trust-fetch";
-import type { NeedsTrustPayload } from "@/components/ProjectTrustDialog";
+import type { NeedsTrustPayload } from "@/lib/trust-types";
 
 export type AttachedImage = {
   data: string;

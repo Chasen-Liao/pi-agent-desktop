@@ -7,8 +7,8 @@ import {
   applyTrustDecision,
   buildTrustOptions,
   evaluateProjectTrust,
-  isTrustOptionId,
 } from "./project-trust-desktop.ts";
+import { isTrustOptionId } from "./trust-types.ts";
 
 test("buildTrustOptions includes trust/deny and session variants", () => {
   const opts = buildTrustOptions("D:\\proj");
