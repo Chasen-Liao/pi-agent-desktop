@@ -52,6 +52,17 @@ npm run dist
 > [!NOTE]
 > 索引状态是由用户决定的。如果项目没有 `.codegraph/` 文件夹，可以通过在项目根目录运行 `codegraph init` 初始化索引。
 
+## 核心能力与当前状态 (Wave 1 & Wave 2 已完成)
+
+- **Agent 安全模式与 Ask 拦截**：支持 `plan` / `ask` / `full` 三种 AgentMode，`ask` 模式下拦截 `bash` / `write` / `edit` 等写工具操作并向 UI 发起确认。
+- **Extension UI Bridge**：通过 SSE 桥接支持 Extension `confirm` / `select` / `input` / `editor` / `notify` 等交互式 UI 弹窗与通知。
+- **Project Trust 409 握手**：对未信任的项目路径在创建/载入 Session 时触发 409 `needsTrust` 响应并弹出 Trust 授权对话框。
+- **MCP 服务器管理**：读写全局 (`~/.pi/agent/mcp.json`) 和项目级 (`<cwd>/.pi/mcp.json`) MCP 配置，支持连接测试、开关与工具计数管理。
+- **扩展与 Skill 管理**：统一配置面板管理已加载 Extension、Skill 启用状态与诊断信息。
+- **会话 Branching & Cloning**：支持从会话节点分叉新分支 (`/api/sessions/[id]/branch`) 或全量 Clone 到目标目录 (`/api/sessions/[id]/clone`)。
+- **会话导出 (HTML/MD)**：支持将会话流式或静态导出为独立的 HTML（含语法高亮）或 Markdown 文件 (`/api/sessions/[id]/export`)。
+- **AgentMode `.jsonl` 持久化**：在模式切换时向 Session `.jsonl` 追加 `desktop_agent_mode` Custom Entry，Session 重载时自动恢复历史模式。
+
 ## 高层架构
 
 > 📖 **完整架构文档见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** —— 以下仅保留开发时高频查阅的速查摘要。
@@ -67,9 +78,9 @@ npm run dist
 
 | 目录 | 用途 |
 |---|---|
-| `app/api/` | 24 条 API 路由（agent / sessions / files / models / skills / auth / health） |
-| `lib/` | 服务端库：`rpc-manager` / `session-reader` / `normalize` / `session-cascade` 等 |
-| `components/` | 17 个顶层组件 + `chat-input/` / `session-sidebar/` / `models-config/` 子目录 |
+| `app/api/` | 33 条 API 路由（agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings） |
+| `lib/` | 服务端库：`rpc-manager` / `session-reader` / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` 等 |
+| `components/` | 24 个顶层组件（含 `McpConfigModal` / `SessionExportModal` / `ExtensionsConfigModal` / `ProjectTrustDialog` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
 | `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 8 个拆分 hook |
 | `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 7 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
@@ -77,11 +88,10 @@ npm run dist
 ### 三条最常踩坑的设计决策
 
 - **活跃 session 注册表必须存 `globalThis`**：Next.js HMR 会丢弃模块级变量；五个 globalThis 变量必须挂在 globalThis 上：`__piSessions`（活跃会话注册表）/ `__piSessionPathCache`（路径缓存）/ `__piStartLocks`（并发启动锁）/ `__piWriteLocks`（per-file 写入锁）/ `__piAllowedRootsCache`（文件访问白名单 5s TTL）。详见 [AGENTS.md](AGENTS.md#五个必须存-globalthis-的原因) 与 [docs/ARCHITECTURE.md §14.1](docs/ARCHITECTURE.md)。
-- **两种分支不要混淆**：**Fork** = 跨文件新 `.jsonl`（`POST /api/agent/[id]` with `{type:"fork"}`）；**会话内分支** = 同文件 `navigate_tree` + `GET /api/sessions/[id]/context?leafId=`。
+- **两种分支不要混淆**：**Fork / Branch** = 跨文件新 `.jsonl`（`POST /api/sessions/[id]/branch` 或 `POST /api/agent/[id]` with `{type:"fork"}`）；**会话内分支** = 同文件 `navigate_tree` + `GET /api/sessions/[id]/context?leafId=`。
 - **Fork 后必须立即销毁旧 wrapper**：Fork 在文件层通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）创建新 `.jsonl`，再用 `startRpcSession()` 构造全新 AgentSession 实例；旧 wrapper 不再会被请求到，立即 `destroy()` 可及时释放资源（而非等 10 分钟 idle 超时）。详见 [docs/ARCHITECTURE.md §14.2](docs/ARCHITECTURE.md#142-fork-的执行顺序预注册--销毁旧-wrapper)。
 
 > 更完整的设计决策与陷阱清单（ToolCall 归一化、SSE 重连、electron-builder extraResources、Windows 兼容层等）见 [docs/ARCHITECTURE.md §14](docs/ARCHITECTURE.md#14-关键设计决策与陷阱)。
-
 <!-- rules-aio:start -->
 @.claude/rules/nextjs.md
 @.claude/rules/react.md

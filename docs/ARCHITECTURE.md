@@ -3,9 +3,9 @@
 > 本文档是项目的**权威架构参考**，由 CodeGraph 静态分析 + 源码核对生成。
 > 若与 `AGENTS.md` / `CLAUDE.md` 中的简要描述冲突，以本文档为准。
 >
-> - **项目**：`@chasen-liao/pi-agent-desktop` v0.7.16
-> - **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.79.8 / `@earendil-works/pi-ai` ^0.79.8
-> - **更新日期**：2026-06-24
+- **项目**：`@chasen-liao/pi-agent-desktop` v0.7.18
+- **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.82.1 / `@earendil-works/pi-ai` ^0.82.1
+- **更新日期**：2026-07-28
 
 ---
 
@@ -26,6 +26,7 @@
 13. [Electron 桌面端](#13-electron-桌面端)
 14. [关键设计决策与陷阱](#14-关键设计决策与陷阱)
 15. [技术栈](#15-技术栈)
+16. [当前状态与后续规划](#16-当前状态与后续规划)
 
 ---
 
@@ -100,7 +101,7 @@ flowchart TD
         S1[rpc-manager.ts<br/>AgentSessionWrapper]
         S2[session-reader.ts<br/>.jsonl 解析]
         S3[normalize.ts<br/>ToolCall 归一化]
-        S4["24 条 API 路由"]
+        S4["33 条 API 路由"]
         S5[session-cascade / session-lock]
     end
 
@@ -141,7 +142,7 @@ flowchart TD
 
 ```text
 pi-agent-desktop/
-├── package.json                  @chasen-liao/pi-agent-desktop v0.7.16
+├── package.json                  @chasen-liao/pi-agent-desktop v0.7.18
 ├── next.config.ts                output:"standalone" + server external packages
 ├── tailwind.config.ts            Tailwind 4 配置
 ├── tsconfig.json                 strict + bundler resolution
@@ -155,7 +156,7 @@ pi-agent-desktop/
 │   ├── layout.tsx                主题初始化 + 字体 + 防 FOUC 脚本
 │   ├── page.tsx                  挂载 <AppShell/>
 │   ├── globals.css               CSS 变量主题 + View Transitions
-│   └── api/                      24 条 API 路由（见 §12）
+│   └── api/                      33 条 API 路由（见 §12）
 │
 ├── components/                   React 组件（见 §10）
 │   ├── AppShell.tsx              顶层布局
@@ -174,6 +175,14 @@ pi-agent-desktop/
 │   ├── FileIcons.tsx             SVG 文件图标
 │   ├── TabBar.tsx                顶部标签栏
 │   ├── StatsBar.tsx              统计栏
+│   ├── AgentModeSelector.tsx     Plan / Ask / Full 安全模式切换器
+│   ├── ExecutePlanBar.tsx        Plan 模式执行计划提示条
+│   ├── ExtensionUiDialog.tsx     Extension 交互弹窗（confirm/select/input/editor）
+│   ├── ProjectTrustDialog.tsx    Project Trust 授权对话框
+│   ├── McpConfigModal.tsx        MCP 服务器配置与状态管理弹窗
+│   ├── SessionExportModal.tsx    会话导出弹窗（HTML/Markdown）
+│   ├── ExtensionsConfigModal.tsx 扩展与 Skill 统一管理弹窗
+│   ├── BranchCloneModal.tsx      会话分叉与克隆对话框
 │   ├── chat-input/               输入栏子组件
 │   │   ├── AttachmentPreview.tsx
 │   │   ├── ModelSelector.tsx
@@ -208,6 +217,15 @@ pi-agent-desktop/
 ├── lib/                          服务端 / 共享库
 │   ├── rpc-manager.ts            ★ AgentSessionWrapper + 注册表 + startRpcSession
 │   ├── session-reader.ts         ★ .jsonl 解析 + 路径缓存 + 会话树
+│   ├── approval-policy.ts        Ask 拦截规则与 AgentMode 校验
+│   ├── extension-ui-bridge.ts    Extension UI Bridge 弹窗响应与通知分派
+│   ├── project-trust-desktop.ts  Project Trust 409 握手与 Trust 存储
+│   ├── desktop-settings.ts       桌面模式默认配置 (desktop-settings.json)
+│   ├── mcp-config.ts             MCP 配置读写与测试 (~/.pi/agent/mcp.json 及 <cwd>/.pi/mcp.json)
+│   ├── extensions-config.ts      扩展与 Skill 读取/开关管理
+│   ├── session-export.ts         会话 HTML 与 Markdown 导出渲染器
+│   ├── session-branch-clone.ts   会话 Branching & Cloning 分叉与克隆
+│   ├── agent-mode-persistence.ts `.jsonl` custom 节点 desktop_agent_mode 读写
 │   ├── session-cascade.ts        会话删除时子会话级联重 parent
 │   ├── session-lock.ts           会话文件并发锁
 │   ├── normalize.ts              ToolCall 字段归一化
@@ -378,9 +396,11 @@ Pi 有两种独立的分支机制，**不要混淆**：
 {"type":"message","id":"<8hex>","parentId":"<8hex>","message":{"role":"toolResult","toolCallId":"...","content":[...]}}
 {"type":"compaction","id":"<8hex>","parentId":"<8hex>","summary":"...","firstKeptEntryId":"<8hex>","tokensBefore":N}
 {"type":"session_info","id":"...","parentId":"...","name":"user-defined name"}
+{"type":"custom","id":"<8hex>","parentId":"<8hex>","timestamp":1785200000000,"customType":"desktop_agent_mode","data":{"mode":"plan"}}
 ```
 
 - `parentSession` 是**显示元数据**，对聊天内容零影响；可安全 `writeFileSync` 整个文件（pi 自己的迁移也这么做）。
+- `customType === "desktop_agent_mode"` 自定义节点用于持久化会话级 AgentMode (`plan`/`ask`/`full`)，`session-reader.ts` 与 `AgentSessionWrapper` 启动时自后向前扫描恢复历史模式。
 - 删除会话时，`session-cascade.ts` 会把所有子会话的 `parentSession` 级联重指向到祖父会话。
 
 ---
@@ -389,17 +409,17 @@ Pi 有两种独立的分支机制，**不要混淆**：
 
 > 完整清单基于 CodeGraph 索引。所有组件**手写，零 UI 库依赖**，通过 CSS 变量实现暗色/亮色主题。
 
-### 顶层组件（17 个）
+### 顶层组件（24 个）
 
 | 组件 | 职责 |
 |---|---|
 | `AppShell.tsx` | 顶层布局：侧边栏 + 聊天区 + 标签页；URL `?session=` 状态；模型/技能弹窗 |
 | `ChatWindow.tsx` | 对话区域外壳；委托 `useAgentSession` 处理所有 agent 交互 |
-| `ChatInput.tsx` | 输入栏：模型选择、工具预设、Thinking Level、图片拖拽 |
+| `ChatInput.tsx` | 输入栏：模型选择、工具预设、AgentMode 选择器、Thinking Level、图片拖拽 |
 | `MessageList.tsx` | 消息列表（虚拟化滚动） |
 | `MessageView.tsx` | 单条消息渲染：Markdown + Prism 高亮 + Thinking 折叠 + 工具调用配对 |
 | `SessionSidebar.tsx` | 按 cwd 分组的会话树 + 内嵌 `FileExplorer` |
-| `BranchNavigator.tsx` | 会话内分支切换器（线性链自动压缩） |
+| `BranchNavigator.tsx` | 会话内分支切换器（线性链自动压缩，支持分叉与克隆按钮） |
 | `ChatMinimap.tsx` | 消息列表右侧的滚动缩略导航 |
 | `ToolPanel.tsx` | 三档工具预设：`PRESET_NONE` / `PRESET_DEFAULT` / `PRESET_FULL` |
 | `ModelsConfig.tsx` | 25+ 提供商配置弹窗 |
@@ -409,6 +429,14 @@ Pi 有两种独立的分支机制，**不要混淆**：
 | `FileIcons.tsx` | 纯 SVG 单色文件图标（按扩展名匹配） |
 | `TabBar.tsx` | 顶部标签栏：Chat 标签 + 多文件标签 |
 | `StatsBar.tsx` | token / cost / 上下文用量统计 |
+| `AgentModeSelector.tsx` | Plan / Ask / Full 三档安全模式切换控件 |
+| `ExecutePlanBar.tsx` | Plan 模式生成计划后的“一键执行计划”操作条 |
+| `ExtensionUiDialog.tsx` | Extension UI Bridge 交互弹窗 (confirm/select/input/editor) |
+| `ProjectTrustDialog.tsx` | Project Trust 409 握手与目录信任授权弹窗 |
+| `McpConfigModal.tsx` | MCP 服务器发现、在线状态、全局与项目级配置编辑弹窗 |
+| `SessionExportModal.tsx` | 会话导出弹窗（支持格式与主题选择、预览与下载） |
+| `ExtensionsConfigModal.tsx` | 扩展、Skill 与 MCP 服务器的多 Tab 统一管理弹窗 |
+| `BranchCloneModal.tsx` | 会话节点分叉 (Branch) 与目录克隆 (Clone) 确认弹窗 |
 | `file-viewer-virtualization.ts` | FileViewer 的虚拟化算法 |
 
 ### 子组件目录
@@ -463,24 +491,51 @@ components/models-config/     模型配置弹窗的子组件
 
 ## 12. API 路由清单
 
-> 共 **24 条** route.ts（CodeGraph 索引统计）。
+> 共 **33 条** route.ts（CodeGraph 索引统计）。
 
 ### Agent 会话交互（3 条）
 
 | 路由 | 方法 | 用途 |
 |---|---|---|
 | `app/api/agent/new/route.ts` | POST | 创建新会话并发送首条消息 |
-| `app/api/agent/[id]/route.ts` | GET / POST | GET 状态；POST 任意命令（prompt / abort / fork / navigate_tree / set_model / compact / get_tools） |
-| `app/api/agent/[id]/events/route.ts` | GET | SSE 事件流（30s 心跳） |
+| `app/api/agent/[id]/route.ts` | GET / POST | GET 状态；POST 任意命令（prompt / abort / fork / navigate_tree / set_model / compact / get_tools / set_agent_mode / extension_ui_response） |
+| `app/api/agent/[id]/events/route.ts` | GET | SSE 事件流（30s 心跳，支持 extension_ui_request / extension_ui_notify） |
 
-### 会话浏览（4 条，只读）
+### 会话浏览、分叉与导出（7 条）
 
 | 路由 | 方法 | 用途 |
 |---|---|---|
 | `app/api/sessions/route.ts` | GET | 列出所有会话（按 cwd 分组） |
 | `app/api/sessions/[id]/route.ts` | GET / PATCH / DELETE | 读取 / 重命名 / 删除 |
 | `app/api/sessions/[id]/context/route.ts` | GET | `?leafId=` 返回指定分支叶子的上下文 |
+| `app/api/sessions/[id]/branch/route.ts` | POST | 从指定 entryId 节点创建分叉新会话 (.jsonl) |
+| `app/api/sessions/[id]/clone/route.ts` | POST | 全量复制/Fork 会话至目标 cwd 目录 |
+| `app/api/sessions/[id]/export/route.ts` | GET | 导出会话为独立 HTML 或 Markdown 文件 |
 | `app/api/sessions/new/route.ts` | — | 已弃用，返回 410 |
+
+### MCP 服务器管理（3 条）
+
+| 路由 | 方法 | 用途 |
+|---|---|---|
+| `app/api/mcp/route.ts` | GET / POST / DELETE | 读取合并配置与连线状态；新增/更新 MCP 配置；删除 MCP 配置 |
+| `app/api/mcp/toggle/route.ts` | POST | 启用或禁用特定 MCP 服务器 (`disabled` 标志) |
+| `app/api/mcp/test/route.ts` | POST | 测试特定 MCP 服务器配置连接与工具探针 |
+
+### 扩展与 Skill 管理（4 条）
+
+| 路由 | 方法 | 用途 |
+|---|---|---|
+| `app/api/extensions/route.ts` | GET / POST | 列出已加载扩展、Skill 及诊断信息；切换扩展/Skill 状态 |
+| `app/api/skills/route.ts` | GET | 列出 / 启用 / 禁用技能 |
+| `app/api/skills/search/route.ts` | POST | 搜索远程技能 |
+| `app/api/skills/install/route.ts` | POST | 安装技能 |
+
+### 桌面配置与 Trust（2 条）
+
+| 路由 | 方法 | 用途 |
+|---|---|---|
+| `app/api/desktop-settings/route.ts` | GET / PUT | 读写 `~/.pi/agent/desktop-settings.json` 全局默认 AgentMode 及 ToolPreset |
+| `app/api/trust/route.ts` | POST | 确认并持久化 Project Trust 信任授权决策 |
 
 ### 文件与目录（4 条）
 
@@ -499,14 +554,6 @@ components/models-config/     模型配置弹窗的子组件
 | `app/api/models-config/route.ts` | GET / PUT | 读写 `~/.pi/agent/models.json` |
 | `app/api/models-config/test/route.ts` | POST | 测试模型连接 |
 
-### Skills（3 条）
-
-| 路由 | 方法 | 用途 |
-|---|---|---|
-| `app/api/skills/route.ts` | GET | 列出 / 启用 / 禁用技能 |
-| `app/api/skills/search/route.ts` | POST | 搜索远程技能 |
-| `app/api/skills/install/route.ts` | POST | 安装技能 |
-
 ### 认证（5 条）
 
 | 路由 | 方法 | 用途 |
@@ -523,7 +570,6 @@ components/models-config/     模型配置弹窗的子组件
 |---|---|---|
 | `app/api/statusline/route.ts` | GET | git 分支与状态元数据 |
 | `app/api/health/route.ts` | GET | 桌面端启动健康探测（`server-wait.ts` 调用） |
-
 ---
 
 ## 13. Electron 桌面端
@@ -701,6 +747,22 @@ serverExternalPackages: [
 
 **PUT 写入**：`{ content: string }` 覆盖写文件，同样受 allowed-roots 鉴权与 512 KB 上限约束。
 
+### 14.12 Extension UI Bridge 异步 RPC 响应队里
+
+`lib/extension-ui-bridge.ts` 实现了 Extension UI 上下文接口。当 Extension 调用 `confirm`/`select`/`input`/`editor` 时，Bridge 分配唯一的 UUID，并通过 SSE 向前端分发 `extension_ui_request` 事件。服务端内部持有 Deferred Promise（Map 结构），前端用户交互操作产生 `extension_ui_response` 命令，精准匹配 UUID 以 resolve/reject，wrapper 销毁时自动 cancel 所有 pending 请求。
+
+### 14.13 Project Trust 409 握手与延迟 Session 创建
+
+在建立 Session 之前，服务端先通过 `needsProjectTrust(cwd)` 校验目标目录的信任状态。如果包含外部 Extension/Skill 配置且未经信任，服务端直接返回 HTTP 409 `needsTrust` 载荷而**拒绝开启**底层 AgentSession。前端拦截 409 弹窗请求用户确认后，调用 `POST /api/trust` 保存决策，再自动重新重试会话创建，从而保证非信任资源绝不越权加载。
+
+### 14.14 MCP 服务器全局与项目级配置双级合并
+
+`lib/mcp-config.ts` 负责读写全局 (`~/.pi/agent/mcp.json`) 与项目级 (`<cwd>/.pi/mcp.json`) 的 MCP 配置。通过合并算法展示并管理 Server 实例状态（如连线、工具数量、错误诊断及禁用标志 `disabled`），且修改项目级 MCP 时自动维护相应 `.pi/` 目录。
+
+### 14.15 AgentMode `.jsonl` 持久化与末位扫描
+
+为了让模式切换跨会话和重启保持一致，`AgentSessionWrapper` 在每次修改 AgentMode (`plan`/`ask`/`full`) 时向 `.jsonl` 追加 Custom Entry (`type: "custom"`, `customType: "desktop_agent_mode"`)。在打开会话时自后向前扫描寻找最后一个 `desktop_agent_mode` 节点，并优先以此还原 Agent 状态与 Ask 拦截规则。
+
 ---
 
 ## 15. 技术栈
@@ -714,8 +776,8 @@ serverExternalPackages: [
 | Markdown | react-markdown | ^10.1.0 |
 | Markdown | remark-gfm | ^4.0.1 |
 | 代码高亮 | react-syntax-highlighter（Prism） | ^16.1.1 |
-| AI SDK | @earendil-works/pi-coding-agent | ^0.79.8 |
-| AI SDK | @earendil-works/pi-ai | ^0.79.8 |
+| AI SDK | @earendil-works/pi-coding-agent | ^0.82.1 |
+| AI SDK | @earendil-works/pi-ai | ^0.82.1 |
 | 品牌图标 | @lobehub/icons | ^5.6.0 |
 | 桌面壳 | Electron | ^36.9.5 |
 | 打包 | electron-builder（NSIS） | ^26.8.1 |
@@ -726,6 +788,24 @@ serverExternalPackages: [
 **不使用**：状态管理库（Redux / Zustand）、UI 组件库（shadcn / MUI）、CSS-in-JS。
 
 ---
+
+## 16. 当前状态与后续规划
+
+### Wave 1: Codex-alignment 基石能力（已完成）
+- **Agent 模式与 Ask 拦截**：Plan / Ask / Full 三模式，`ask` 模式拦截 `bash`/`write`/`edit` 并弹窗确认；Plan 模式一键执行计划。
+- **Extension UI Bridge**：支持 Extension 弹窗 (`confirm`/`select`/`input`/`editor`) 与原生 Notify 通知。
+- **Project Trust 409 握手**：409 响应与 ProjectTrustDialog 弹窗，信任后载入项目资源。
+
+### Wave 2: MCP / 会话分支与导出 / 扩展管理 UI（已完成）
+- **MCP 服务器配置与管理 UI**：支持全局与项目级 `mcp.json` 的读写、开启/禁用、测试连通性与工具数查看。
+- **会话 Branching & Cloning**：支持从指定节点分叉 Session Branch 以及将 Session 全量 Clone 至新目录。
+- **会话导出 (HTML / Markdown)**：一键导出会话内容为原生 HTML 或 Markdown。
+- **AgentMode `.jsonl` 持久化**：写入 `desktop_agent_mode` 自定义节点并在加载时自后向前恢复历史模式。
+- **扩展与 Skill 统一管理**：Tab 化管理已配置的 Extensions、Skills 与 MCP 服务。
+
+### 后续规划
+- **操作系统级沙盒隔离**：Docker / OS 容器沙盒执行隔离。
+- **多 Agent 协作与 Worktree**：支持独立 Worktree 分支与多 Agent 并行处理。
 
 ## 附录：相关文档
 

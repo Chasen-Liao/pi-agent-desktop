@@ -57,13 +57,12 @@ CodeGraph provides MCP (Model Context Protocol) tools for efficient symbol searc
 
 | 目录 | 用途 |
 |---|---|
-| `app/api/` | 24 条 API 路由（agent / sessions / files / models / skills / auth / health） |
-| `lib/` | 服务端库：`rpc-manager` / `session-reader` / `normalize` / `session-cascade` 等 |
-| `components/` | 17 个顶层组件 + `chat-input/` / `session-sidebar/` / `models-config/` 子目录 |
+| `app/api/` | 33 条 API 路由（agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings） |
+| `lib/` | 服务端库：`rpc-manager` / `session-reader` / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` 等 |
+| `components/` | 24 个顶层组件（含 `McpConfigModal` / `SessionExportModal` / `ExtensionsConfigModal` / `ProjectTrustDialog` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
 | `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 8 个拆分 hook |
 | `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 7 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
-
 ### 五个必须存 `globalThis` 的原因
 
 Next.js HMR 会丢弃模块级变量，因此以下五个必须挂在 `globalThis` 上：

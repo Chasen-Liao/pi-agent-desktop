@@ -26,7 +26,14 @@
 - **原生桌面体验** — 基于 Electron 的独立窗口应用，支持系统托盘、最小化到托盘
 - **会话浏览器** — 按工作目录分组展示所有 pi 会话
 - **实时对话** — 通过 SSE 流式输出与智能体实时交互
-- **会话分叉** — 从任意用户消息创建独立的新会话分支
+- **Agent 模式** — 支持 Plan / Ask / Full 三种安全模式与 Ask 工具拦截确认
+- **Extension UI Bridge** — 原生弹窗支持 Extension `confirm`/`select`/`input`/`editor`/`notify` 交互
+- **项目信任机制** — Project Trust 409 握手与授权弹窗
+- **MCP 服务器管理** — 支持全局 (`~/.pi/agent/mcp.json`) 与项目 (`<cwd>/.pi/mcp.json`) MCP 配置与 UI 管理
+- **扩展与 Skill 管理** — 统一 UI 管理全局和项目扩展、Skill 启用与诊断
+- **会话分叉与克隆** — API/UI 支持从任意节点 Branch 及 Clone 会话到新目录
+- **会话导出** — 一键导出为 HTML / Markdown 格式
+- **AgentMode 持久化** — 自动写入 `.jsonl` 自定义 `desktop_agent_mode` 节点，重载恢复历史模式
 - **会话内分支** — 回退到任意节点继续对话，在同一文件内创建分支
 - **分支导航器** — 可视化切换同一会话内的各个分支
 - **模型切换** — 对话中途随时切换模型
