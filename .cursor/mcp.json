@@ -7,7 +7,7 @@
         "serve",
         "--mcp",
         "--path",
-        "D:\\MyProjects\\pi-agent-desktop"
+        "D:\\orca\\pi-agent-desktop\\next-version"
       ]
     }
   }
