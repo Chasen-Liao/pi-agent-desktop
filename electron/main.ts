@@ -12,6 +12,13 @@ import { pickApiKeys } from "./env-filter";
 import { choosePort } from "./port-selection";
 import { getNextRestartState, type ServerState } from "./restart-policy";
 import { formatElectronLogLine, deriveScope, type ElectronLogLevel } from "./log-format";
+import {
+  createUpdateInstallState,
+  decideQuitAndInstall,
+  markUpdateDownloaded,
+  type UpdateInstallState,
+} from "./update-install-gate";
+import { buildElectronCspHeader } from "./csp";
 
 // ---------------------------------------------------------------------------
 // Single Instance Lock
@@ -42,6 +49,11 @@ let serverState: ServerState = "starting";
 let activePort: number | null = null;
 let startupUiReady = false;
 let restartAttempts: number[] = [];
+let updateInstallState: UpdateInstallState = createUpdateInstallState();
+
+function nextServerReadyOptions() {
+  return { requireHttpHealth: app.isPackaged };
+}
 
 export function setQuitting(val: boolean) {
   isQuitting = val;
@@ -199,7 +211,7 @@ async function restartNextServer(label: string) {
     const port = await findFreePort(DEFAULT_PORT);
     activePort = port;
     nextProcess = startNextServer(port);
-    await waitForNextServerReady(port, nextProcess);
+    await waitForNextServerReady(port, nextProcess, nextServerReadyOptions());
     showApp(port);
   } catch (err) {
     logError("Failed to restart Next.js server", err);
@@ -294,23 +306,12 @@ function createWindow() {
   // this a single XSS (e.g. from a compromised npm package or local route)
   // could drive the preload-exposed electronAPI (quitAndInstall, select
   // directory, ...). The port is re-read on every callback so restarts / port
-  // switches pick up the new value automatically. The policy mirrors the
-  // CSP_HEADER constant in middleware.ts (with connect-src tightened to the
-  // specific active port instead of a wildcard). startup.html ships its own
-  // stricter CSP via a meta tag and is unaffected (multiple CSPs are merged
-  // most-strict; its resources pass both). Future: share via lib/csp.ts.
+  // switches pick up the new value automatically. Policy builder mirrors
+  // lib/csp.ts (see electron/csp.ts). startup.html ships its own stricter
+  // CSP via a meta tag and is unaffected.
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     const port = activePort ?? 0;
-    const csp = [
-      "default-src 'self'",
-      `connect-src 'self' http://127.0.0.1:${port} ws://127.0.0.1:${port}`,
-      "img-src 'self' data: blob:",
-      "style-src 'self' 'unsafe-inline'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "font-src 'self' data:",
-      "frame-src 'self'",
-      "media-src 'self' data:",
-    ].join("; ");
+    const csp = buildElectronCspHeader(port);
     callback({
       responseHeaders: {
         ...details.responseHeaders,
@@ -395,9 +396,15 @@ function registerIpcHandlers() {
 
   ipcMain.handle("quit-and-install", async () => {
     logInfo("quitAndInstall requested from renderer");
+    const decision = decideQuitAndInstall(updateInstallState);
+    if (!decision.allowed) {
+      logInfo("quitAndInstall refused", { reason: decision.reason });
+      return { ok: false, error: decision.reason };
+    }
     setQuitting(true);
     const { autoUpdater } = await import("electron-updater");
     autoUpdater.quitAndInstall();
+    return { ok: true, version: decision.version };
   });
 
   ipcMain.on("set-theme", (_event, isDark: boolean) => {
@@ -451,7 +458,7 @@ app.whenReady().then(async () => {
     logStartupTiming("next process spawned");
     logInfo("Waiting for Next.js server...");
 
-    await waitForNextServerReady(port, nextProcess);
+    await waitForNextServerReady(port, nextProcess, nextServerReadyOptions());
     logStartupTiming("next server ready");
     logInfo("Next.js server is ready");
     showApp(port);
@@ -526,6 +533,7 @@ app.whenReady().then(async () => {
 
           autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
             logInfo("autoUpdater update-downloaded", info);
+            updateInstallState = markUpdateDownloaded(updateInstallState, info.version);
             mainWindow?.webContents.send("update-downloaded", { version: info.version });
             // mainWindow 可能已被销毁（用户关闭到托盘后退出）；fallback 到无父窗口版本
             // 让用户仍能看到提示，而非抛 "Cannot read properties of null"。

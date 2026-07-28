@@ -103,7 +103,7 @@ test("server readiness allows a slow first health response during cold startup",
   }
 });
 
-test("next server readiness resolves from Next ready output before slow health route", async () => {
+test("dev next server readiness resolves from Next ready output before slow health route", async () => {
   const proc = createFakeProcess();
   const server = net.createServer((socket) => {
     let data = "";
@@ -122,9 +122,52 @@ test("next server readiness resolves from Next ready output before slow health r
   assert.ok(address && typeof address === "object");
 
   try {
-    const ready = waitForNextServerReady(address.port, proc, { timeoutMs: 900, getRetryDelayMs: () => 10 });
+    const ready = waitForNextServerReady(address.port, proc, {
+      timeoutMs: 900,
+      getRetryDelayMs: () => 10,
+      requireHttpHealth: false,
+    });
     setTimeout(() => proc.stdout.write("✓ Ready in 0ms\n"), 50);
     await ready;
+  } finally {
+    server.close();
+    if (server.listening) await once(server, "close");
+  }
+});
+
+test("packaged readiness ignores stdout Ready until health succeeds", async () => {
+  const proc = createFakeProcess();
+  let healthHits = 0;
+  const server = net.createServer((socket) => {
+    let data = "";
+    socket.on("data", (chunk) => {
+      data += chunk.toString("utf8");
+      if (!data.includes("\r\n\r\n")) return;
+      healthHits += 1;
+      // First responses fail; only later succeed — stdout Ready already fired
+      if (healthHits < 3) {
+        socket.end("HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n");
+      } else {
+        socket.end("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+      }
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+
+  try {
+    const ready = waitForNextServerReady(address.port, proc, {
+      timeoutMs: 2000,
+      getRetryDelayMs: () => 20,
+      requireHttpHealth: true,
+    });
+    // stdout Ready alone must NOT resolve packaged readiness
+    proc.stdout.write("✓ Ready in 0ms\n");
+    await ready;
+    assert.ok(healthHits >= 3, "health must succeed before packaged ready");
   } finally {
     server.close();
     if (server.listening) await once(server, "close");

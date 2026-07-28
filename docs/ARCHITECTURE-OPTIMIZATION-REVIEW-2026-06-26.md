@@ -1,7 +1,10 @@
 # Pi Agent Desktop 架构优化审查报告（2026-06-26）
 
+> **状态**：部分建议已在后续迭代落地（Pi 0.82 适配、`useAgentSession` 拆分、CustomEvent 收敛、Electron health/更新门禁、CSP 共享、files 列表上限、updater 依赖校验等）。  
+> 仍可参考本文的 **P1/P2 未完成项**；**不要**把全文当作仍全部未修的当前缺陷清单。权威架构见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
 > **审查日期**：2026-06-26  
-> **审查基线**：当前工作区，`package.json` v0.7.16  
+> **审查基线**：当时工作区，`package.json` v0.7.16  
 > **审查范围**：Next.js App Router API、`lib/` 服务端会话层、React components/hooks、Electron 主进程与打包配置、文档一致性  
 > **说明**：本轮按用户要求派出多个 subagent。前两次 subagent 调度因工作区 credits 不足失败；随后重新派出 2 个 subagent，分别完成 Electron/打包/工程化与前端组件/hooks/状态流审查。主 agent 基于 subagent 结果和本地源码核查整合本报告。
 

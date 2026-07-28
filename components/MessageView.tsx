@@ -204,7 +204,7 @@ const UserMessageView = React.memo(function UserMessageView({
 
   return (
     <div
-      className="mb-[18px] flex flex-col items-end"
+      className="group/msg mb-[18px] flex flex-col items-end"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -237,12 +237,12 @@ const UserMessageView = React.memo(function UserMessageView({
         </div>
       </div>
 
-      {/* Bottom row: action buttons + timestamp */}
+      {/* Bottom row: action buttons + timestamp — visible on hover OR focus-within (keyboard) */}
       {(time || canFork || canNavigate || true) && (
         <div className="flex items-center justify-end gap-1.5 mt-[3px]">
           <div
-            className={`flex gap-[3px] transition-opacity duration-120 ${
-              hovered ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+            className={`flex gap-[3px] transition-opacity duration-120 opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto group-focus-within/msg:opacity-100 group-focus-within/msg:pointer-events-auto ${
+              hovered ? "opacity-100 pointer-events-auto" : ""
             }`}
           >
             <button
@@ -268,8 +268,8 @@ const UserMessageView = React.memo(function UserMessageView({
           </div>
           {(canFork || canNavigate) && (
             <div
-              className={`flex gap-[3px] transition-opacity duration-120 ${
-                hovered || forking ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+              className={`flex gap-[3px] transition-opacity duration-120 opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto group-focus-within/msg:opacity-100 group-focus-within/msg:pointer-events-auto ${
+                hovered || forking ? "opacity-100 pointer-events-auto" : ""
               }`}
             >
               {canNavigate && (
@@ -433,7 +433,7 @@ const AssistantMessageView = React.memo(function AssistantMessageView({
 
   return (
     <div
-      className="mb-[18px]"
+      className="group/msg mb-[18px]"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -516,9 +516,9 @@ const AssistantMessageView = React.memo(function AssistantMessageView({
             onClick={copyContent}
             title="Copy message"
             aria-label="Copy message"
-            className={`flex items-center gap-1 px-2 py-[3px] h-[22px] bg-transparent border-none rounded-control cursor-pointer text-[11px] font-normal whitespace-nowrap transition-colors duration-120 ${
+            className={`flex items-center gap-1 px-2 py-[3px] h-[22px] bg-transparent border-none rounded-control cursor-pointer text-[11px] font-normal whitespace-nowrap transition-colors duration-120 opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto group-focus-within/msg:opacity-100 group-focus-within/msg:pointer-events-auto ${
               copied ? "text-accent" : "text-text-dim hover:text-accent"
-            } ${hovered ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+            } ${hovered ? "opacity-100 pointer-events-auto" : ""}`}
           >
             {copied ? (
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

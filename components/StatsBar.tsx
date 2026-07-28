@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 
 interface SessionStats {
   tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -15,41 +15,15 @@ interface ContextUsage {
 
 interface StatsBarProps {
   showChat: boolean;
+  sessionStats?: SessionStats | null;
+  contextUsage?: ContextUsage | null;
 }
 
 export const StatsBar = React.memo(function StatsBar({
   showChat,
+  sessionStats = null,
+  contextUsage = null,
 }: StatsBarProps) {
-  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
-  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
-
-  useEffect(() => {
-    if (!showChat) {
-      setSessionStats(null);
-      setContextUsage(null);
-    }
-  }, [showChat]);
-
-  useEffect(() => {
-    const handleStats = (e: Event) => {
-      const customEvent = e as CustomEvent<SessionStats | null>;
-      setSessionStats(customEvent.detail);
-    };
-
-    const handleContext = (e: Event) => {
-      const customEvent = e as CustomEvent<ContextUsage | null>;
-      setContextUsage(customEvent.detail);
-    };
-
-    window.addEventListener("pi-session-stats", handleStats);
-    window.addEventListener("pi-context-usage", handleContext);
-
-    return () => {
-      window.removeEventListener("pi-session-stats", handleStats);
-      window.removeEventListener("pi-context-usage", handleContext);
-    };
-  }, []);
-
   if (!showChat || (!sessionStats && !contextUsage)) {
     return null;
   }

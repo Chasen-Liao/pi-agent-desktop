@@ -83,16 +83,26 @@ export function AppShell() {
     setSystemPrompt(prompt);
   }, []);
 
+  const [sessionStats, setSessionStats] = useState<{
+    tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
+    cost?: number;
+  } | null>(null);
+  const [contextUsage, setContextUsage] = useState<{
+    percent: number | null;
+    contextWindow: number;
+    tokens: number | null;
+  } | null>(null);
+
   const handleSessionStatsChange = useCallback(
     (stats: { tokens: { input: number; output: number; cacheRead: number; cacheWrite: number }; cost?: number } | null) => {
-      window.dispatchEvent(new CustomEvent("pi-session-stats", { detail: stats }));
+      setSessionStats(stats);
     },
     []
   );
 
   const handleContextUsageChange = useCallback(
     (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
-      window.dispatchEvent(new CustomEvent("pi-context-usage", { detail: usage }));
+      setContextUsage(usage);
     },
     []
   );
@@ -187,20 +197,29 @@ export function AppShell() {
   const handleSessionForked = useCallback(
     (newId: string) => {
       setRefreshKey((k) => k + 1);
-      // Wait for registry refresh, then load
-      setTimeout(async () => {
+      void (async () => {
         try {
-          const res = await fetch("/api/sessions");
-          if (!res.ok) return;
-          const data = (await res.json()) as { sessions: SessionInfo[] };
-          const s = data.sessions.find((x) => x.id === newId);
-          if (s) {
-            handleSelectSession(s, false);
-          }
+          const { resolveForkedSession } = await import("@/lib/fork-session-wait");
+          const found = await resolveForkedSession(
+            newId,
+            async () => {
+              const res = await fetch("/api/sessions");
+              if (!res.ok) return [];
+              const data = (await res.json()) as { sessions: SessionInfo[] };
+              return data.sessions;
+            },
+            async (id) => {
+              const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`);
+              if (!res.ok) return null;
+              const data = (await res.json()) as { info?: SessionInfo | null };
+              return data.info ?? null;
+            }
+          );
+          if (found) handleSelectSession(found, false);
         } catch {
           // ignore
         }
-      }, 50);
+      })();
     },
     [handleSelectSession]
   );
@@ -499,7 +518,7 @@ export function AppShell() {
               </div>
             )}
             <div className="flex-1" />
-            <StatsBar showChat={showChat} />
+            <StatsBar showChat={showChat} sessionStats={sessionStats} contextUsage={contextUsage} />
             {!rightPanelOpen && (
               <>
                 <button

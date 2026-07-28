@@ -1,5 +1,11 @@
-import { AuthStorage } from "@earendil-works/pi-coding-agent";
 import { validateProviderName } from "@/lib/auth-policy";
+import {
+  createPiRuntime,
+  isOAuthProvider,
+  loginProvider,
+  type AuthInteraction,
+} from "@/lib/pi-runtime";
+import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +69,7 @@ export async function GET(
     controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
   };
 
-  // AbortController propagates client disconnect into authStorage.login()
+  // AbortController propagates client disconnect into ModelRuntime.login()
   const abort = new AbortController();
   req.signal.addEventListener("abort", () => abort.abort());
 
@@ -72,10 +78,8 @@ export async function GET(
 
   const stream = new ReadableStream({
     async start(controller) {
-      const authStorage = AuthStorage.create();
-      const providers = authStorage.getOAuthProviders();
-      const providerInfo = providers.find((p) => p.id === provider);
-      if (!providerInfo) {
+      const { runtime } = await createPiRuntime();
+      if (!isOAuthProvider(runtime, provider)) {
         send(controller, { type: "error", message: `Unknown provider: ${provider}` });
         controller.close();
         return;
@@ -136,46 +140,39 @@ export async function GET(
       // Also cancel on client disconnect
       abort.signal.addEventListener("abort", cleanup);
 
-      try {
-        await authStorage.login(provider, {
-          onAuth: (info: { url: string; instructions?: string }) => {
+      const interaction: AuthInteraction = {
+        signal: abort.signal,
+        notify: (event: AuthEvent) => {
+          if (event.type === "auth_url") {
             const request = getManualInputRequest();
             send(controller, {
               type: "auth",
-              url: info.url,
-              instructions: info.instructions ?? null,
+              url: event.url,
+              instructions: event.instructions ?? null,
               token: request.token,
             });
-          },
-          onDeviceCode: (info: {
-            userCode: string;
-            verificationUri: string;
-            intervalSeconds?: number;
-            expiresInSeconds?: number;
-          }) => {
+            return;
+          }
+          if (event.type === "device_code") {
             send(controller, {
               type: "device_code",
-              userCode: info.userCode,
-              verificationUri: info.verificationUri,
-              intervalSeconds: info.intervalSeconds ?? null,
-              expiresInSeconds: info.expiresInSeconds ?? null,
+              userCode: event.userCode,
+              verificationUri: event.verificationUri,
+              intervalSeconds: event.intervalSeconds ?? null,
+              expiresInSeconds: event.expiresInSeconds ?? null,
             });
-          },
-          onPrompt: async (prompt: { message: string; placeholder?: string }) => {
-            const request = getManualInputRequest();
-            send(controller, {
-              type: "prompt_request",
-              message: prompt.message,
-              placeholder: prompt.placeholder ?? null,
-              token: request.token,
-            });
-            const value = await request.promise;
-            return value;
-          },
-          onProgress: (message: string) => {
-            send(controller, { type: "progress", message });
-          },
-          onSelect: async (prompt: { message: string; options: { id: string; label: string }[] }) => {
+            return;
+          }
+          if (event.type === "progress") {
+            send(controller, { type: "progress", message: event.message });
+            return;
+          }
+          if (event.type === "info") {
+            send(controller, { type: "progress", message: event.message });
+          }
+        },
+        prompt: async (prompt: AuthPrompt) => {
+          if (prompt.type === "select") {
             const request = createClientInputRequest();
             send(controller, {
               type: "select_request",
@@ -184,12 +181,22 @@ export async function GET(
               token: request.token,
             });
             const value = await request.promise;
-            return value || undefined;
-          },
-          onManualCodeInput: () => getManualInputRequest().promise,
-          signal: abort.signal,
-        });
+            return value || "";
+          }
+          // text / secret / manual_code
+          const request = getManualInputRequest();
+          send(controller, {
+            type: "prompt_request",
+            message: prompt.message,
+            placeholder: "placeholder" in prompt ? (prompt.placeholder ?? null) : null,
+            token: request.token,
+          });
+          return request.promise;
+        },
+      };
 
+      try {
+        await loginProvider(runtime, provider, "oauth", interaction);
         send(controller, { type: "success" });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

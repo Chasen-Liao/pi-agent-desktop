@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildWebCspHeader } from "@/lib/csp";
 
 // Allowed origins: localhost / 127.0.0.1 on http or https, with optional port.
 // LAN IPs (e.g. 192.168.x.x) are intentionally NOT allowed — they cannot reach
@@ -15,19 +16,9 @@ export function isAllowedOrigin(origin: string): boolean {
   return ALLOWED_ORIGIN_RE.test(origin);
 }
 
-// CSP header value — identical to the previous proxy.ts. Only injected into
-// HTML page responses (see `middleware` below); API responses are JSON and
-// CSP has no meaning there.
-const CSP_HEADER = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*",
-  "font-src 'self' data:",
-  "frame-src 'self'",
-  "media-src 'self' data:",
-].join("; ");
+// CSP for HTML page responses — shared builder with Electron (lib/csp.ts).
+// API responses skip CSP (JSON; CSP is meaningless there).
+const CSP_HEADER = buildWebCspHeader();
 
 /**
  * Decides whether the middleware should run the Origin check for a given

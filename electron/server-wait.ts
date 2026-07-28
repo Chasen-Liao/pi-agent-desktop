@@ -162,16 +162,24 @@ function waitForNextReadyOutput(
   });
 }
 
+export type WaitForNextServerReadyOptions = {
+  timeoutMs?: number;
+  requestTimeoutMs?: number;
+  getRetryDelayMs?: (elapsedMs: number) => number;
+  /**
+   * When true (packaged Electron), only HTTP /api/health may open the app.
+   * Stdout "Ready" alone must not resolve readiness.
+   */
+  requireHttpHealth?: boolean;
+};
+
 export function waitForNextServerReady(
   port: number,
   proc: ReadyProcess,
-  options: {
-    timeoutMs?: number;
-    requestTimeoutMs?: number;
-    getRetryDelayMs?: (elapsedMs: number) => number;
-  } = {}
+  options: WaitForNextServerReadyOptions = {}
 ): Promise<void> {
   const timeoutMs = options.timeoutMs ?? 60_000;
+  const requireHttpHealth = options.requireHttpHealth ?? false;
   const readyAbort = new AbortController();
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -199,6 +207,15 @@ export function waitForNextServerReady(
 
     proc.once("exit", onExit);
     proc.once("error", onError);
+
+    if (requireHttpHealth) {
+      // Packaged mode: health is the only success signal (still watch process exit).
+      waitForHttpServerReady(port, { ...options, signal: readyAbort.signal }).then(
+        () => finish(resolve, undefined),
+        (error: Error) => finish(reject, error)
+      );
+      return;
+    }
 
     Promise.any([
       waitForNextReadyOutput(proc, timeoutMs, readyAbort.signal),

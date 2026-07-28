@@ -15,7 +15,7 @@ const flushMicrotasks = (): Promise<void> => new Promise((r) => setImmediate(r))
 
 test("startRpcSession does not pass a hardcoded default tool allowlist", () => {
   assert.doesNotMatch(source, /const allCodingToolNames = \[[^\]]+\]/);
-  assert.match(source, /toolNames\?\.length === 0 \? \{ tools: \[\] \} : \{\}/);
+  assert.match(source, /toolNames\?\.length === 0 \? \{ noTools: "all" as const \} : \{\}/);
   assert.match(source, /inner\.setActiveToolsByName\(toolNames\)/);
 });
 
@@ -39,7 +39,7 @@ function makeStubInner(overrides: {
     getContextUsage: () => null,
     agent: overrides.agent ?? { state: { systemPrompt: "", thinkingLevel: "off" } },
     sessionManager: overrides.sessionManager ?? null,
-    modelRegistry: null,
+    modelRuntime: { getModel: () => undefined },
     prompt: overrides.prompt ?? (() => Promise.resolve()),
     steer: overrides.steer ?? (() => Promise.resolve()),
     followUp: overrides.followUp ?? (() => Promise.resolve()),

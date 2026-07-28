@@ -182,8 +182,7 @@ export class AgentSessionWrapper {
 
       case "set_model": {
         const { provider, modelId } = command as { provider: string; modelId: string };
-        const registry = this.inner.modelRegistry;
-        const model = registry.find(provider, modelId);
+        const model = this.inner.modelRuntime.getModel(provider, modelId);
         if (!model) throw new Error(`Model not found: ${provider}/${modelId}`);
         await this.inner.setModel(model);
         return { id: model.id, provider: model.provider };
@@ -453,7 +452,8 @@ export async function startRpcSession(
       ? SessionManager.open(sessionFile, undefined)
       : SessionManager.create(cwd, undefined);
 
-    const createOptions = toolNames?.length === 0 ? { tools: [] } : {};
+    // Pi 0.82+: empty tools allowlist is expressed via noTools: "all"
+    const createOptions = toolNames?.length === 0 ? { noTools: "all" as const } : {};
 
     const { session: inner } = await createAgentSession({
       cwd,

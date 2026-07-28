@@ -160,25 +160,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handleAbortCompaction,
     handleToolPresetChange, handleThinkingLevelChange, handleAgentEventRef,
-    connectEvents,
+    connectEvents, connectionStatus,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange,
     onAgentEndEvent: handleAgentEndEvent,
   });
-
-  const [connectionStatus, setConnectionStatus] = useState<string>("disconnected");
-
-  useEffect(() => {
-    const handleStatusChange = (e: Event) => {
-      const customEvent = e as CustomEvent<string>;
-      setConnectionStatus(customEvent.detail);
-    };
-    window.addEventListener("pi-connection-status", handleStatusChange);
-    return () => {
-      window.removeEventListener("pi-connection-status", handleStatusChange);
-    };
-  }, []);
 
   const handleReconnect = useCallback(() => {
     if (session) {

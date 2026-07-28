@@ -4,6 +4,16 @@ import path from "path";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 import { getAllowedRoots, isPathAllowed, isWindowsAbsolutePath, normalizeSlashes } from "@/lib/allowed-roots";
 import { validateWritablePath } from "@/lib/path-policy";
+import {
+  DEFAULT_DIR_LIST_LIMIT,
+  filterDirEntryNames,
+  finalizeDirListEntries,
+  getAudioMime,
+  getImageMime,
+  getLanguage,
+  parseByteRange,
+  type DirListEntry,
+} from "@/lib/file-browser";
 
 /**
  * Resolves a path to its canonical form via realpath(3), then re-validates
@@ -24,79 +34,9 @@ async function resolveAuthorizedPath(
   return realPath;
 }
 
-const IGNORED_NAMES = new Set([
-  "node_modules", ".git", ".next", "dist", "build", "__pycache__",
-  ".turbo", ".cache", "coverage", ".pytest_cache", ".mypy_cache",
-  "target", "vendor", ".DS_Store", ".git",
-]);
-
-const IGNORED_SUFFIXES = [".pyc"];
-
 const TEXT_PREVIEW_MAX_BYTES = 256 * 1024;
 const TEXT_WRITE_MAX_BYTES = 512 * 1024;
 const IMAGE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024;
-
-const IMAGE_EXT_TO_MIME: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  gif: "image/gif",
-  webp: "image/webp",
-  svg: "image/svg+xml",
-  bmp: "image/bmp",
-  ico: "image/x-icon",
-  avif: "image/avif",
-};
-
-const AUDIO_EXT_TO_MIME: Record<string, string> = {
-  mp3: "audio/mpeg",
-  wav: "audio/wav",
-  ogg: "audio/ogg",
-  oga: "audio/ogg",
-  opus: "audio/ogg",
-  m4a: "audio/mp4",
-  aac: "audio/aac",
-  flac: "audio/flac",
-  weba: "audio/webm",
-  webm: "audio/webm",
-};
-
-function getExt(filePath: string): string {
-  const ext = path.basename(filePath).toLowerCase().split(".").pop() ?? "";
-  return ext;
-}
-
-function getImageMime(filePath: string): string | null {
-  return IMAGE_EXT_TO_MIME[getExt(filePath)] ?? null;
-}
-
-function getAudioMime(filePath: string): string | null {
-  return AUDIO_EXT_TO_MIME[getExt(filePath)] ?? null;
-}
-
-const EXT_TO_LANGUAGE: Record<string, string> = {
-  ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
-  mjs: "javascript", cjs: "javascript", py: "python", rb: "ruby",
-  go: "go", rs: "rust", java: "java", kt: "kotlin", swift: "swift",
-  c: "c", cpp: "cpp", h: "c", hpp: "cpp", cs: "csharp",
-  html: "html", htm: "html", css: "css", scss: "css", less: "css",
-  json: "json", jsonl: "json", yaml: "yaml", yml: "yaml",
-  toml: "toml", xml: "xml", md: "markdown", mdx: "markdown",
-  sh: "bash", bash: "bash", zsh: "bash", fish: "bash",
-  sql: "sql", graphql: "graphql", gql: "graphql",
-  dockerfile: "dockerfile", tf: "hcl", hcl: "hcl",
-  env: "bash", gitignore: "bash", txt: "text",
-};
-
-function getLanguage(filePath: string): string {
-  const base = path.basename(filePath).toLowerCase();
-  // Special full-name matches
-  if (base === "dockerfile" || base.startsWith("dockerfile.")) return "dockerfile";
-  if (base === ".env" || base.startsWith(".env.")) return "bash";
-  if (base === "makefile" || base === "gnumakefile") return "makefile";
-  const ext = base.split(".").pop() ?? "";
-  return EXT_TO_LANGUAGE[ext] ?? "text";
-}
 
 function filePathFromSegments(segments: string[]): string {
   const joined = segments.join("/");
@@ -162,8 +102,8 @@ function streamFile(filePath: string, stat: fs.Stats, contentType: string, range
     });
   }
 
-  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
-  if (!match) {
+  const parsed = parseByteRange(rangeHeader, stat.size);
+  if (!parsed.ok) {
     return new Response(null, {
       status: 416,
       headers: {
@@ -173,25 +113,7 @@ function streamFile(filePath: string, stat: fs.Stats, contentType: string, range
     });
   }
 
-  let start = match[1] ? Number(match[1]) : 0;
-  let end = match[2] ? Number(match[2]) : stat.size - 1;
-  if (!match[1] && match[2]) {
-    const suffixLength = Number(match[2]);
-    start = Math.max(stat.size - suffixLength, 0);
-    end = stat.size - 1;
-  }
-
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= stat.size) {
-    return new Response(null, {
-      status: 416,
-      headers: {
-        ...headers,
-        "Content-Range": `bytes */${stat.size}`,
-      },
-    });
-  }
-
-  end = Math.min(end, stat.size - 1);
+  const { start, end } = parsed;
   const chunkSize = end - start + 1;
   return new Response(createFileBodyStream(filePath, { start, end }), {
     status: 206,
@@ -310,31 +232,34 @@ export async function GET(
     }
 
     const names = await fs.promises.readdir(realPath);
-    const entryPromises = names
-      .filter((name) => !IGNORED_NAMES.has(name) && !IGNORED_SUFFIXES.some((s) => name.endsWith(s)))
-      .map(async (name) => {
-        const full = path.join(realPath, name);
-        try {
-          const s = await fs.promises.stat(full);
-          return {
-            name,
-            isDir: s.isDirectory(),
-            size: s.isFile() ? s.size : 0,
-            modified: s.mtime.toISOString(),
-          };
-        } catch {
-          return null;
-        }
-      });
-    const entries = (await Promise.all(entryPromises))
-      .filter(Boolean)
-      .sort((a, b) => {
-        // Dirs first, then files, both alphabetically
-        if (a!.isDir !== b!.isDir) return a!.isDir ? -1 : 1;
-        return a!.name.localeCompare(b!.name);
-      });
+    const { names: limitedNames, truncated: nameTruncated } = filterDirEntryNames(
+      names,
+      DEFAULT_DIR_LIST_LIMIT
+    );
+    const entryPromises = limitedNames.map(async (name) => {
+      const full = path.join(realPath, name);
+      try {
+        const s = await fs.promises.stat(full);
+        return {
+          name,
+          isDir: s.isDirectory(),
+          size: s.isFile() ? s.size : 0,
+          modified: s.mtime.toISOString(),
+        } satisfies DirListEntry;
+      } catch {
+        return null;
+      }
+    });
+    const raw = (await Promise.all(entryPromises)).filter(
+      (e): e is DirListEntry => e !== null
+    );
+    const { entries, truncated: finalizeTruncated } = finalizeDirListEntries(
+      raw,
+      DEFAULT_DIR_LIST_LIMIT
+    );
+    const truncated = nameTruncated || finalizeTruncated;
 
-    return NextResponse.json({ entries, path: realPath });
+    return NextResponse.json({ entries, path: realPath, truncated });
   } catch (error) {
     logApiError({ route: "/api/files/[...path]", method: "GET", requestId, error });
     return NextResponse.json(

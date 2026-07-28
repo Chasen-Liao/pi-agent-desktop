@@ -30,7 +30,8 @@ export interface AgentSessionLike {
   readonly autoCompactionEnabled: boolean;
   readonly autoRetryEnabled: boolean;
   readonly model: ModelLike | undefined;
-  readonly modelRegistry: { find: (provider: string, modelId: string) => ModelLike | undefined };
+  /** Pi 0.82+: model lookup lives on modelRuntime (modelRegistry facade removed from AgentSession). */
+  readonly modelRuntime: { getModel: (provider: string, modelId: string) => ModelLike | undefined };
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
   readonly agent: { state?: { systemPrompt?: string; thinkingLevel?: string } };

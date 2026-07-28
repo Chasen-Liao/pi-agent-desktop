@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
-import { AgentEventsManager, type AgentEvent } from "./agent-events-manager";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AgentEventsManager, type AgentEvent, type ConnectionStatus } from "./agent-events-manager";
 
-export type { AgentEvent };
+export type { AgentEvent, ConnectionStatus };
 
 interface UseAgentEventsOptions {
   agentRunning: boolean;
@@ -12,6 +12,7 @@ interface UseAgentEventsOptions {
 export function useAgentEvents({ agentRunning }: UseAgentEventsOptions) {
   const managerRef = useRef<AgentEventsManager | null>(null);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("disconnected");
 
   if (!managerRef.current) {
     managerRef.current = new AgentEventsManager();
@@ -22,13 +23,15 @@ export function useAgentEvents({ agentRunning }: UseAgentEventsOptions) {
   }, [agentRunning]);
 
   useEffect(() => {
-    if (managerRef.current) {
-      managerRef.current.setEventHandler((event) => {
-        handleAgentEventRef.current?.(event);
-      });
-    }
+    const manager = managerRef.current;
+    if (!manager) return;
+    manager.setEventHandler((event) => {
+      handleAgentEventRef.current?.(event);
+    });
+    manager.setStatusChangeHandler(setConnectionStatus);
     return () => {
-      managerRef.current?.cleanup();
+      manager.setStatusChangeHandler(null);
+      manager.cleanup();
     };
   }, []);
 
@@ -61,5 +64,6 @@ export function useAgentEvents({ agentRunning }: UseAgentEventsOptions) {
     agentRunningRef,
     handleAgentEventRef,
     connectEvents,
+    connectionStatus,
   };
 }

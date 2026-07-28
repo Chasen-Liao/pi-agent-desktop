@@ -4,8 +4,36 @@ import type { SessionEntry as PiSessionEntry, SessionInfo as PiSessionInfo } fro
 import { normalizeToolCalls } from "./normalize.ts";
 import { readFile } from "fs/promises";
 import { createReadStream } from "fs";
+import {
+  cacheSessionPathEntry,
+  createSessionPathCacheState,
+  getCachedSessionPath,
+  invalidateSessionPathEntry,
+  markSessionPathMiss,
+  type SessionPathCacheState,
+} from "./session-path-cache.ts";
 
 export { getAgentDir };
+
+// ============================================================================
+// Session path cache: sessionId → absolute file path
+// Stored in globalThis for hot-reload safety
+// Positive + short-TTL negative cache (see session-path-cache.ts)
+// ============================================================================
+declare global {
+  var __piSessionPathCacheState: SessionPathCacheState | undefined;
+}
+
+function getPathCacheState(): SessionPathCacheState {
+  if (!globalThis.__piSessionPathCacheState) {
+    globalThis.__piSessionPathCacheState = createSessionPathCacheState();
+  }
+  return globalThis.__piSessionPathCacheState;
+}
+
+function getPathCache(): Map<string, string> {
+  return getPathCacheState().paths;
+}
 
 export function getSessionsDir(): string {
   return `${getAgentDir()}/sessions`;
@@ -16,10 +44,10 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
   const pathToId = new Map<string, string>();
   for (const s of piSessions) pathToId.set(s.path, s.id);
 
-  const cache = getPathCache();
+  const state = getPathCacheState();
   return piSessions.map((s) => {
     // Populate path cache so resolveSessionPath works without a full scan
-    cache.set(s.id, s.path);
+    cacheSessionPathEntry(state, s.id, s.path);
     return {
       path: s.path,
       id: s.id,
@@ -34,34 +62,27 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
   });
 }
 
-// ============================================================================
-// Session path cache: sessionId → absolute file path
-// Stored in globalThis for hot-reload safety
-// ============================================================================
-declare global {
-  var __piSessionPathCache: Map<string, string> | undefined;
-}
-
-function getPathCache(): Map<string, string> {
-  if (!globalThis.__piSessionPathCache) globalThis.__piSessionPathCache = new Map();
-  return globalThis.__piSessionPathCache;
-}
-
 export async function resolveSessionPath(sessionId: string): Promise<string | null> {
-  const cached = getPathCache().get(sessionId);
-  if (cached) return cached;
+  const state = getPathCacheState();
+  const cached = getCachedSessionPath(state, sessionId);
+  if (cached.hit) return cached.path;
+  // Negative cache: avoid full-scan thrash on unknown ids
+  if (cached.negative) return null;
 
   // Cache miss: scan all sessions to populate cache, then retry
   await listAllSessions();
-  return getPathCache().get(sessionId) ?? null;
+  const after = getPathCache().get(sessionId) ?? null;
+  if (!after) markSessionPathMiss(state, sessionId);
+  else state.misses.delete(sessionId);
+  return after;
 }
 
 export function cacheSessionPath(sessionId: string, filePath: string): void {
-  getPathCache().set(sessionId, filePath);
+  cacheSessionPathEntry(getPathCacheState(), sessionId, filePath);
 }
 
 export function invalidateSessionPathCache(sessionId: string): void {
-  getPathCache().delete(sessionId);
+  invalidateSessionPathEntry(getPathCacheState(), sessionId);
 }
 
 export function readFirstLineAsync(filePath: string): Promise<string | null> {

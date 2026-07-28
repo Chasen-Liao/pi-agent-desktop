@@ -1,7 +1,11 @@
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { NextResponse } from "next/server";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 import { validateProviderName } from "@/lib/auth-policy";
+import {
+  createPiRuntime,
+  removeProviderApiKey,
+  setProviderApiKey,
+} from "@/lib/pi-runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +19,8 @@ export async function GET(req: Request, { params }: Params) {
   if (providerError) {
     return NextResponse.json({ error: providerError }, { status: 400, headers: { "x-request-id": requestId } });
   }
-  const authStorage = AuthStorage.create();
-  const registry = ModelRegistry.create(authStorage);
-  const status = registry.getProviderAuthStatus(provider);
+  const { runtime, registry } = await createPiRuntime();
+  const status = runtime.getProviderAuthStatus(provider);
   const displayName = registry.getProviderDisplayName(provider);
   const models = registry.getAll().filter((m) => m.provider === provider).length;
   return NextResponse.json({ provider, displayName, configured: status.configured, source: status.source, models });
@@ -36,8 +39,8 @@ export async function POST(req: Request, { params }: Params) {
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
       return NextResponse.json({ error: "apiKey is required" }, { status: 400, headers: { "x-request-id": requestId } });
     }
-    const authStorage = AuthStorage.create();
-    authStorage.set(provider, { type: "api_key", key: apiKey.trim() });
+    const { runtime } = await createPiRuntime();
+    await setProviderApiKey(runtime, provider, apiKey);
     return NextResponse.json({ success: true });
   } catch (error) {
     logApiError({ route: "/api/auth/api-key/[provider]", method: "POST", requestId, error, params: { provider } });
@@ -57,8 +60,8 @@ export async function DELETE(req: Request, { params }: Params) {
     return NextResponse.json({ error: providerError }, { status: 400, headers: { "x-request-id": requestId } });
   }
   try {
-    const authStorage = AuthStorage.create();
-    authStorage.remove(provider);
+    const { runtime } = await createPiRuntime();
+    await removeProviderApiKey(runtime, provider);
     return NextResponse.json({ success: true });
   } catch (error) {
     logApiError({ route: "/api/auth/api-key/[provider]", method: "DELETE", requestId, error, params: { provider } });

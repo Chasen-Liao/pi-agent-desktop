@@ -1,8 +1,12 @@
 # Pi Agent Desktop 架构审查报告
 
-> **审查日期**：2026-06-22
-> **审查方法**：5 个并行 subagent 分领域深度审查（GLM-5.2 CodingPlan），覆盖 `app/api`、`lib`、`components/hooks`、`electron`、整体工程化五大领域
-> **审查基线**：`main` 分支，package.json `0.7.13`
+> ⚠️ **归档说明（2026-07）**：本文档为 **2026-06-22 / v0.7.13** 基线的历史审查快照。  
+> **请勿**再把它当作「当前风险清单」。许多条目（安全、Electron、会话层等）后续版本已修复或改写。  
+> **当前状态**请以 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [ARCHITECTURE-OPTIMIZATION-REVIEW-2026-06-26.md](ARCHITECTURE-OPTIMIZATION-REVIEW-2026-06-26.md) 为准。
+
+> **审查日期**：2026-06-22  
+> **审查方法**：5 个并行 subagent 分领域深度审查（GLM-5.2 CodingPlan），覆盖 `app/api`、`lib`、`components/hooks`、`electron`、整体工程化五大领域  
+> **审查基线**：`main` 分支，package.json `0.7.13`  
 > **配套文档**：[ARCHITECTURE.md](ARCHITECTURE.md)（项目权威架构参考）
 
 ---

@@ -33,6 +33,7 @@ export class AgentEventsManager {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private agentRunning = false;
   private handleAgentEvent: ((event: AgentEvent) => void) | null = null;
+  private statusChangeHandler: ((status: ConnectionStatus) => void) | null = null;
   private sid: string | null = null;
   private reconnectDelay: number;
   private reconnectAttempts = 0;
@@ -44,9 +45,11 @@ export class AgentEventsManager {
 
   private setStatus(newStatus: ConnectionStatus) {
     this.status = newStatus;
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("pi-connection-status", { detail: newStatus }));
-    }
+    this.statusChangeHandler?.(newStatus);
+  }
+
+  setStatusChangeHandler(handler: ((status: ConnectionStatus) => void) | null) {
+    this.statusChangeHandler = handler;
   }
 
   getStatus(): ConnectionStatus {
