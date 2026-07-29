@@ -21,7 +21,7 @@
   "scripts": {
     "dev": "next dev -p 30141",
     "build": "npm run build:standalone",
-    "build:standalone": "next build --webpack",
+    "build:standalone": "next build",
     "start": "next start -p 30141",
     "lint": "eslint .",
     "check:electron-deps": "node lib/electron-updater-runtime-deps.mjs --check",
@@ -30,7 +30,7 @@
     "build:electron": "tsc -p electron/tsconfig.json && node -e \"const fs=require('fs'); fs.copyFileSync('electron/startup.html', 'electron/dist/startup.html'); fs.copyFileSync('electron/startup.js', 'electron/dist/startup.js')\"",
     "dev:electron": "npm run build:electron && npx electron .",
     "pack": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --dir",
-    "dist": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder"
+    "dist": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --publish never"
   },
   "build": {
     "extends": "electron-builder.yml"
