@@ -6,6 +6,9 @@ import { tmpdir } from "node:os";
 import {
   branchEntriesToMessagesText,
   contentToText,
+  lastAssistantFromBranch,
+  lastUserFromBranch,
+  safeLtmAgentEndObserve,
   safeLtmPreCompactObserve,
 } from "./observe-hooks.ts";
 import {
@@ -162,5 +165,158 @@ test("safeLtmPreCompactObserve swallows errors", async () => {
     sessionId: "x",
     cwd: "\0invalid",
     messagesText: "anything",
+  });
+});
+
+test("lastUserFromBranch / lastAssistantFromBranch from branch entries", () => {
+  const entries = [
+    {
+      type: "message",
+      message: { role: "user", content: "first question" },
+    },
+    {
+      type: "message",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "first answer" }],
+      },
+    },
+    {
+      type: "message",
+      message: { role: "user", content: "second question" },
+    },
+    {
+      type: "message",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "second answer" }],
+      },
+    },
+    { type: "compaction", summary: "skip" },
+  ];
+  assert.equal(lastUserFromBranch(entries), "second question");
+  assert.equal(lastAssistantFromBranch(entries), "second answer");
+});
+
+test("lastUserFromBranch / lastAssistantFromBranch from raw messages", () => {
+  const messages = [
+    { role: "user", content: "prompt me" },
+    { role: "toolResult", content: [{ type: "text", text: "tool out" }] },
+    { role: "assistant", content: [{ type: "text", text: "done" }] },
+  ];
+  assert.equal(lastUserFromBranch(messages), "prompt me");
+  assert.equal(lastAssistantFromBranch(messages), "done");
+});
+
+test("lastUserFromBranch skips empty role text", () => {
+  const entries = [
+    {
+      type: "message",
+      message: { role: "user", content: "real user" },
+    },
+    {
+      type: "message",
+      message: { role: "user", content: "   " },
+    },
+    {
+      type: "message",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "  " }],
+      },
+    },
+  ];
+  assert.equal(lastUserFromBranch(entries), "real user");
+  assert.equal(lastAssistantFromBranch(entries), "");
+});
+
+test("safeLtmAgentEndObserve no-ops when observeAgentEnd false", async () => {
+  const agentDir = mkdtempSync(join(tmpdir(), "ltm-agent-end-off-"));
+  try {
+    writeFileSync(
+      join(agentDir, "desktop-settings.json"),
+      JSON.stringify({
+        ltm: {
+          enabled: true,
+          observeAgentEnd: false,
+          dbPath: join(agentDir, "memory", "ltm.sqlite"),
+        },
+      })
+    );
+    resetMemoryServiceForTests();
+
+    await safeLtmAgentEndObserve({
+      sessionId: "sess-end-1",
+      cwd: agentDir,
+      userText: "should not persist agent end",
+      assistantText: "nope",
+      agentDir,
+    });
+
+    const service = getMemoryService(agentDir);
+    assert.equal(service.getConfig().observeAgentEnd, false);
+    const hits = await service.recallFromCwd(agentDir, {
+      query: "should not persist agent end",
+      limit: 5,
+      kinds: ["observation"],
+    });
+    assert.equal(hits.length, 0);
+  } finally {
+    resetMemoryServiceForTests();
+    rmSync(agentDir, { recursive: true, force: true });
+  }
+});
+
+test("safeLtmAgentEndObserve persists when enabled", async () => {
+  const agentDir = mkdtempSync(join(tmpdir(), "ltm-agent-end-on-"));
+  try {
+    writeFileSync(
+      join(agentDir, "desktop-settings.json"),
+      JSON.stringify({
+        ltm: {
+          enabled: true,
+          observeAgentEnd: true,
+          dbPath: join(agentDir, "memory", "ltm.sqlite"),
+        },
+      })
+    );
+    resetMemoryServiceForTests();
+
+    await safeLtmAgentEndObserve({
+      sessionId: "sess-end-2",
+      cwd: agentDir,
+      userText: "remember this agent end turn",
+      assistantText: "stored for later recall",
+      agentDir,
+    });
+
+    const service = getMemoryService(agentDir);
+    const hits = await service.recallFromCwd(agentDir, {
+      query: "remember this agent end turn",
+      limit: 5,
+      kinds: ["observation"],
+    });
+    assert.ok(hits.length >= 1, "expected at least one observation hit");
+    assert.ok(
+      hits.some(
+        (h) =>
+          h.kind === "observation" &&
+          (h.snippet.includes("remember this") ||
+            h.title.includes("remember this") ||
+            h.snippet.includes("stored for later"))
+      )
+    );
+  } finally {
+    resetMemoryServiceForTests();
+    rmSync(agentDir, { recursive: true, force: true });
+  }
+});
+
+test("safeLtmAgentEndObserve swallows errors", async () => {
+  await safeLtmAgentEndObserve({
+    sessionId: "x",
+    cwd: "\0invalid",
+    userText: "u",
+    assistantText: "a",
   });
 });

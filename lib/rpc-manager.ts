@@ -19,6 +19,9 @@ import { readDesktopSettings } from "./desktop-settings.ts";
 import { findLastAgentMode } from "./agent-mode-persistence.ts";
 import {
   branchEntriesToMessagesText,
+  lastAssistantFromBranch,
+  lastUserFromBranch,
+  safeLtmAgentEndObserve,
   safeLtmPreCompactObserve,
 } from "./ltm/observe-hooks.ts";
 
@@ -155,6 +158,22 @@ export class AgentSessionWrapper {
   start(): void {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
       this.resetIdleTimer();
+      // Best-effort LTM observe when an agent loop settles.
+      if (event.type === "agent_end") {
+        try {
+          const source = Array.isArray(event.messages)
+            ? (event.messages as unknown[])
+            : (this.inner.sessionManager.getBranch() as unknown[]);
+          void safeLtmAgentEndObserve({
+            sessionId: this.sessionId,
+            cwd: this.inner.sessionManager.getHeader()?.cwd ?? process.cwd(),
+            userText: lastUserFromBranch(source),
+            assistantText: lastAssistantFromBranch(source),
+          });
+        } catch (err) {
+          console.error("ltm agent_end observe wire failed:", err);
+        }
+      }
       for (const l of this.listeners) l(event);
     });
     this.resetIdleTimer();
