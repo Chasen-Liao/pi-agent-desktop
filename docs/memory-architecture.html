@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi Agent · 记忆架构深度解析</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #111827;
+    --bg3: #1a2235;
+    --bg4: #243049;
+    --accent: #6366f1;
+    --accent2: #8b5cf6;
+    --accent3: #a78bfa;
+    --cyan: #22d3ee;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --sky: #38bdf8;
+    --orange: #fb923c;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --border: rgba(99,102,241,0.2);
+    --border2: rgba(148,163,184,0.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+    line-height: 1.7;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+
+  /* ── Nav ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(10,14,26,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 1.5rem;
+    display: flex; align-items: center; height: 52px; gap: 1.5rem;
+  }
+  nav .logo {
+    font-weight: 800; font-size: 0.95rem; white-space: nowrap;
+    background: linear-gradient(135deg, var(--cyan), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  nav .links { display: flex; gap: 0.15rem; flex-wrap: nowrap; overflow-x: auto; }
+  nav .links a {
+    color: var(--text2); text-decoration: none; font-size: 0.75rem;
+    padding: 0.3rem 0.6rem; border-radius: 6px; transition: all 0.2s;
+    font-weight: 500; white-space: nowrap;
+  }
+  nav .links a:hover { color: var(--text); background: rgba(99,102,241,0.15); }
+
+  /* ── Sections ── */
+  section {
+    position: relative; z-index: 1;
+    padding: 5rem 1.5rem 3rem;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .section-inner { max-width: 1080px; width: 100%; }
+
+  .section-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem; color: var(--cyan);
+    letter-spacing: 0.15em; text-transform: uppercase;
+    margin-bottom: 0.6rem;
+  }
+  .section-title {
+    font-size: 2.1rem; font-weight: 800;
+    letter-spacing: -0.03em; line-height: 1.2;
+    margin-bottom: 1rem;
+  }
+  .section-desc {
+    font-size: 1rem; color: var(--text2);
+    max-width: 720px; line-height: 1.8; margin-bottom: 2.2rem;
+  }
+
+  /* ── Hero ── */
+  #hero {
+    min-height: 92vh; justify-content: center; text-align: center;
+    padding-top: 6rem;
+  }
+  #hero .glow {
+    position: absolute; width: 560px; height: 560px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(34,211,238,0.12) 0%, transparent 70%);
+    top: 45%; left: 50%; transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: rgba(34,211,238,0.08); border: 1px solid rgba(34,211,238,0.25);
+    border-radius: 999px; padding: 0.35rem 1rem;
+    font-size: 0.78rem; color: var(--cyan); font-weight: 600;
+    margin-bottom: 1.5rem; font-family: 'JetBrains Mono', monospace;
+  }
+  .hero-title {
+    font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 900;
+    letter-spacing: -0.04em; line-height: 1.1; margin-bottom: 1.2rem;
+  }
+  .hero-title span {
+    background: linear-gradient(135deg, var(--cyan), var(--accent2), var(--rose));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero-sub {
+    font-size: 1.1rem; color: var(--text2); max-width: 640px;
+    margin: 0 auto 2.5rem; line-height: 1.8;
+  }
+  .hero-stats {
+    display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
+  }
+  .stat-card {
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 12px; padding: 1rem 1.4rem; min-width: 140px;
+    text-align: center;
+  }
+  .stat-card .num {
+    font-size: 1.6rem; font-weight: 800; font-family: 'JetBrains Mono', monospace;
+    color: var(--cyan);
+  }
+  .stat-card .label { font-size: 0.75rem; color: var(--text3); margin-top: 0.2rem; }
+
+  /* ── Cards / grids ── */
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+
+  .card {
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 14px; padding: 1.4rem 1.5rem;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .card:hover { border-color: rgba(99,102,241,0.4); transform: translateY(-2px); }
+  .card h3 {
+    font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .card p, .card li { font-size: 0.88rem; color: var(--text2); line-height: 1.7; }
+  .card ul { padding-left: 1.1rem; margin-top: 0.4rem; }
+  .card .dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  /* ── Layer diagram ── */
+  .layers {
+    display: flex; flex-direction: column; gap: 0.6rem; margin: 1.5rem 0;
+  }
+  .layer {
+    display: grid; grid-template-columns: 140px 1fr;
+    gap: 1rem; align-items: stretch;
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 12px; overflow: hidden;
+  }
+  .layer-label {
+    display: flex; flex-direction: column; justify-content: center;
+    align-items: center; padding: 1rem 0.75rem;
+    font-weight: 700; font-size: 0.78rem; text-align: center;
+    letter-spacing: 0.03em; color: #fff;
+  }
+  .layer-body {
+    padding: 1rem 1.2rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+  }
+  .chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem; padding: 0.3rem 0.65rem;
+    border-radius: 6px; background: var(--bg3);
+    border: 1px solid var(--border2); color: var(--text);
+  }
+  .chip.hot { border-color: rgba(251,113,133,0.4); color: var(--rose); }
+  .chip.cold { border-color: rgba(56,189,248,0.4); color: var(--sky); }
+  .chip.meta { border-color: rgba(251,191,36,0.4); color: var(--amber); }
+  .chip.live { border-color: rgba(52,211,153,0.4); color: var(--green); }
+
+  /* ── Flow ── */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+    gap: 0.5rem; margin: 1.5rem 0; padding: 1.5rem;
+    background: var(--bg2); border: 1px solid var(--border2); border-radius: 14px;
+  }
+  .flow-node {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 10px; padding: 0.7rem 1rem; text-align: center;
+    min-width: 110px;
+  }
+  .flow-node .fn-title {
+    font-size: 0.78rem; font-weight: 700; margin-bottom: 0.15rem;
+  }
+  .flow-node .fn-sub {
+    font-size: 0.65rem; color: var(--text3); font-family: 'JetBrains Mono', monospace;
+  }
+  .flow-arrow {
+    color: var(--accent3); font-size: 1.2rem; font-weight: 700;
+  }
+
+  /* ── Tree viz ── */
+  .tree-viz {
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 14px; padding: 1.5rem; font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem; overflow-x: auto; line-height: 1.9;
+  }
+  .tree-viz .t-header { color: var(--amber); }
+  .tree-viz .t-msg { color: var(--sky); }
+  .tree-viz .t-asst { color: var(--green); }
+  .tree-viz .t-tool { color: var(--orange); }
+  .tree-viz .t-comp { color: var(--rose); }
+  .tree-viz .t-custom { color: var(--accent3); }
+  .tree-viz .t-branch { color: var(--text3); }
+  .tree-viz .t-active { background: rgba(34,211,238,0.12); border-radius: 4px; padding: 0 4px; }
+  .tree-viz .t-dim { color: var(--text3); opacity: 0.55; }
+
+  /* ── Table ── */
+  .data-table {
+    width: 100%; border-collapse: collapse; font-size: 0.85rem;
+    margin: 1rem 0 1.5rem;
+  }
+  .data-table th {
+    text-align: left; padding: 0.7rem 0.9rem;
+    background: var(--bg3); color: var(--text2); font-weight: 600;
+    border-bottom: 1px solid var(--border); font-size: 0.78rem;
+  }
+  .data-table td {
+    padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--border2);
+    color: var(--text2); vertical-align: top;
+  }
+  .data-table tr:hover td { background: rgba(99,102,241,0.05); }
+  .data-table code {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+    color: var(--cyan); background: rgba(34,211,238,0.08);
+    padding: 0.1rem 0.35rem; border-radius: 4px;
+  }
+
+  /* ── Callout ── */
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: rgba(99,102,241,0.08);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.2rem; margin: 1.2rem 0;
+    font-size: 0.9rem; color: var(--text2);
+  }
+  .callout.warn { border-left-color: var(--amber); background: rgba(251,191,36,0.08); }
+  .callout.danger { border-left-color: var(--rose); background: rgba(251,113,133,0.08); }
+  .callout.ok { border-left-color: var(--green); background: rgba(52,211,153,0.08); }
+  .callout strong { color: var(--text); }
+
+  /* ── Code block ── */
+  pre.code {
+    background: #0d1220; border: 1px solid var(--border2);
+    border-radius: 10px; padding: 1rem 1.2rem;
+    overflow-x: auto; font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem; line-height: 1.65; color: var(--text2);
+    margin: 1rem 0;
+  }
+  pre.code .k { color: var(--accent3); }
+  pre.code .s { color: var(--green); }
+  pre.code .c { color: var(--text3); }
+  pre.code .n { color: var(--amber); }
+
+  /* ── Timeline ── */
+  .timeline { position: relative; padding-left: 1.8rem; margin: 1.2rem 0; }
+  .timeline::before {
+    content: ''; position: absolute; left: 6px; top: 4px; bottom: 4px;
+    width: 2px; background: linear-gradient(to bottom, var(--cyan), var(--accent2), var(--rose));
+  }
+  .tl-item { position: relative; margin-bottom: 1.4rem; }
+  .tl-item::before {
+    content: ''; position: absolute; left: -1.55rem; top: 0.45rem;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--cyan); border: 2px solid var(--bg);
+    box-shadow: 0 0 0 2px var(--cyan);
+  }
+  .tl-item h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.3rem; }
+  .tl-item p { font-size: 0.85rem; color: var(--text2); }
+
+  /* ── Improvement cards ── */
+  .improve {
+    display: grid; grid-template-columns: auto 1fr; gap: 0.8rem 1rem;
+    align-items: start; padding: 1rem 0;
+    border-bottom: 1px solid var(--border2);
+  }
+  .improve:last-child { border-bottom: none; }
+  .prio {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.68rem;
+    font-weight: 700; padding: 0.25rem 0.55rem; border-radius: 5px;
+    white-space: nowrap;
+  }
+  .prio.p0 { background: rgba(251,113,133,0.15); color: var(--rose); }
+  .prio.p1 { background: rgba(251,191,36,0.15); color: var(--amber); }
+  .prio.p2 { background: rgba(56,189,248,0.15); color: var(--sky); }
+  .prio.p3 { background: rgba(148,163,184,0.12); color: var(--text3); }
+
+  /* ── SVG diagrams ── */
+  .svg-wrap {
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 14px; padding: 1.5rem; margin: 1.2rem 0;
+    overflow-x: auto;
+  }
+  .svg-wrap svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+
+  /* ── Dual path ── */
+  .dual {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.2rem 0;
+  }
+  @media (max-width: 720px) {
+    .dual { grid-template-columns: 1fr; }
+    .layer { grid-template-columns: 1fr; }
+    .layer-label { padding: 0.6rem; flex-direction: row; gap: 0.5rem; }
+  }
+  .dual-col {
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 14px; padding: 1.3rem;
+  }
+  .dual-col h3 {
+    font-size: 0.95rem; margin-bottom: 0.8rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .dual-col .badge {
+    font-size: 0.65rem; font-family: 'JetBrains Mono', monospace;
+    padding: 0.15rem 0.45rem; border-radius: 4px;
+  }
+  .badge.hot-b { background: rgba(251,113,133,0.15); color: var(--rose); }
+  .badge.cold-b { background: rgba(56,189,248,0.15); color: var(--sky); }
+
+  h2.sub { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.8rem; }
+  h3.sub { font-size: 1.05rem; font-weight: 700; margin: 1.5rem 0 0.6rem; }
+
+  footer {
+    text-align: center; padding: 2.5rem 1rem 3rem;
+    color: var(--text3); font-size: 0.8rem; border-top: 1px solid var(--border2);
+  }
+  footer a { color: var(--accent3); text-decoration: none; }
+
+  .file-ref {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+    color: var(--accent3); background: rgba(139,92,246,0.1);
+    padding: 0.1rem 0.4rem; border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">🧠 Memory Architecture</div>
+  <div class="links">
+    <a href="#hero">总览</a>
+    <a href="#layers">三层模型</a>
+    <a href="#jsonl">JSONL 格式</a>
+    <a href="#paths">读写路径</a>
+    <a href="#tree">树与分支</a>
+    <a href="#compact">压缩</a>
+    <a href="#runtime">运行时</a>
+    <a href="#client">客户端</a>
+    <a href="#map">符号地图</a>
+    <a href="#gaps">改进空间</a>
+    <a href="#ltm">长期记忆 LTM</a>
+  </div>
+</nav>
+
+<!-- ════════════ HERO ════════════ -->
+<section id="hero">
+  <div class="glow"></div>
+  <div class="section-inner">
+    <div class="hero-badge">CodeGraph 深度探索 · 2026-08-03</div>
+    <h1 class="hero-title">Pi Agent<br><span>记忆架构深度解析</span></h1>
+    <p class="hero-sub">
+      本文件基于 CodeGraph 对 <code>session-reader</code>、<code>rpc-manager</code>、
+      <code>types</code>、<code>agent-mode-persistence</code> 与客户端 hooks 的源码级分析，
+      刻画当前「会话即记忆」体系的完整数据流，为后续长期记忆改进提供基线。
+    </p>
+    <div class="hero-stats">
+      <div class="stat-card"><div class="num">3</div><div class="label">记忆层级</div></div>
+      <div class="stat-card"><div class="num">9</div><div class="label">Entry 类型</div></div>
+      <div class="stat-card"><div class="num">2</div><div class="label">分支机制</div></div>
+      <div class="stat-card"><div class="num">5</div><div class="label">globalThis 状态</div></div>
+      <div class="stat-card"><div class="num">0</div><div class="label">跨会话语义记忆</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ LAYERS ════════════ -->
+<section id="layers">
+  <div class="section-inner">
+    <div class="section-tag">01 · Architecture</div>
+    <h2 class="section-title">三层记忆模型</h2>
+    <p class="section-desc">
+      当前系统没有独立的「Memory Service」。记忆 = 会话历史，以 append-only JSONL 为真理源，
+      进程内 AgentSession 为热缓存，浏览器 React state 为展示层。三者通过不同 API 路径同步。
+    </p>
+
+    <div class="layers">
+      <div class="layer">
+        <div class="layer-label" style="background:linear-gradient(160deg,#0e7490,#164e63)">
+          L3 展示层<br><span style="font-weight:400;font-size:0.65rem;opacity:0.85">Ephemeral UI</span>
+        </div>
+        <div class="layer-body">
+          <span class="chip live">messages[]</span>
+          <span class="chip live">entryIds[]</span>
+          <span class="chip live">streamingMessage</span>
+          <span class="chip live">activeLeafId</span>
+          <span class="chip live">tree</span>
+          <span class="chip">useAgentSession</span>
+          <span class="chip">agent-event-apply</span>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="layer-label" style="background:linear-gradient(160deg,#6d28d9,#4c1d95)">
+          L2 运行时<br><span style="font-weight:400;font-size:0.65rem;opacity:0.85">Process Memory</span>
+        </div>
+        <div class="layer-body">
+          <span class="chip hot">__piSessions</span>
+          <span class="chip hot">AgentSessionWrapper</span>
+          <span class="chip hot">SessionManager (Pi)</span>
+          <span class="chip meta">__piSessionPathCache</span>
+          <span class="chip meta">__piStartLocks</span>
+          <span class="chip meta">__piWriteLocks</span>
+          <span class="chip">10min idle destroy</span>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="layer-label" style="background:linear-gradient(160deg,#1e3a5f,#0f172a)">
+          L1 持久层<br><span style="font-weight:400;font-size:0.65rem;opacity:0.85">Disk Truth</span>
+        </div>
+        <div class="layer-body">
+          <span class="chip cold">~/.pi/agent/sessions/</span>
+          <span class="chip cold">&lt;encoded-cwd&gt;/</span>
+          <span class="chip cold">&lt;ts&gt;_&lt;uuid&gt;.jsonl</span>
+          <span class="chip cold">SessionHeader</span>
+          <span class="chip cold">SessionEntry tree</span>
+          <span class="chip">parentSession 链接</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>核心洞察：</strong>L1 是唯一权威源。L2 由 <code>startRpcSession</code> 从 JSONL hydrate；
+      L3 由只读 <code>/api/sessions/*</code> 或 SSE 事件增量构建。热路径写 L2→L1，冷路径只读 L1。
+    </div>
+
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 340" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
+        <!-- Browser -->
+        <rect x="40" y="30" width="200" height="100" rx="12" fill="#1a2235" stroke="#38bdf8" stroke-width="1.5"/>
+        <text x="140" y="60" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">Browser UI</text>
+        <text x="140" y="82" text-anchor="middle" fill="#94a3b8" font-size="10">messages / entryIds</text>
+        <text x="140" y="100" text-anchor="middle" fill="#64748b" font-size="9">SSE · fetch context</text>
+
+        <!-- Next.js -->
+        <rect x="340" y="20" width="240" height="120" rx="12" fill="#1a2235" stroke="#8b5cf6" stroke-width="1.5"/>
+        <text x="460" y="48" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="700">Next.js Server</text>
+        <text x="460" y="70" text-anchor="middle" fill="#94a3b8" font-size="10">rpc-manager · session-reader</text>
+        <text x="460" y="90" text-anchor="middle" fill="#64748b" font-size="9">globalThis 注册表 / 路径缓存</text>
+        <text x="460" y="110" text-anchor="middle" fill="#64748b" font-size="9">AgentSessionWrapper</text>
+
+        <!-- Pi SDK -->
+        <rect x="680" y="30" width="200" height="100" rx="12" fill="#1a2235" stroke="#34d399" stroke-width="1.5"/>
+        <text x="780" y="60" text-anchor="middle" fill="#34d399" font-size="12" font-weight="700">Pi Coding Agent</text>
+        <text x="780" y="82" text-anchor="middle" fill="#94a3b8" font-size="10">SessionManager</text>
+        <text x="780" y="100" text-anchor="middle" fill="#64748b" font-size="9">createAgentSession</text>
+
+        <!-- Disk -->
+        <rect x="240" y="220" width="440" height="90" rx="12" fill="#111827" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="460" y="250" text-anchor="middle" fill="#fbbf24" font-size="12" font-weight="700">Disk · JSONL Sessions</text>
+        <text x="460" y="272" text-anchor="middle" fill="#94a3b8" font-size="10">~/.pi/agent/sessions/&lt;encoded-cwd&gt;/&lt;ts&gt;_&lt;uuid&gt;.jsonl</text>
+        <text x="460" y="292" text-anchor="middle" fill="#64748b" font-size="9">append-only · parentId tree · parentSession graph</text>
+
+        <!-- Arrows -->
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6" fill="none" stroke="#64748b" stroke-width="1.2"/>
+          </marker>
+        </defs>
+        <line x1="240" y1="80" x2="340" y2="80" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="290" y="70" text-anchor="middle" fill="#64748b" font-size="8">HTTP / SSE</text>
+        <line x1="580" y1="80" x2="680" y2="80" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="630" y="70" text-anchor="middle" fill="#64748b" font-size="8">in-process</text>
+        <line x1="460" y1="140" x2="460" y2="220" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="480" y="185" fill="#fbbf24" font-size="8">read / append</text>
+        <path d="M140 130 L140 265 Q140 280 160 280 L240 280" fill="none" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+        <text x="165" y="200" fill="#38bdf8" font-size="8">cold read</text>
+        <text x="165" y="212" fill="#38bdf8" font-size="8">(no session)</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ JSONL ════════════ -->
+<section id="jsonl">
+  <div class="section-inner">
+    <div class="section-tag">02 · Schema</div>
+    <h2 class="section-title">JSONL 会话格式 = 记忆 schema</h2>
+    <p class="section-desc">
+      每个会话一个文件。第一行是 header，之后每一行是带 <code>parentId</code> 的树节点。
+      类型定义镜像自 Pi mono 的 session-manager，本地见 <span class="file-ref">lib/types.ts</span>。
+    </p>
+
+    <h3 class="sub">Header（第一行）</h3>
+    <pre class="code">{
+  <span class="k">"type"</span>: <span class="s">"session"</span>,
+  <span class="k">"version"</span>: <span class="n">3</span>,
+  <span class="k">"id"</span>: <span class="s">"&lt;uuid&gt;"</span>,
+  <span class="k">"timestamp"</span>: <span class="s">"..."</span>,
+  <span class="k">"cwd"</span>: <span class="s">"/path/to/project"</span>,
+  <span class="k">"parentSession"</span>: <span class="s">"/abs/path/parent.jsonl"</span>,  <span class="c">// optional — Fork 元数据</span>
+  <span class="k">"name"</span>: <span class="s">"optional display name"</span>
+}</pre>
+
+    <h3 class="sub">Entry 类型一览</h3>
+    <table class="data-table">
+      <thead>
+        <tr><th>type</th><th>作用</th><th>是否进入 LLM 上下文</th><th>备注</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>message</code></td>
+          <td>user / assistant / toolResult</td>
+          <td>是（沿 leaf 路径）</td>
+          <td>记忆主体</td>
+        </tr>
+        <tr>
+          <td><code>compaction</code></td>
+          <td>历史摘要节点</td>
+          <td>是（summary 替代前段）</td>
+          <td><code>firstKeptEntryId</code> 划界</td>
+        </tr>
+        <tr>
+          <td><code>model_change</code></td>
+          <td>切换模型</td>
+          <td>否（元数据）</td>
+          <td>影响后续请求</td>
+        </tr>
+        <tr>
+          <td><code>thinking_level_change</code></td>
+          <td>思考等级</td>
+          <td>否</td>
+          <td>持久化到路径状态</td>
+        </tr>
+        <tr>
+          <td><code>custom</code></td>
+          <td>扩展数据</td>
+          <td>否（默认）</td>
+          <td>Desktop 用 <code>desktop_agent_mode</code></td>
+        </tr>
+        <tr>
+          <td><code>custom_message</code></td>
+          <td>可显示自定义消息</td>
+          <td>视 display</td>
+          <td>UI 提示类</td>
+        </tr>
+        <tr>
+          <td><code>branch_summary</code></td>
+          <td>分支切换摘要</td>
+          <td>可能注入</td>
+          <td>Pi navigateTree 相关</td>
+        </tr>
+        <tr>
+          <td><code>label</code></td>
+          <td>节点标签</td>
+          <td>否</td>
+          <td>UI 标注</td>
+        </tr>
+        <tr>
+          <td><code>session_info</code></td>
+          <td>会话名称等</td>
+          <td>否</td>
+          <td>侧边栏展示</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout ok">
+      <strong>唯一的 Desktop 自定义记忆字段：</strong>
+      <code>customType: "desktop_agent_mode"</code> + <code>data: { mode: "plan"|"ask"|"full" }</code>。
+      切换模式时 <code>sessionManager.appendCustomEntry(...)</code> 追加；启动时
+      <code>findLastAgentMode(entries)</code> 自后向前扫描恢复。
+      见 <span class="file-ref">lib/agent-mode-persistence.ts</span>、
+      <span class="file-ref">lib/rpc-manager.ts</span>。
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ PATHS ════════════ -->
+<section id="paths">
+  <div class="section-inner">
+    <div class="section-tag">03 · Data Paths</div>
+    <h2 class="section-title">双路径：热写 vs 冷读</h2>
+    <p class="section-desc">
+      架构刻意分离「运行 Agent」与「浏览历史」。冷读永不创建 AgentSession，避免资源浪费与副作用。
+    </p>
+
+    <div class="dual">
+      <div class="dual-col">
+        <h3><span class="badge hot-b">HOT</span> 写入 / 执行路径</h3>
+        <div class="timeline">
+          <div class="tl-item">
+            <h4>UI 发送</h4>
+            <p><code>handleSend</code> → 乐观追加 user 消息 → <code>POST /api/agent/[id]</code> 或 <code>/api/agent/new</code></p>
+          </div>
+          <div class="tl-item">
+            <h4>启动 / 复用 Session</h4>
+            <p><code>startRpcSession</code> 查 <code>__piSessions</code>；miss 则
+            <code>SessionManager.open|create</code> + <code>createAgentSession</code></p>
+          </div>
+          <div class="tl-item">
+            <h4>Pi 执行 + 落盘</h4>
+            <p><code>inner.prompt()</code> 驱动模型与工具；SessionManager 向 JSONL append message / toolResult</p>
+          </div>
+          <div class="tl-item">
+            <h4>SSE 推送</h4>
+            <p><code>GET /api/agent/[id]/events</code> → <code>applyAgentEvent</code> 更新 L3</p>
+          </div>
+          <div class="tl-item">
+            <h4>回合结束</h4>
+            <p><code>agent_end</code> 触发 <code>reloadSession</code>，从磁盘重同步 tree + messages</p>
+          </div>
+        </div>
+      </div>
+      <div class="dual-col">
+        <h3><span class="badge cold-b">COLD</span> 只读路径</h3>
+        <div class="timeline">
+          <div class="tl-item">
+            <h4>列表</h4>
+            <p><code>SessionManager.listAll()</code> → <code>listAllSessions</code> 填充路径缓存 + parent 映射</p>
+          </div>
+          <div class="tl-item">
+            <h4>解析路径</h4>
+            <p><code>resolveSessionPath(id)</code>：正缓存 hit / 负缓存 30s TTL / miss 则全量扫描</p>
+          </div>
+          <div class="tl-item">
+            <h4>加载会话</h4>
+            <p>读 JSONL → <code>buildTree</code> + <code>buildSessionContext(leafId)</code></p>
+          </div>
+          <div class="tl-item">
+            <h4>分支上下文</h4>
+            <p><code>GET .../context?leafId=</code> 仅重算 path→messages，不启动 Agent</p>
+          </div>
+          <div class="tl-item">
+            <h4>导出</h4>
+            <p><code>session-export</code> 流式/静态输出 HTML 或 Markdown</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="sub">上下文重建算法（buildSessionContext）</h3>
+    <div class="flow">
+      <div class="flow-node">
+        <div class="fn-title">定位 leaf</div>
+        <div class="fn-sub">leafId | last entry</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="fn-title">向上 walk</div>
+        <div class="fn-sub">parentId → root</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="fn-title">找 compaction</div>
+        <div class="fn-sub">路径上最后一次</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="fn-title">裁切 + 拼装</div>
+        <div class="fn-sub">summary + kept + after</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="fn-title">归一化</div>
+        <div class="fn-sub">toolCall 字段</div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>entryIds[] 平行数组：</strong>与 <code>messages[]</code> 一一对应，把 UI 消息映射回 JSONL entry id，
+      是 Fork 按钮与 navigate_tree 的桥梁。Compaction 后第一条 message 的 entryId 指向 compaction 节点本身。
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ TREE ════════════ -->
+<section id="tree">
+  <div class="section-inner">
+    <div class="section-tag">04 · Branching</div>
+    <h2 class="section-title">两种分支 = 两种记忆分裂策略</h2>
+    <p class="section-desc">
+      这是记忆系统最容易混淆的部分：同文件树分叉 vs 跨文件 Fork。侧边栏树用 <code>parentSession</code> 展示后者。
+    </p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3><span class="dot" style="background:var(--cyan)"></span>会话内分支（In-file）</h3>
+        <ul>
+          <li>同一 <code>.jsonl</code> 内通过 <code>parentId</code> 形成树</li>
+          <li>命令：<code>navigate_tree</code> → <code>inner.navigateTree(targetId)</code></li>
+          <li>UI：BranchNavigator；上下文：<code>?leafId=</code></li>
+          <li>记忆共享同一文件，仅「当前活跃路径」不同</li>
+          <li>切换后 <code>loadContext</code> 重绘 messages</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--rose)"></span>Fork / Branch（Cross-file）</h3>
+        <ul>
+          <li>新 JSONL；header 写 <code>parentSession</code></li>
+          <li>Agent 路径：<code>send({type:"fork", entryId})</code></li>
+          <li>API 路径：<code>POST .../branch</code>、<code>.../clone</code></li>
+          <li>Fork 点前历史拷贝；之后独立演化</li>
+          <li>顺序：建文件 → <code>startRpcSession</code> 预注册 → <code>destroy</code> 旧 wrapper</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="sub">同文件树示意（活跃路径高亮）</h3>
+    <div class="tree-viz">
+<span class="t-header">session header  id=S1  cwd=./proj</span>
+│
+├─ <span class="t-msg">[m1] message user: "修登录 bug"</span>
+│  └─ <span class="t-asst">[m2] message assistant + toolCall</span>
+│     └─ <span class="t-tool">[m3] toolResult</span>
+│        └─ <span class="t-asst">[m4] message assistant</span>
+│           ├─ <span class="t-msg t-active">[m5] message user: "换种方案"  ← leaf A</span>
+│           │  └─ <span class="t-asst t-active">[m6] assistant ...</span>
+│           └─ <span class="t-msg t-dim">[m7] message user: "继续原方案"  ← leaf B (inactive)</span>
+│              └─ <span class="t-asst t-dim">[m8] assistant ...</span>
+│
+└─ <span class="t-custom">[c1] custom desktop_agent_mode { mode: "ask" }</span>
+    </div>
+
+    <h3 class="sub">跨文件 Fork 后的会话图</h3>
+    <div class="tree-viz">
+<span class="t-header">S1.jsonl</span>  ──parentSession──▶  <span class="t-header">S2.jsonl</span>  (forked at m4)
+  full tree m1…m8                        copy of path → m4, then new growth
+                                           leaf starts after fork point
+
+<span class="t-branch">// 删除 S1 时 session-cascade 把 S2.parentSession 重写到 S1 的祖父（或移除）</span>
+    </div>
+
+    <div class="callout warn">
+      <strong>Fork 契约陷阱：</strong>必须先 <code>startRpcSession(newId)</code> 成功预注册，再 destroy 旧 wrapper。
+      若预注册失败：旧会话保持可用，删除孤儿 JSONL + invalidate 路径缓存。
+      详见 <span class="file-ref">lib/rpc-manager.ts</span> case <code>"fork"</code>。
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ COMPACT ════════════ -->
+<section id="compact">
+  <div class="section-inner">
+    <div class="section-tag">05 · Compaction</div>
+    <h2 class="section-title">压缩：唯一的「遗忘」机制</h2>
+    <p class="section-desc">
+      没有外部向量库或事实抽取。当上下文逼近窗口时，Pi 用 LLM 把前段历史压成 summary entry，
+      这是系统目前<strong>唯一有损的记忆变换</strong>。
+    </p>
+
+    <div class="svg-wrap">
+      <svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
+        <!-- Before -->
+        <text x="20" y="28" fill="#94a3b8" font-size="11" font-weight="600">压缩前（路径上的 entries）</text>
+        <rect x="20" y="45" width="70" height="36" rx="6" fill="#1a2235" stroke="#38bdf8"/>
+        <text x="55" y="67" text-anchor="middle" fill="#38bdf8" font-size="10">m1..mN</text>
+        <text x="100" y="67" fill="#64748b" font-size="16">→</text>
+        <rect x="120" y="45" width="90" height="36" rx="6" fill="#1a2235" stroke="#fb7185"/>
+        <text x="165" y="67" text-anchor="middle" fill="#fb7185" font-size="10">to summarize</text>
+        <text x="220" y="67" fill="#64748b" font-size="16">→</text>
+        <rect x="240" y="45" width="100" height="36" rx="6" fill="#1a2235" stroke="#34d399"/>
+        <text x="290" y="67" text-anchor="middle" fill="#34d399" font-size="10">keep recent</text>
+        <text x="350" y="67" fill="#64748b" font-size="16">→</text>
+        <rect x="370" y="45" width="50" height="36" rx="6" fill="#1a2235" stroke="#fbbf24"/>
+        <text x="395" y="67" text-anchor="middle" fill="#fbbf24" font-size="10">leaf</text>
+
+        <!-- After -->
+        <text x="20" y="120" fill="#94a3b8" font-size="11" font-weight="600">压缩后（上下文视图）</text>
+        <rect x="20" y="137" width="140" height="40" rx="6" fill="#2a1520" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="90" y="155" text-anchor="middle" fill="#fb7185" font-size="10" font-weight="600">compaction</text>
+        <text x="90" y="168" text-anchor="middle" fill="#94a3b8" font-size="8">summary + firstKeptEntryId</text>
+        <text x="170" y="160" fill="#64748b" font-size="16">→</text>
+        <rect x="190" y="137" width="100" height="40" rx="6" fill="#1a2235" stroke="#34d399"/>
+        <text x="240" y="161" text-anchor="middle" fill="#34d399" font-size="10">kept messages</text>
+        <text x="300" y="160" fill="#64748b" font-size="16">→</text>
+        <rect x="320" y="137" width="80" height="40" rx="6" fill="#1a2235" stroke="#fbbf24"/>
+        <text x="360" y="161" text-anchor="middle" fill="#fbbf24" font-size="10">new turns</text>
+
+        <!-- note -->
+        <rect x="480" y="40" width="370" height="140" rx="10" fill="#111827" stroke="rgba(148,163,184,0.15)"/>
+        <text x="500" y="70" fill="#a78bfa" font-size="11" font-weight="700">Desktop 防护</text>
+        <text x="500" y="95" fill="#94a3b8" font-size="10">findCutPoint 预检：history 太短则</text>
+        <text x="500" y="112" fill="#94a3b8" font-size="10">抛 "Conversation too short to compact"</text>
+        <text x="500" y="138" fill="#94a3b8" font-size="10">UI：/compact 或 handleCompact</text>
+        <text x="500" y="155" fill="#94a3b8" font-size="10">事件：compaction_start/end（兼容 auto_*）</text>
+        <text x="500" y="172" fill="#64748b" font-size="9">成功后 reloadSession 从磁盘重载</text>
+      </svg>
+    </div>
+
+    <div class="callout danger">
+      <strong>改进记忆时必须注意：</strong>压缩是路径局部、有损的。原始 message 仍在 JSONL 文件中（append-only），
+      但 <code>buildSessionContext</code> 对 LLM/UI 可见的上下文会用 summary 替换前段。
+      任何「长期记忆抽取」若只看 context 视图会丢失细节——应读完整 entries 或在 compact 前抽取。
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ RUNTIME ════════════ -->
+<section id="runtime">
+  <div class="section-inner">
+    <div class="section-tag">06 · Runtime State</div>
+    <h2 class="section-title">进程内记忆与并发控制</h2>
+    <p class="section-desc">
+      Next.js HMR 会丢掉模块级变量，因此会话相关状态必须挂在 <code>globalThis</code>。
+      这些不是「业务记忆」，而是记忆系统的运行时索引与锁。
+    </p>
+
+    <table class="data-table">
+      <thead>
+        <tr><th>globalThis 键</th><th>结构</th><th>用途</th><th>生命周期</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>__piSessions</code></td>
+          <td>Map&lt;id, Wrapper&gt;</td>
+          <td>活跃 Agent 热缓存</td>
+          <td>destroy / 空闲 10min / process exit</td>
+        </tr>
+        <tr>
+          <td><code>__piSessionPathCacheState</code></td>
+          <td>paths + misses</td>
+          <td>id → 文件路径；负缓存 30s</td>
+          <td>list 填充；DELETE/fork 失败 invalidate</td>
+        </tr>
+        <tr>
+          <td><code>__piStartLocks</code></td>
+          <td>Map&lt;id, Promise&gt;</td>
+          <td>并发 start 去重</td>
+          <td>start finally 删除</td>
+        </tr>
+        <tr>
+          <td><code>__piWriteLocks</code></td>
+          <td>Map&lt;path, Promise&gt;</td>
+          <td>per-file 写入串行化</td>
+          <td>withFileLock finally</td>
+        </tr>
+        <tr>
+          <td><code>__piAllowedRootsCache</code></td>
+          <td>{roots, expiresAt}</td>
+          <td>文件白名单（安全边界）</td>
+          <td>5s TTL</td>
+        </tr>
+        <tr>
+          <td><code>__piSessionOnlyTrust</code></td>
+          <td>Map&lt;id, bool&gt;</td>
+          <td>会话级信任标记</td>
+          <td>信任握手相关</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">Session 生命周期（记忆热度）</h3>
+    <div class="flow">
+      <div class="flow-node">
+        <div class="fn-title">Cold</div>
+        <div class="fn-sub">仅磁盘 JSONL</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="fn-title">Hydrate</div>
+        <div class="fn-sub">startRpcSession</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="fn-title">Active</div>
+        <div class="fn-sub">prompt / events</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="fn-title">Idle</div>
+        <div class="fn-sub">计时重置</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="fn-title">Destroyed</div>
+        <div class="fn-sub">10min / fork</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="fn-title">Cold</div>
+        <div class="fn-sub">磁盘仍在</div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>cascade 删除：</strong><span class="file-ref">lib/session-cascade.ts</span> 的
+      <code>rewriteChildHeader</code> 在删父会话时重写子会话 header 的 <code>parentSession</code>，
+      防止侧边栏出现悬挂父链接。这是会话图完整性的一部分。
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ CLIENT ════════════ -->
+<section id="client">
+  <div class="section-inner">
+    <div class="section-tag">07 · Client Memory</div>
+    <h2 class="section-title">浏览器侧的瞬时记忆</h2>
+    <p class="section-desc">
+      L3 不持久化。切换 session 时用 <code>sessionScopedResetPatch()</code> 清空，防止串台。
+    </p>
+
+    <div class="grid-3">
+      <div class="card">
+        <h3><span class="dot" style="background:var(--sky)"></span>会话加载</h3>
+        <p><span class="file-ref">use-session-loader.ts</span></p>
+        <ul>
+          <li>data / tree / leafId</li>
+          <li>messages + entryIds</li>
+          <li>loadSession / loadContext</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--green)"></span>事件应用</h3>
+        <p><span class="file-ref">agent-event-apply.ts</span></p>
+        <ul>
+          <li>纯函数：event → patches</li>
+          <li>appendMessages / streamAction</li>
+          <li>reloadSession side effect</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--amber)"></span>流式状态</h3>
+        <p><span class="file-ref">stream-state.ts</span></p>
+        <ul>
+          <li>isStreaming</li>
+          <li>streamingMessage</li>
+          <li>start / update / end</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="sub">一轮对话中 L3 如何更新</h3>
+    <pre class="code"><span class="c">// 简化时序</span>
+handleSend:
+  setMessages(prev =&gt; [...prev, userMsg])     <span class="c">// 乐观更新</span>
+  dispatch({ type: <span class="s">"start"</span> })
+  sendAgentCommand(prompt)                     <span class="c">// 或 /api/agent/new</span>
+  connectEvents(sid)
+
+SSE message_update:
+  streamAction update → streamingMessage        <span class="c">// 打字机</span>
+
+SSE message_end:
+  appendMessages([completed])                   <span class="c">// 固化到 messages[]</span>
+  stream reset
+
+SSE agent_end:
+  reloadSession(sid)                            <span class="c">// 权威同步 tree/entryIds</span>
+  fetchAgentState</pre>
+  </div>
+</section>
+
+<!-- ════════════ MAP ════════════ -->
+<section id="map">
+  <div class="section-inner">
+    <div class="section-tag">08 · Symbol Map</div>
+    <h2 class="section-title">CodeGraph 符号与文件地图</h2>
+    <p class="section-desc">后续改记忆系统时，优先从这些入口切入。</p>
+
+    <table class="data-table">
+      <thead>
+        <tr><th>文件</th><th>关键符号</th><th>记忆职责</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="file-ref">lib/types.ts</span></td>
+          <td>SessionHeader, SessionEntry*, SessionContext</td>
+          <td>记忆 schema 契约</td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">lib/session-reader.ts</span></td>
+          <td>listAllSessions, buildTree, buildSessionContext, resolveSessionPath</td>
+          <td>冷读与上下文投影</td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">lib/session-path-cache.ts</span></td>
+          <td>getCachedSessionPath, SESSION_MISS_TTL_MS</td>
+          <td>路径索引</td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">lib/rpc-manager.ts</span></td>
+          <td>AgentSessionWrapper, startRpcSession, send(fork|compact|…)</td>
+          <td>热写、执行、Fork、压缩</td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">lib/agent-mode-persistence.ts</span></td>
+          <td>findLastAgentMode, createAgentModeCustomEntry</td>
+          <td>自定义 entry 读写范例</td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">lib/session-branch-clone.ts</span></td>
+          <td>extractAncestryPath, createBranchedHeader</td>
+          <td>跨文件分支/克隆纯函数</td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">lib/session-cascade.ts</span></td>
+          <td>rewriteChildHeader</td>
+          <td>会话图维护</td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">lib/session-lock.ts</span></td>
+          <td>withFileLock</td>
+          <td>并发写保护</td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">lib/normalize.ts</span></td>
+          <td>normalizeToolCalls</td>
+          <td>SDK/UI 字段对齐</td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">hooks/agent-session/*</span></td>
+          <td>useSessionLoader, applyAgentEvent, sessionScopedResetPatch</td>
+          <td>L3 状态机</td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">@earendil-works/pi-coding-agent</span></td>
+          <td>SessionManager, createAgentSession, findCutPoint</td>
+          <td>真正的 append / compact / branch 实现</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout ok">
+      <strong>扩展记忆的推荐挂载点：</strong>
+      像 <code>desktop_agent_mode</code> 一样使用 <code>appendCustomEntry(customType, data)</code>
+      写入 JSONL，在 cold path 用 entry 扫描恢复——无需改 Pi 核心。
+      若要跨会话检索，需在 L1 之上新建索引层（见下一节）。
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ GAPS ════════════ -->
+<section id="gaps">
+  <div class="section-inner">
+    <div class="section-tag">09 · Improvement Roadmap</div>
+    <h2 class="section-title">现状边界与改进铺垫</h2>
+    <p class="section-desc">
+      结论先行：今天的「记忆」= 单会话树状对话日志 + 可选有损压缩。
+      没有跨会话事实库、没有语义检索、没有用户偏好/项目知识的一等公民存储。
+    </p>
+
+    <h3 class="sub">已有能力（可复用）</h3>
+    <div class="grid-2">
+      <div class="card">
+        <h3>✅ 强项</h3>
+        <ul>
+          <li>Append-only 审计友好，易 fork/export</li>
+          <li>树 + compaction 兼顾探索与上下文预算</li>
+          <li>冷热分离，列表/历史零 Agent 开销</li>
+          <li>custom entry 扩展通道已验证</li>
+          <li>路径缓存 + 写锁 + 启动锁齐备</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>❌ 缺口</h3>
+        <ul>
+          <li>无跨会话 recall</li>
+          <li>无 embedding / hybrid search</li>
+          <li>compaction 细节不可自动「复活」到 prompt</li>
+          <li>无显式 fact / preference / decision 类型</li>
+          <li>无记忆治理（过期、删除审计、project scope）</li>
+          <li>无与 MCP 外部记忆服务的内置桥</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="sub">建议演进方向（按优先级）</h3>
+
+    <div class="improve">
+      <span class="prio p0">P0</span>
+      <div>
+        <strong>记忆类型分层设计文档</strong>
+        <p style="font-size:0.85rem;color:var(--text2);margin-top:0.3rem">
+          区分 Working（当前 context）、Episodic（会话 JSONL）、Semantic（可抽取事实）、
+          Procedural（skills/prefs）。先定义写入触发与读取注入点，再写代码。
+        </p>
+      </div>
+    </div>
+    <div class="improve">
+      <span class="prio p1">P1</span>
+      <div>
+        <strong>Custom Entry 扩展：显式记忆节点</strong>
+        <p style="font-size:0.85rem;color:var(--text2);margin-top:0.3rem">
+          仿 <code>desktop_agent_mode</code> 增加
+          <code>desktop_memory_note</code>（fact / preference / decision / architecture）。
+          写入：slash 命令或 agent 工具；读取：session 启动时注入 system 片段或独立 panel。
+          落点：<span class="file-ref">rpc-manager</span> append +
+          <span class="file-ref">session-reader</span> 扫描。
+        </p>
+      </div>
+    </div>
+    <div class="improve">
+      <span class="prio p1">P1</span>
+      <div>
+        <strong>Compact 前记忆抽取钩子</strong>
+        <p style="font-size:0.85rem;color:var(--text2);margin-top:0.3rem">
+          在 <code>case "compact"</code> 调 Pi compact 之前，对即将被摘要的路径跑抽取，
+          把结构化结果写入 custom entry 或外部 store，避免有损后不可恢复。
+        </p>
+      </div>
+    </div>
+    <div class="improve">
+      <span class="prio p2">P2</span>
+      <div>
+        <strong>项目级记忆索引（SQLite / JSONL sidecar）</strong>
+        <p style="font-size:0.85rem;color:var(--text2);margin-top:0.3rem">
+          按 cwd 聚合跨会话 notes，支持 keyword → 可选 embedding。
+          启动 session 时 <code>recall(cwd, query?)</code> 注入。
+          注意：不要污染 Pi 的 session JSONL 契约；用 sidecar 或 agentDir 下独立库。
+        </p>
+      </div>
+    </div>
+    <div class="improve">
+      <span class="prio p2">P2</span>
+      <div>
+        <strong>可选对接外部 Memory MCP</strong>
+        <p style="font-size:0.85rem;color:var(--text2);margin-top:0.3rem">
+          工具面：save / recall / smart_search。Desktop 提供开关与 project id 规范
+          （稳定 slug，禁止用易变路径）。与内置 sidecar 二选一或分层。
+        </p>
+      </div>
+    </div>
+    <div class="improve">
+      <span class="prio p3">P3</span>
+      <div>
+        <strong>记忆 UI：侧边栏 Memory 面板</strong>
+        <p style="font-size:0.85rem;color:var(--text2);margin-top:0.3rem">
+          浏览 / 编辑 / 删除笔记；展示来源 session 与 entry 链接；审计删除原因。
+        </p>
+      </div>
+    </div>
+
+    <h3 class="sub">改进时的硬约束（勿破坏）</h3>
+    <div class="grid-2">
+      <div class="card">
+        <h3>契约</h3>
+        <ul>
+          <li>JSONL 第一行必须是 session header</li>
+          <li>parentId 树不可出现环（branch 已有 visited 防护）</li>
+          <li>entryIds 与 messages 平行</li>
+          <li>Fork 预注册再 destroy</li>
+          <li>冷路径禁止创建 AgentSession</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>工程</h3>
+        <ul>
+          <li>globalThis 抗 HMR</li>
+          <li>写文件走 withFileLock</li>
+          <li>ToolCall 字段归一化两处（load + SSE）</li>
+          <li>compaction 事件新旧双名</li>
+          <li>测试优先覆盖纯函数（reader / cascade / branch）</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout ok">
+      <strong>设计已落地：</strong>跨会话长期记忆见下方
+      <a href="#ltm">§ LTM</a> 与
+      <a href="./superpowers/specs/2026-08-03-long-term-memory-design.md">2026-08-03-long-term-memory-design.md</a>。
+      本 HTML 仍是会话 JSONL 记忆基线；LTM 为旁路层，不改写 JSONL 契约。
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ LTM ════════════ -->
+<section id="ltm">
+  <div class="section-inner">
+    <div class="section-tag">10 · Long-Term Memory</div>
+    <h2 class="section-title">长期记忆层（LTM）</h2>
+    <p class="section-desc">
+      在会话 JSONL（episodic）旁增加<strong>项目作用域</strong>的持久记忆层。
+      Phase 1 使用内置 SQLite；不修改 Pi 会话文件作为主存储。
+    </p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3><span class="dot" style="background:var(--green)"></span>代码与 API</h3>
+        <ul>
+          <li>实现：<span class="file-ref">lib/ltm/</span>（Service + MemoryBackend + SQLite）</li>
+          <li>HTTP：<code>/api/memory/*</code>（health / recall / remember / forget / stats）</li>
+          <li>Agent 工具：<code>memory_save</code> · <code>memory_recall</code> · <code>memory_forget</code></li>
+          <li>自动观察：<code>agent_end</code> + pre-compact（best-effort，不阻塞对话）</li>
+          <li>DB：<code>~/.pi/agent/memory/ltm.sqlite</code></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--accent2)"></span>设计与计划</h3>
+        <ul>
+          <li>
+            规格：
+            <a href="./superpowers/specs/2026-08-03-long-term-memory-design.md">
+              docs/superpowers/specs/2026-08-03-long-term-memory-design.md
+            </a>
+          </li>
+          <li>
+            实施计划：
+            <a href="./superpowers/plans/2026-08-03-long-term-memory.md">
+              docs/superpowers/plans/2026-08-03-long-term-memory.md
+            </a>
+          </li>
+          <li>v1：工具 + HTTP；无侧边栏 UI；不默认注入 system prompt</li>
+          <li>可插拔后端：SQLite（实现）/ agentmemory REST（stub）</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>与三层模型的关系：</strong>LTM 是 L1 旁的<strong>独立持久层</strong>（按 <code>projectId = hash(cwd)</code> 作用域），
+      不经 <code>SessionManager</code>。会话树、冷读、Fork/compact 契约保持不变；
+      模型仅通过 <code>memory_*</code> 工具显式读写。
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Pi Agent Desktop · Memory Architecture</p>
+  <p style="margin-top:0.4rem">
+    基于 CodeGraph 源码分析 · 本地文件
+    <a href="./memory-architecture.html">docs/memory-architecture.html</a>
+    · 相关
+    <a href="./architecture.html">architecture.html</a>
+    ·
+    <a href="./ARCHITECTURE.md">ARCHITECTURE.md §8–9</a>
+    ·
+    <a href="./superpowers/specs/2026-08-03-long-term-memory-design.md">LTM 设计规格</a>
+  </p>
+  <p style="margin-top:0.6rem;opacity:0.6">生成日期 2026-08-03 · 不随代码自动更新，改记忆层后请人工校对</p>
+</footer>
+
+<script>
+  // Smooth active nav highlight
+  const links = document.querySelectorAll('nav .links a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      links.forEach(l => l.style.color = '');
+      const id = '#' + e.target.id;
+      const active = document.querySelector(`nav .links a[href="${id}"]`);
+      if (active) active.style.color = 'var(--cyan)';
+    });
+  }, { rootMargin: '-30% 0px -55% 0px' });
+  sections.forEach(s => io.observe(s));
+</script>
+</body>
+</html>

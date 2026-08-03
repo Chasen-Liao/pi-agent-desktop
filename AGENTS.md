@@ -52,13 +52,14 @@ CodeGraph provides MCP (Model Context Protocol) tools for efficient symbol searc
 - **浏览历史**（只读）：`GET /api/sessions/*` → `lib/session-reader.ts` 直接解析 `.jsonl`，**不创建** AgentSession
 - **SSE 流**：`GET /api/agent/[id]/events` —— 30s 心跳，单向推送
 - **UI 主入口**：`app/page.tsx` → `components/AppShell.tsx` → `components/ChatWindow.tsx` → `hooks/useAgentSession.ts`
+- **长期记忆 LTM**：`lib/ltm` · API `/api/memory/*` · tools `memory_save` / `memory_recall` / `memory_forget`（设计见 [docs/superpowers/specs/2026-08-03-long-term-memory-design.md](docs/superpowers/specs/2026-08-03-long-term-memory-design.md)）
 
 ### 顶层目录速查
 
 | 目录 | 用途 |
 |---|---|
-| `app/api/` | 33 条 API 路由（agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings） |
-| `lib/` | 服务端库：`rpc-manager` / `session-reader` / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` 等 |
+| `app/api/` | API 路由（agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings / **memory**） |
+| `lib/` | 服务端库：`rpc-manager` / `session-reader` / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` / **`ltm`** 等 |
 | `components/` | 24 个顶层组件（含 `McpConfigModal` / `SessionExportModal` / `ExtensionsConfigModal` / `ProjectTrustDialog` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
 | `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 8 个拆分 hook |
 | `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 7 个辅助模块 |
