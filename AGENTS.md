@@ -52,26 +52,28 @@ CodeGraph provides MCP (Model Context Protocol) tools for efficient symbol searc
 - **浏览历史**（只读）：`GET /api/sessions/*` → `lib/session-reader.ts` 直接解析 `.jsonl`，**不创建** AgentSession
 - **SSE 流**：`GET /api/agent/[id]/events` —— 30s 心跳，单向推送
 - **UI 主入口**：`app/page.tsx` → `components/AppShell.tsx` → `components/ChatWindow.tsx` → `hooks/useAgentSession.ts`
+- **长期记忆 LTM**：`lib/ltm` · API `/api/memory/*` · tools `memory_save` / `memory_recall` / `memory_forget`（设计见 [docs/superpowers/specs/2026-08-03-long-term-memory-design.md](docs/superpowers/specs/2026-08-03-long-term-memory-design.md)）
 
 ### 顶层目录速查
 
 | 目录 | 用途 |
 |---|---|
-| `app/api/` | 33 条 API 路由（agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings） |
-| `lib/` | 服务端库：`rpc-manager` / `session-reader` / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` 等 |
+| `app/api/` | API 路由（agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings / **memory**） |
+| `lib/` | 服务端库：`rpc-manager` / `session-reader` / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` / **`ltm`** 等 |
 | `components/` | 24 个顶层组件（含 `McpConfigModal` / `SessionExportModal` / `ExtensionsConfigModal` / `ProjectTrustDialog` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
 | `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 8 个拆分 hook |
 | `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 7 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
-### 五个必须存 `globalThis` 的原因
+### 必须存 `globalThis` 的原因
 
-Next.js HMR 会丢弃模块级变量，因此以下五个必须挂在 `globalThis` 上：
+Next.js HMR 会丢弃模块级变量，因此会话与 LTM 相关状态必须挂在 `globalThis` 上：
 
 - `globalThis.__piSessions` — `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表（[lib/rpc-manager.ts](lib/rpc-manager.ts)）
 - `globalThis.__piSessionPathCache` — `sessionId → .jsonl` 路径缓存（[lib/session-reader.ts](lib/session-reader.ts)）
 - `globalThis.__piStartLocks` — 并发启动共享 Promise 锁（[lib/rpc-manager.ts](lib/rpc-manager.ts)）
 - `globalThis.__piWriteLocks` — per-file 写入锁（[lib/session-lock.ts](lib/session-lock.ts)）
 - `globalThis.__piAllowedRootsCache` — 文件访问白名单缓存（5s TTL）（[lib/allowed-roots.ts](lib/allowed-roots.ts)）
+- `globalThis.__piLtmService` — 长期记忆 `MemoryService` 单例（[lib/ltm/service.ts](lib/ltm/service.ts)）
 
 ---
 
@@ -99,7 +101,11 @@ Pi SDK 存 `{id, name, arguments}`，前端用 `{toolCallId, toolName, input}`�
 
 ### 5. Electron 打包大小 & Next.js NFT 套娃陷阱
 
-Frontend 依赖必须放 `devDependencies`（否则 electron-builder 盲目打包进 app.asar）。`next.config.ts` 必须加上 `outputFileTracingExcludes: { "/": ["release/**/*", ".git/**/*"] }` 防止 NFT 把旧安装包拉进 build，造成指数级套娃膨胀。详见 [ARCHITECTURE.md §14.12](docs/ARCHITECTURE.md#1412-electron-打包大小--nextjs-nft-套娃陷阱)。
+Frontend 依赖必须放 `devDependencies`（否则 electron-builder 盲目打包进 app.asar）。`next.config.ts` 必须加上 `outputFileTracingExcludes` 防止 NFT 把旧安装包拉进 build。详见 [ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+
+### 6. Next 16 Turbopack standalone 必须补齐 turbo runtime
+
+`build:standalone` = `next build && node scripts/ensure-standalone-next-runtimes.mjs`。缺省会导致安装包卡在启动页（`app-route-turbo.runtime.prod.js` missing）。详见 [ARCHITECTURE.md §14.10b](docs/ARCHITECTURE.md#1410b-next-16-turbopack-standalone-缺-app-route-runtime2026-08-03)。
 
 ---
 

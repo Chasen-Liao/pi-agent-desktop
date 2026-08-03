@@ -491,7 +491,7 @@ components/models-config/     模型配置弹窗的子组件
 
 ## 12. API 路由清单
 
-> 共 **33 条** route.ts（CodeGraph 索引统计）。
+> 共 **38** 条 `route.ts`（2026-08-03 文件系统盘点：含 LTM 5 条）。
 
 ### Agent 会话交互（3 条）
 
@@ -500,6 +500,18 @@ components/models-config/     模型配置弹窗的子组件
 | `app/api/agent/new/route.ts` | POST | 创建新会话并发送首条消息 |
 | `app/api/agent/[id]/route.ts` | GET / POST | GET 状态；POST 任意命令（prompt / abort / fork / navigate_tree / set_model / compact / get_tools / set_agent_mode / extension_ui_response） |
 | `app/api/agent/[id]/events/route.ts` | GET | SSE 事件流（30s 心跳，支持 extension_ui_request / extension_ui_notify） |
+
+### 长期记忆 LTM（5 条）
+
+| 路由 | 方法 | 用途 |
+|---|---|---|
+| `app/api/memory/health/route.ts` | GET | LTM 后端健康（`backend` / `enabled`） |
+| `app/api/memory/recall/route.ts` | GET | `?cwd=&q=&limit=` 项目级检索 |
+| `app/api/memory/remember/route.ts` | POST | 显式写入 memory（`cwd` + `content` + 可选 type） |
+| `app/api/memory/forget/route.ts` | POST | 按 id 删除 memory / observation |
+| `app/api/memory/stats/route.ts` | GET | `?cwd=` 项目记忆计数 |
+
+实现与工具面见 `lib/ltm/`、`lib/desktop-ltm-extension.ts`；会话 JSONL 仍为独立 episodic 日志。可视化基线：[memory-architecture.html](./memory-architecture.html)；设计：[superpowers/specs/2026-08-03-long-term-memory-design.md](./superpowers/specs/2026-08-03-long-term-memory-design.md)。
 
 ### 会话浏览、分叉与导出（7 条）
 
@@ -708,6 +720,20 @@ serverExternalPackages: [
 ```
 
 把两个 pi 包设为 server external，避免 webpack 打包它们（它们依赖 Node 原生模块）。
+
+### 14.10b Next 16 Turbopack standalone 缺 app-route runtime（2026-08-03）
+
+`next build`（Turbopack）的 NFT 可能**不**把
+
+`next/dist/compiled/next-server/app-route-turbo.runtime.prod.js`
+
+拷进 `.next/standalone`。打包后 Electron 子进程能起 `server.js`，但加载任意 App Route（含 `/api/health` 路径上的依赖）时报 `Cannot find module ...app-route-turbo.runtime.prod.js`，窗口一直停在启动页。
+
+**修复**：`package.json` 的 `build:standalone` 在 `next build` 后运行
+
+`node scripts/ensure-standalone-next-runtimes.mjs`
+
+将所有 `*turbo*.runtime.prod.js` 从 `node_modules/next/.../next-server` 复制进 standalone。不要删掉该步骤。
 
 ### 14.11 安全文件访问：allowed-roots 鉴权模型
 

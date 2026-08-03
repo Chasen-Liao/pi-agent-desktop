@@ -15,8 +15,19 @@ import {
 } from "./approval-policy.ts";
 import { ExtensionUiBridge } from "./extension-ui-bridge.ts";
 import { desktopApprovalInlineExtension, type AgentModeRef } from "./desktop-approval-extension.ts";
+import {
+  desktopLtmInlineExtension,
+  withMemoryTools,
+} from "./desktop-ltm-extension.ts";
 import { readDesktopSettings } from "./desktop-settings.ts";
 import { findLastAgentMode } from "./agent-mode-persistence.ts";
+import {
+  branchEntriesToMessagesText,
+  lastAssistantFromBranch,
+  lastUserFromBranch,
+  safeLtmAgentEndObserve,
+  safeLtmPreCompactObserve,
+} from "./ltm/observe-hooks.ts";
 
 // ============================================================================
 // Constants
@@ -112,7 +123,7 @@ export class AgentSessionWrapper {
     }
     this._agentMode = mode;
     this._modeRef.current = mode;
-    const tools = effectiveToolsForMode(mode, this._toolPreset);
+    const tools = withMemoryTools(effectiveToolsForMode(mode, this._toolPreset));
     this.inner.setActiveToolsByName(tools);
     if (tools.length === 0) {
       const state = this.inner.agent?.state as { systemPrompt?: string } | undefined;
@@ -151,6 +162,22 @@ export class AgentSessionWrapper {
   start(): void {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
       this.resetIdleTimer();
+      // Best-effort LTM observe when an agent loop settles.
+      if (event.type === "agent_end") {
+        try {
+          const source = Array.isArray(event.messages)
+            ? (event.messages as unknown[])
+            : (this.inner.sessionManager.getBranch() as unknown[]);
+          void safeLtmAgentEndObserve({
+            sessionId: this.sessionId,
+            cwd: this.inner.sessionManager.getHeader()?.cwd ?? process.cwd(),
+            userText: lastUserFromBranch(source),
+            assistantText: lastAssistantFromBranch(source),
+          });
+        } catch (err) {
+          console.error("ltm agent_end observe wire failed:", err);
+        }
+      }
       for (const l of this.listeners) l(event);
     });
     this.resetIdleTimer();
@@ -376,6 +403,12 @@ export class AgentSessionWrapper {
         if (historyEnd <= boundaryStart) {
           throw new Error("Conversation too short to compact");
         }
+        // Best-effort LTM observe of branch text before compaction rewrites context.
+        void safeLtmPreCompactObserve({
+          sessionId: this.sessionId,
+          cwd: this.inner.sessionManager.getHeader()?.cwd ?? process.cwd(),
+          messagesText: branchEntriesToMessagesText(pathEntries),
+        });
         const result = await this.inner.compact(command.customInstructions as string | undefined);
         return result;
       }
@@ -424,9 +457,11 @@ export class AgentSessionWrapper {
         this._toolPreset = this.inferPresetFromTools(toolNames);
         if (this._agentMode === "plan") {
           this._toolPresetBeforePlan = this._toolPreset;
-          this.inner.setActiveToolsByName([...effectiveToolsForMode("plan", this._toolPreset)]);
+          this.inner.setActiveToolsByName(
+            withMemoryTools([...effectiveToolsForMode("plan", this._toolPreset)])
+          );
         } else {
-          this.inner.setActiveToolsByName(toolNames);
+          this.inner.setActiveToolsByName(withMemoryTools(toolNames));
         }
         return null;
       }
@@ -608,7 +643,7 @@ export async function startRpcSession(
       : SessionManager.create(cwd, undefined);
 
     const storedMode = findLastAgentMode(sessionManager.getEntries() as never);
-    let agentMode: AgentMode = isAgentMode(opts.agentMode)
+    const agentMode: AgentMode = isAgentMode(opts.agentMode)
       ? opts.agentMode
       : (storedMode ?? desktop.defaultAgentMode);
     let toolPreset: ToolPreset = isToolPreset(opts.toolPreset)
@@ -623,13 +658,18 @@ export async function startRpcSession(
       else if (key === [...toolNamesForPreset("full")].sort().join(",")) toolPreset = "full";
     }
 
-    const effectiveTools = effectiveToolsForMode(agentMode, toolPreset);
+    const effectiveTools = withMemoryTools(
+      effectiveToolsForMode(agentMode, toolPreset)
+    );
 
     const modeRef: AgentModeRef = { current: agentMode };
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
-      extensionFactories: [desktopApprovalInlineExtension(modeRef)],
+      extensionFactories: [
+        desktopApprovalInlineExtension(modeRef),
+        desktopLtmInlineExtension({ getCwd: () => cwd }),
+      ],
     });
     await resourceLoader.reload();
 

@@ -1,0 +1,373 @@
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import type { MemoryBackend } from "./backend";
+import { jaccardSimilarity } from "./jaccard.ts";
+import type {
+  ForgetInput,
+  MemoryType,
+  ObserveInput,
+  RecallHit,
+  RecallInput,
+  RememberInput,
+} from "./types";
+
+const DEFAULT_LIMIT = 10;
+const MAX_LIMIT = 50;
+const SUPERSEDE_THRESHOLD = 0.7;
+const SNIPPET_MAX = 240;
+const TITLE_MAX = 80;
+const NARRATIVE_MAX = 4000;
+
+/** Strip FTS5 operators; return space-joined quoted tokens for safe MATCH. */
+export function sanitizeFtsQuery(q: string): string {
+  if (!q || !q.trim()) return "";
+  const cleaned = q
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ");
+  const tokens = cleaned.split(/\s+/).filter((t) => t.length > 0);
+  if (tokens.length === 0) return "";
+  return tokens.map((t) => `"${t.replace(/"/g, "")}"`).join(" ");
+}
+
+function newId(prefix: "mem" | "obs"): string {
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `${prefix}_${ts}_${rand}`;
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function titleFromContent(content: string): string {
+  const line = content.split(/\r?\n/, 1)[0] ?? content;
+  return line.length <= TITLE_MAX ? line : line.slice(0, TITLE_MAX);
+}
+
+function snippetOf(text: string): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  return t.length <= SNIPPET_MAX ? t : `${t.slice(0, SNIPPET_MAX)}…`;
+}
+
+function clampLimit(limit: number | undefined): number {
+  if (limit == null || !Number.isFinite(limit)) return DEFAULT_LIMIT;
+  return Math.min(MAX_LIMIT, Math.max(1, Math.floor(limit)));
+}
+
+export class SqliteBackend implements MemoryBackend {
+  private readonly db: DatabaseSync;
+
+  constructor(dbPath: string) {
+    mkdirSync(dirname(dbPath), { recursive: true });
+    this.db = new DatabaseSync(dbPath);
+    this.db.exec("PRAGMA journal_mode = WAL;");
+    this.db.exec("PRAGMA foreign_keys = ON;");
+    this.initSchema();
+  }
+
+  private initSchema(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS observations (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        narrative TEXT NOT NULL,
+        source_json TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_obs_project ON observations(project_id);
+
+      CREATE TABLE IF NOT EXISTS memories (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        concepts_json TEXT,
+        files_json TEXT,
+        source_observation_ids_json TEXT,
+        is_latest INTEGER NOT NULL,
+        parent_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_mem_project_latest
+        ON memories(project_id, is_latest);
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
+        id UNINDEXED,
+        project_id UNINDEXED,
+        title,
+        narrative
+      );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+        id UNINDEXED,
+        project_id UNINDEXED,
+        title,
+        content
+      );
+    `);
+  }
+
+  async remember(
+    input: RememberInput
+  ): Promise<{ id: string; type: MemoryType }> {
+    const type: MemoryType = input.type ?? "fact";
+    const content = input.content;
+    const title = titleFromContent(content);
+    const now = nowIso();
+    const id = newId("mem");
+
+    let parentId: string | null = null;
+    const latest = this.db
+      .prepare(
+        `SELECT id, content FROM memories
+         WHERE project_id = ? AND is_latest = 1`
+      )
+      .all(input.projectId) as Array<{ id: string; content: string }>;
+
+    for (const row of latest) {
+      if (jaccardSimilarity(content, row.content) > SUPERSEDE_THRESHOLD) {
+        parentId = row.id;
+        this.db
+          .prepare(
+            `UPDATE memories SET is_latest = 0, updated_at = ? WHERE id = ?`
+          )
+          .run(now, row.id);
+        // One supersede parent is enough; first high match wins.
+        break;
+      }
+    }
+
+    this.db
+      .prepare(
+        `INSERT INTO memories (
+          id, project_id, type, title, content,
+          concepts_json, files_json, source_observation_ids_json,
+          is_latest, parent_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
+      )
+      .run(
+        id,
+        input.projectId,
+        type,
+        title,
+        content,
+        input.concepts ? JSON.stringify(input.concepts) : null,
+        input.files ? JSON.stringify(input.files) : null,
+        input.sourceObservationIds
+          ? JSON.stringify(input.sourceObservationIds)
+          : null,
+        parentId,
+        now,
+        now
+      );
+
+    this.db
+      .prepare(
+        `INSERT INTO memories_fts(id, project_id, title, content)
+         VALUES (?, ?, ?, ?)`
+      )
+      .run(id, input.projectId, title, content);
+
+    return { id, type };
+  }
+
+  async recall(input: RecallInput): Promise<RecallHit[]> {
+    const match = sanitizeFtsQuery(input.query);
+    if (!match) return [];
+
+    const limit = clampLimit(input.limit);
+    const kinds = input.kinds ?? ["memory", "observation"];
+    const wantMemory = kinds.includes("memory");
+    const wantObs = kinds.includes("observation");
+    const hits: RecallHit[] = [];
+
+    if (wantMemory) {
+      const rows = this.db
+        .prepare(
+          `SELECT m.id, m.title, m.content, m.type, m.created_at,
+                  bm25(memories_fts) AS rank
+           FROM memories_fts
+           JOIN memories m ON m.id = memories_fts.id
+           WHERE memories_fts MATCH ?
+             AND m.project_id = ?
+             AND m.is_latest = 1
+           ORDER BY rank
+           LIMIT ?`
+        )
+        .all(match, input.projectId, limit) as Array<{
+        id: string;
+        title: string;
+        content: string;
+        type: MemoryType;
+        created_at: string;
+        rank: number;
+      }>;
+
+      for (const r of rows) {
+        hits.push({
+          kind: "memory",
+          id: r.id,
+          title: r.title,
+          snippet: snippetOf(r.content),
+          score: -r.rank,
+          type: r.type,
+          createdAt: r.created_at,
+        });
+      }
+    }
+
+    if (wantObs) {
+      const rows = this.db
+        .prepare(
+          `SELECT o.id, o.title, o.narrative, o.kind, o.created_at,
+                  bm25(observations_fts) AS rank
+           FROM observations_fts
+           JOIN observations o ON o.id = observations_fts.id
+           WHERE observations_fts MATCH ?
+             AND o.project_id = ?
+           ORDER BY rank
+           LIMIT ?`
+        )
+        .all(match, input.projectId, limit) as Array<{
+        id: string;
+        title: string;
+        narrative: string;
+        kind: string;
+        created_at: string;
+        rank: number;
+      }>;
+
+      for (const r of rows) {
+        hits.push({
+          kind: "observation",
+          id: r.id,
+          title: r.title,
+          snippet: snippetOf(r.narrative),
+          score: -r.rank,
+          type: r.kind as RecallHit["type"],
+          createdAt: r.created_at,
+        });
+      }
+    }
+
+    hits.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    return hits.slice(0, limit);
+  }
+
+  async observe(
+    input: ObserveInput
+  ): Promise<{ observationId: string } | { deduplicated: true }> {
+    const id = newId("obs");
+    const narrative =
+      input.narrative.length > NARRATIVE_MAX
+        ? input.narrative.slice(0, NARRATIVE_MAX)
+        : input.narrative;
+    const createdAt = nowIso();
+    const sourceJson =
+      input.source === undefined ? null : JSON.stringify(input.source);
+
+    this.db
+      .prepare(
+        `INSERT INTO observations (
+          id, project_id, session_id, kind, title, narrative, source_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        input.projectId,
+        input.sessionId,
+        input.kind,
+        input.title,
+        narrative,
+        sourceJson,
+        createdAt
+      );
+
+    this.db
+      .prepare(
+        `INSERT INTO observations_fts(id, project_id, title, narrative)
+         VALUES (?, ?, ?, ?)`
+      )
+      .run(id, input.projectId, input.title, narrative);
+
+    return { observationId: id };
+  }
+
+  async forget(input: ForgetInput): Promise<{ deleted: number }> {
+    let deleted = 0;
+
+    if (input.memoryIds?.length) {
+      const delMem = this.db.prepare(
+        `DELETE FROM memories WHERE id = ? AND project_id = ?`
+      );
+      const delMemFts = this.db.prepare(`DELETE FROM memories_fts WHERE id = ?`);
+      for (const id of input.memoryIds) {
+        const result = delMem.run(id, input.projectId) as { changes: number };
+        if (result.changes > 0) {
+          delMemFts.run(id);
+          deleted += result.changes;
+        }
+      }
+    }
+
+    if (input.observationIds?.length) {
+      const delObs = this.db.prepare(
+        `DELETE FROM observations WHERE id = ? AND project_id = ?`
+      );
+      const delObsFts = this.db.prepare(
+        `DELETE FROM observations_fts WHERE id = ?`
+      );
+      for (const id of input.observationIds) {
+        const result = delObs.run(id, input.projectId) as { changes: number };
+        if (result.changes > 0) {
+          delObsFts.run(id);
+          deleted += result.changes;
+        }
+      }
+    }
+
+    return { deleted };
+  }
+
+  async health(): Promise<{ ok: boolean; backend: string; detail?: string }> {
+    try {
+      this.db.prepare("SELECT 1").get();
+      return { ok: true, backend: "sqlite" };
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      return { ok: false, backend: "sqlite", detail };
+    }
+  }
+
+  /** Debug / API stats: latest memories + all observations for a project. */
+  async stats(
+    projectId: string
+  ): Promise<{ memoryCount: number; observationCount: number }> {
+    const mem = this.db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM memories
+         WHERE project_id = ? AND is_latest = 1`
+      )
+      .get(projectId) as { c: number };
+    const obs = this.db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM observations WHERE project_id = ?`
+      )
+      .get(projectId) as { c: number };
+    return {
+      memoryCount: Number(mem.c),
+      observationCount: Number(obs.c),
+    };
+  }
+
+  async close(): Promise<void> {
+    this.db.close();
+  }
+}

@@ -21,11 +21,11 @@
   "scripts": {
     "dev": "next dev -p 30141",
     "build": "npm run build:standalone",
-    "build:standalone": "next build",
+    "build:standalone": "next build && node scripts/ensure-standalone-next-runtimes.mjs",
     "start": "next start -p 30141",
     "lint": "eslint .",
     "check:electron-deps": "node lib/electron-updater-runtime-deps.mjs --check",
-    "test": "node --test --test-force-exit \"lib/**/*.test.ts\" \"lib/**/*.test.mjs\" \"electron/**/*.test.ts\" \"app/**/*.test.ts\" \"hooks/**/*.test.ts\" \"components/**/*.test.ts\" \"package.test.ts\"",
+    "test": "node --test --test-force-exit \"lib/**/*.test.ts\" \"lib/**/*.test.mjs\" \"electron/**/*.test.ts\" \"app/**/*.test.ts\" \"hooks/**/*.test.ts\" \"components/**/*.test.ts\" \"scripts/**/*.test.mjs\" \"package.test.ts\"",
     "release": "npm version patch --no-git-tag-version && npm run build:standalone && npm publish --access public",
     "build:electron": "tsc -p electron/tsconfig.json && node -e \"const fs=require('fs'); fs.copyFileSync('electron/startup.html', 'electron/dist/startup.html'); fs.copyFileSync('electron/startup.js', 'electron/dist/startup.js')\"",
     "dev:electron": "npm run build:electron && npx electron .",
