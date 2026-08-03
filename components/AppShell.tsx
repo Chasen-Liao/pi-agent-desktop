@@ -462,7 +462,7 @@ export function AppShell() {
         </div>
 
         {/* Center: chat */}
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <div className="relative flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Top bar with sidebar toggle */}
           <div ref={topBarRef} className="flex items-center shrink-0 border-b border-divider h-toolbar-height bg-bg-elevated [-webkit-app-region:drag]">
             <button
@@ -573,21 +573,8 @@ export function AppShell() {
               </div>
             )}
             <div className="flex-1" />
-            {/* Extensions & Export Toolbar Actions */}
+            {/* Export Toolbar Action */}
             <div className="flex items-center h-full border-r border-divider [-webkit-app-region:no-drag]">
-              <button
-                onClick={() => setExtensionsModalOpen(true)}
-                title="Extensions & MCP Servers"
-                aria-label="Extensions & MCP Servers"
-                className="flex items-center gap-1.5 h-full px-2.5 bg-transparent border-none text-text-muted hover:text-text cursor-pointer text-[11px] font-medium transition-colors duration-120"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-accent">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                  <path d="M2 12l10 5 10-5" />
-                </svg>
-                <span>Extensions & MCP</span>
-              </button>
               <button
                 onClick={() => {
                   setExportSessionId(selectedSession?.id ?? null);
@@ -709,6 +696,21 @@ export function AppShell() {
               )
             ) : null}
           </div>
+
+          {/* Extensions & MCP — floating bottom-right to free top bar space */}
+          <button
+            onClick={() => setExtensionsModalOpen(true)}
+            title="Extensions & MCP Servers"
+            aria-label="Extensions & MCP Servers"
+            className="absolute bottom-4 right-4 z-[80] flex items-center gap-1.5 rounded-full border border-border bg-bg-panel/95 px-3 py-2 text-[12px] font-medium text-text-muted shadow-popover backdrop-blur-sm transition-all duration-150 hover:border-accent/40 hover:bg-bg-elevated hover:text-text active:scale-95"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-accent">
+              <path d="M12 2L2 7l10 5 10-5-10-5z" />
+              <path d="M2 17l10 5 10-5" />
+              <path d="M2 12l10 5 10-5" />
+            </svg>
+            <span>MCP</span>
+          </button>
         </div>
 
         {/* Right panel: file viewer — always mounted, width animated via CSS */}
