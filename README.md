@@ -1,6 +1,6 @@
 <div align="center">
   <a href="https://github.com/Chasen-Liao/pi-agent-desktop">
-    <img src="public/logo.png" alt="Pi Agent Desktop Logo" width="128" height="128" style="border-radius: 28px; border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 4px 16px rgba(0,0,0,0.08);" />
+    <img src="https://raw.githubusercontent.com/Chasen-Liao/pi-agent-desktop/main/public/logo.png" alt="Pi Agent Desktop Logo" width="128" height="128" style="border-radius: 28px; border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 4px 16px rgba(0,0,0,0.08);" />
   </a>
 
   # Pi Agent Desktop
@@ -14,7 +14,7 @@
 
   ---
 
-  ![Pi Agent Desktop Demo](public/pi.gif)
+  ![Pi Agent Desktop Demo](https://raw.githubusercontent.com/Chasen-Liao/pi-agent-desktop/main/public/pi.gif)
 
   ---
 </div>
@@ -100,9 +100,12 @@ lib/
 - **打包**：electron-builder (NSIS)
 - **通信**：SSE (Server-Sent Events) 实时流式传输
 
-## 界面截图
+## CI
 
-![Pi Agent Desktop Interface](image-2.png)
+- `CI` 在 pull request 和 `main` push 上运行 lint、类型检查、测试和 Next.js 构建。
+- `PR Walkthrough` 会生成 PR 可视化预览；需要在仓库 Secrets 中配置 `WARP_API_KEY`。
+- 未配置密钥时，walkthrough 会安全跳过并在 Actions 摘要中说明，不会让普通 CI 失败。
+- `Publish PR Walkthrough` 需要将 GitHub Pages 发布源设置为 `gh-pages` 分支的根目录。
 
 ## 致谢
 

@@ -1,0 +1,94 @@
+name: PR Walkthrough
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number to visualize when running this workflow manually.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  actions: read
+
+concurrency:
+  group: pr-walkthrough-${{ github.event.pull_request.number || inputs.pr_number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    name: Generate walkthrough
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve PR number
+        id: pr
+        env:
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          pr_number="${EVENT_PR_NUMBER:-$INPUT_PR_NUMBER}"
+          if [ -z "$pr_number" ]; then
+            echo "This workflow needs a pull_request trigger or workflow_dispatch pr_number." >&2
+            exit 1
+          fi
+          echo "number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      - name: Check out PR head
+        uses: actions/checkout@v7
+        with:
+          ref: refs/pull/${{ steps.pr.outputs.number }}/head
+          fetch-depth: 0
+
+      - name: Check walkthrough configuration
+        id: config
+        env:
+          WARP_API_KEY: ${{ secrets.WARP_API_KEY }}
+        run: |
+          mkdir -p .warp/pr-walkthrough
+          if [ -z "$WARP_API_KEY" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            cat > .warp/pr-walkthrough/SKIPPED.md <<'EOF'
+          PR walkthrough generation was skipped because the `WARP_API_KEY` repository secret is not configured.
+          EOF
+            echo "::warning::PR walkthrough skipped: configure the WARP_API_KEY repository secret to enable previews."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate PR walkthrough with Oz
+        if: steps.config.outputs.enabled == 'true'
+        uses: warpdotdev/oz-agent-action@v1.0.28
+        with:
+          skill: warpdotdev/common-skills:pr-walkthrough
+          name: PR walkthrough for #${{ steps.pr.outputs.number }}
+          share: team
+          warp_api_key: ${{ secrets.WARP_API_KEY }}
+          prompt: |
+            Generate a static interactive D3 PR walkthrough for PR #${{ steps.pr.outputs.number }} in ${{ github.repository }}.
+
+            Requirements:
+            - Use the checked-out repository as the PR head.
+            - Use GitHub PR metadata, diff, files, and existing PR review comments when available.
+            - Create the self-contained visualizer at `.warp/pr-walkthrough/index.html`.
+            - Run the skill's D3 canvas validator before finishing.
+            - Do not commit, push, create branches, create PRs, or post GitHub comments.
+            - Leave all generated files in `.warp/pr-walkthrough/` for the workflow to upload.
+
+      - name: Verify generated visualizer exists
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          test -f .warp/pr-walkthrough/index.html
+          grep -q 'window.PR_WALKTHROUGH_D3_DATA' .warp/pr-walkthrough/index.html
+
+      - name: Upload walkthrough artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-walkthrough-${{ steps.pr.outputs.number }}
+          path: .warp/pr-walkthrough
+          if-no-files-found: error
+          retention-days: 7

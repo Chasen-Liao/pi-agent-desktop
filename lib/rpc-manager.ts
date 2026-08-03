@@ -608,7 +608,7 @@ export async function startRpcSession(
       : SessionManager.create(cwd, undefined);
 
     const storedMode = findLastAgentMode(sessionManager.getEntries() as never);
-    let agentMode: AgentMode = isAgentMode(opts.agentMode)
+    const agentMode: AgentMode = isAgentMode(opts.agentMode)
       ? opts.agentMode
       : (storedMode ?? desktop.defaultAgentMode);
     let toolPreset: ToolPreset = isToolPreset(opts.toolPreset)
