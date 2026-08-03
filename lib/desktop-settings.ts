@@ -13,9 +13,21 @@ import {
   type ToolPreset,
 } from "./approval-policy.ts";
 
+/** Optional nested LTM overrides in desktop-settings.json (`ltm`). */
+export interface DesktopLtmSettings {
+  enabled?: boolean;
+  backend?: "sqlite" | "agentmemory";
+  dbPath?: string;
+  observeAgentEnd?: boolean;
+  observePreCompact?: boolean;
+  agentmemoryUrl?: string;
+}
+
 export interface DesktopSettings {
   defaultAgentMode: AgentMode;
   defaultToolPreset: ToolPreset;
+  /** Optional LTM config; omitted when unset. Merged by getLtmConfig. */
+  ltm?: DesktopLtmSettings;
 }
 
 export const DESKTOP_SETTINGS_FILENAME = "desktop-settings.json";
@@ -31,16 +43,32 @@ export function desktopSettingsPath(agentDir: string): string {
   return join(agentDir, DESKTOP_SETTINGS_FILENAME);
 }
 
+function mergeDesktopLtmSettings(raw: unknown): DesktopLtmSettings | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const out: DesktopLtmSettings = {};
+  if (typeof o.enabled === "boolean") out.enabled = o.enabled;
+  if (o.backend === "sqlite" || o.backend === "agentmemory") out.backend = o.backend;
+  if (typeof o.dbPath === "string") out.dbPath = o.dbPath;
+  if (typeof o.observeAgentEnd === "boolean") out.observeAgentEnd = o.observeAgentEnd;
+  if (typeof o.observePreCompact === "boolean") out.observePreCompact = o.observePreCompact;
+  if (typeof o.agentmemoryUrl === "string") out.agentmemoryUrl = o.agentmemoryUrl;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function mergeDesktopSettings(raw: unknown): DesktopSettings {
   const base = defaultDesktopSettings();
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return base;
   const obj = raw as Record<string, unknown>;
-  return {
+  const ltm = mergeDesktopLtmSettings(obj.ltm);
+  const result: DesktopSettings = {
     defaultAgentMode: isAgentMode(obj.defaultAgentMode) ? obj.defaultAgentMode : base.defaultAgentMode,
     defaultToolPreset: isToolPreset(obj.defaultToolPreset)
       ? obj.defaultToolPreset
       : base.defaultToolPreset,
   };
+  if (ltm) result.ltm = ltm;
+  return result;
 }
 
 export function readDesktopSettings(agentDir: string): DesktopSettings {
@@ -73,6 +101,37 @@ export function validateDesktopSettingsBody(body: unknown): string | null {
   }
   if (obj.defaultToolPreset !== undefined && !isToolPreset(obj.defaultToolPreset)) {
     return "defaultToolPreset must be none | default | full";
+  }
+  if (obj.ltm !== undefined) {
+    if (!obj.ltm || typeof obj.ltm !== "object" || Array.isArray(obj.ltm)) {
+      return "ltm must be an object";
+    }
+    const ltm = obj.ltm as Record<string, unknown>;
+    if (ltm.enabled !== undefined && typeof ltm.enabled !== "boolean") {
+      return "ltm.enabled must be a boolean";
+    }
+    if (
+      ltm.backend !== undefined &&
+      ltm.backend !== "sqlite" &&
+      ltm.backend !== "agentmemory"
+    ) {
+      return "ltm.backend must be sqlite | agentmemory";
+    }
+    if (ltm.dbPath !== undefined && typeof ltm.dbPath !== "string") {
+      return "ltm.dbPath must be a string";
+    }
+    if (ltm.observeAgentEnd !== undefined && typeof ltm.observeAgentEnd !== "boolean") {
+      return "ltm.observeAgentEnd must be a boolean";
+    }
+    if (
+      ltm.observePreCompact !== undefined &&
+      typeof ltm.observePreCompact !== "boolean"
+    ) {
+      return "ltm.observePreCompact must be a boolean";
+    }
+    if (ltm.agentmemoryUrl !== undefined && typeof ltm.agentmemoryUrl !== "string") {
+      return "ltm.agentmemoryUrl must be a string";
+    }
   }
   return null;
 }
