@@ -7,7 +7,11 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 };
 
 test("build scripts name the standalone Next.js build explicitly", () => {
-  assert.equal(pkg.scripts["build:standalone"], "next build");
+  assert.match(pkg.scripts["build:standalone"], /^next build\b/);
+  assert.match(
+    pkg.scripts["build:standalone"],
+    /ensure-standalone-next-runtimes\.mjs/
+  );
   assert.equal(pkg.scripts.build, "npm run build:standalone");
 });
 
