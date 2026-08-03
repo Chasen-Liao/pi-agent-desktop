@@ -34,6 +34,7 @@
 - **会话分叉与克隆** — API/UI 支持从任意节点 Branch 及 Clone 会话到新目录
 - **会话导出** — 一键导出为 HTML / Markdown 格式
 - **AgentMode 持久化** — 自动写入 `.jsonl` 自定义 `desktop_agent_mode` 节点，重载恢复历史模式
+- **长期记忆 LTM** — 项目级 SQLite 记忆（`memory_save` / `memory_recall` / `memory_forget`），跨会话检索；`agent_end` 与 compact 前自动观察写入
 - **会话内分支** — 回退到任意节点继续对话，在同一文件内创建分支
 - **分支导航器** — 可视化切换同一会话内的各个分支
 - **模型切换** — 对话中途随时切换模型
@@ -77,6 +78,7 @@ app/
   api/
     sessions/      # 读取会话文件
     agent/         # 发送命令、SSE 事件流
+    memory/        # 长期记忆 recall / remember / forget / stats / health
     files/         # 文件内容读取
     models/        # 可用模型列表与默认模型
     models-config/ # 读写 models.json
@@ -87,10 +89,13 @@ components/        # UI 组件
 electron/          # Electron 主进程
 hooks/             # React Hooks（会话管理、面板布局等）
 lib/
+  ltm/               # 长期记忆（SQLite + MemoryService + hooks）
   session-reader.ts  # 解析 .jsonl 会话文件
   rpc-manager.ts     # 管理 AgentSession 生命周期
   normalize.ts       # 规范化 toolCall 字段名
   types.ts
+scripts/
+  ensure-standalone-next-runtimes.mjs  # 打包后补齐 Turbopack runtime
 ```
 
 ## 技术栈
