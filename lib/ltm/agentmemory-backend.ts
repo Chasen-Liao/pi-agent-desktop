@@ -26,22 +26,26 @@ export class AgentMemoryRestBackend implements MemoryBackend {
   }
 
   async remember(
-    _input: RememberInput
+    input: RememberInput
   ): Promise<{ id: string; type: MemoryType }> {
+    void input;
     throw new Error(NOT_IMPLEMENTED);
   }
 
-  async recall(_input: RecallInput): Promise<RecallHit[]> {
+  async recall(input: RecallInput): Promise<RecallHit[]> {
+    void input;
     throw new Error(NOT_IMPLEMENTED);
   }
 
   async observe(
-    _input: ObserveInput
+    input: ObserveInput
   ): Promise<{ observationId: string } | { deduplicated: true }> {
+    void input;
     throw new Error(NOT_IMPLEMENTED);
   }
 
-  async forget(_input: ForgetInput): Promise<{ deleted: number }> {
+  async forget(input: ForgetInput): Promise<{ deleted: number }> {
+    void input;
     throw new Error(NOT_IMPLEMENTED);
   }
 
