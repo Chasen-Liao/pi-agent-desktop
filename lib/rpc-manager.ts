@@ -15,6 +15,10 @@ import {
 } from "./approval-policy.ts";
 import { ExtensionUiBridge } from "./extension-ui-bridge.ts";
 import { desktopApprovalInlineExtension, type AgentModeRef } from "./desktop-approval-extension.ts";
+import {
+  desktopLtmInlineExtension,
+  withMemoryTools,
+} from "./desktop-ltm-extension.ts";
 import { readDesktopSettings } from "./desktop-settings.ts";
 import { findLastAgentMode } from "./agent-mode-persistence.ts";
 import {
@@ -119,7 +123,7 @@ export class AgentSessionWrapper {
     }
     this._agentMode = mode;
     this._modeRef.current = mode;
-    const tools = effectiveToolsForMode(mode, this._toolPreset);
+    const tools = withMemoryTools(effectiveToolsForMode(mode, this._toolPreset));
     this.inner.setActiveToolsByName(tools);
     if (tools.length === 0) {
       const state = this.inner.agent?.state as { systemPrompt?: string } | undefined;
@@ -453,9 +457,11 @@ export class AgentSessionWrapper {
         this._toolPreset = this.inferPresetFromTools(toolNames);
         if (this._agentMode === "plan") {
           this._toolPresetBeforePlan = this._toolPreset;
-          this.inner.setActiveToolsByName([...effectiveToolsForMode("plan", this._toolPreset)]);
+          this.inner.setActiveToolsByName(
+            withMemoryTools([...effectiveToolsForMode("plan", this._toolPreset)])
+          );
         } else {
-          this.inner.setActiveToolsByName(toolNames);
+          this.inner.setActiveToolsByName(withMemoryTools(toolNames));
         }
         return null;
       }
@@ -652,13 +658,18 @@ export async function startRpcSession(
       else if (key === [...toolNamesForPreset("full")].sort().join(",")) toolPreset = "full";
     }
 
-    const effectiveTools = effectiveToolsForMode(agentMode, toolPreset);
+    const effectiveTools = withMemoryTools(
+      effectiveToolsForMode(agentMode, toolPreset)
+    );
 
     const modeRef: AgentModeRef = { current: agentMode };
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
-      extensionFactories: [desktopApprovalInlineExtension(modeRef)],
+      extensionFactories: [
+        desktopApprovalInlineExtension(modeRef),
+        desktopLtmInlineExtension({ getCwd: () => cwd }),
+      ],
     });
     await resourceLoader.reload();
 

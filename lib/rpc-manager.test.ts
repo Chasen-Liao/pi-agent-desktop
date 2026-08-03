@@ -20,6 +20,11 @@ test("startRpcSession does not pass a hardcoded default tool allowlist", () => {
   assert.match(source, /setActiveToolsByName\(effectiveTools\)/);
 });
 
+test("startRpcSession registers desktopLtmInlineExtension", () => {
+  assert.match(source, /desktopLtmInlineExtension\(\{\s*getCwd:\s*\(\)\s*=>\s*cwd\s*\}\)/);
+  assert.match(source, /withMemoryTools/);
+});
+
 function makeStubInner(overrides: {
   subscribe?: SubscribeFn;
   sessionManager?: unknown;
@@ -566,7 +571,10 @@ test("set_agent_mode plan forces read tools", async () => {
   w.initPolicy("ask", "default");
   const result = await w.send({ type: "set_agent_mode", mode: "plan" }) as { agentMode: string };
   assert.equal(result.agentMode, "plan");
-  assert.deepEqual(applied.at(-1)?.slice().sort(), ["find", "grep", "ls", "read"]);
+  assert.deepEqual(
+    applied.at(-1)?.slice().sort(),
+    ["find", "grep", "ls", "memory_forget", "memory_recall", "memory_save", "read"]
+  );
 });
 
 test("get_state includes agentMode", async () => {
