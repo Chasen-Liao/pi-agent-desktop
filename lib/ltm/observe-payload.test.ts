@@ -33,8 +33,8 @@ test("buildAgentEndObservation truncates user 500 and assistant 4000", () => {
   const userText = "u".repeat(600);
   const assistantText = "a".repeat(5000);
   const { narrative } = buildAgentEndObservation({ userText, assistantText });
-  const userPart = narrative.match(/^User: (.*)\nAssistant: /s)?.[1] ?? "";
-  const asstPart = narrative.match(/\nAssistant: (.*)$/s)?.[1] ?? "";
+  const userPart = narrative.match(/^User: ([\s\S]*)\nAssistant: /)?.[1] ?? "";
+  const asstPart = narrative.match(/\nAssistant: ([\s\S]*)$/)?.[1] ?? "";
   assert.equal(userPart.length, 500);
   assert.equal(asstPart.length, 4000);
   assert.equal(userPart, "u".repeat(500));

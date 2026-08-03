@@ -36,6 +36,7 @@ test("withMemoryTools appends memory tools when non-empty", () => {
 test("desktopLtmInlineExtension factory registers three tool names", () => {
   const registered: string[] = [];
   const ext = desktopLtmInlineExtension({ getCwd: () => "/tmp/proj" });
+  assert.ok(typeof ext === "object" && ext !== null && "name" in ext);
   assert.equal(ext.name, "desktop-ltm");
   assert.equal(typeof ext.factory, "function");
 
