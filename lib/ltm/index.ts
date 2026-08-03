@@ -9,6 +9,21 @@ export {
   type LtmConfig,
   type LtmConfigPartial,
 } from "./config.ts";
+export {
+  isLtmDisabledError,
+  isMemoryType,
+  LTM_DISABLED,
+  parseForgetBody,
+  parseLimit,
+  parseRecallQuery,
+  parseRememberBody,
+  parseStatsQuery,
+  type ForgetBody,
+  type ParseResult,
+  type RecallQuery,
+  type RememberBody,
+  type StatsQuery,
+} from "./http.ts";
 export { jaccardSimilarity } from "./jaccard.ts";
 export { projectIdFromCwd } from "./project-id.ts";
 export {
