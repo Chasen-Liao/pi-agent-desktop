@@ -17,6 +17,10 @@ import { ExtensionUiBridge } from "./extension-ui-bridge.ts";
 import { desktopApprovalInlineExtension, type AgentModeRef } from "./desktop-approval-extension.ts";
 import { readDesktopSettings } from "./desktop-settings.ts";
 import { findLastAgentMode } from "./agent-mode-persistence.ts";
+import {
+  branchEntriesToMessagesText,
+  safeLtmPreCompactObserve,
+} from "./ltm/observe-hooks.ts";
 
 // ============================================================================
 // Constants
@@ -376,6 +380,12 @@ export class AgentSessionWrapper {
         if (historyEnd <= boundaryStart) {
           throw new Error("Conversation too short to compact");
         }
+        // Best-effort LTM observe of branch text before compaction rewrites context.
+        void safeLtmPreCompactObserve({
+          sessionId: this.sessionId,
+          cwd: this.inner.sessionManager.getHeader()?.cwd ?? process.cwd(),
+          messagesText: branchEntriesToMessagesText(pathEntries),
+        });
         const result = await this.inner.compact(command.customInstructions as string | undefined);
         return result;
       }
