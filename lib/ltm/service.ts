@@ -16,6 +16,10 @@ import type {
 
 const DISABLED_ERROR = "ltm_disabled";
 
+/** How long a cached backend-construction failure is trusted before the
+ * singleton retries construction once (see getMemoryService). */
+export const LTM_FAILURE_RETRY_MS = 30_000;
+
 export type RememberFromCwdInput = Omit<RememberInput, "projectId">;
 export type RecallFromCwdInput = Omit<RecallInput, "projectId">;
 export type ObserveFromCwdInput = Omit<ObserveInput, "projectId">;
@@ -25,6 +29,7 @@ type LtmServiceGlobal = {
   __piLtmService?: MemoryService;
   __piLtmServiceKey?: string;
   __piLtmServiceError?: unknown;
+  __piLtmServiceErrorAt?: number;
 };
 
 function ltmGlobal(): LtmServiceGlobal {
@@ -68,14 +73,16 @@ function createBackend(config: LtmConfig): MemoryBackend {
 }
 
 function serviceKey(config: LtmConfig): string {
-  return [
+  // JSON.stringify (not join("|")) so a free-text dbPath containing "|" cannot
+  // collide with another config (e.g. ".../mem|true" shifting a boolean token).
+  return JSON.stringify([
     config.backend,
     config.dbPath,
     config.enabled,
     config.observeAgentEnd,
     config.observePreCompact,
     config.agentmemoryUrl,
-  ].join("|");
+  ]);
 }
 
 export class MemoryService {
@@ -189,7 +196,8 @@ export class MemoryService {
 
 /**
  * Process-wide singleton (HMR-safe via globalThis).
- * Keyed by backend|dbPath|enabled so config changes get a fresh instance.
+ * Keyed by a JSON encoding of backend|dbPath|enabled|observe flags|agentmemoryUrl
+ * so config changes get a fresh instance.
  */
 export function getMemoryService(agentDir?: string): MemoryService {
   const dir = agentDir ?? getAgentDir();
@@ -203,8 +211,17 @@ export function getMemoryService(agentDir?: string): MemoryService {
   // A previous construction attempt for this exact config failed: throw the
   // cached failure instead of rebuilding (and re-logging) on every hook/tool
   // call. A config change produces a different key and retries fresh.
+  // The cache only lives for LTM_FAILURE_RETRY_MS — a transient root cause
+  // (disk full, AV lock, directory in use) must not disable LTM for the rest
+  // of the session.
   if (g.__piLtmServiceKey === key && g.__piLtmServiceError !== undefined) {
-    throw g.__piLtmServiceError;
+    const errorAt = g.__piLtmServiceErrorAt ?? 0;
+    if (Date.now() - errorAt < LTM_FAILURE_RETRY_MS) {
+      throw g.__piLtmServiceError;
+    }
+    // TTL expired: drop the cached failure so the next construction retries once.
+    g.__piLtmServiceError = undefined;
+    g.__piLtmServiceErrorAt = undefined;
   }
 
   const previous = g.__piLtmService;
@@ -215,6 +232,7 @@ export function getMemoryService(agentDir?: string): MemoryService {
     g.__piLtmService = undefined;
     g.__piLtmServiceKey = key;
     g.__piLtmServiceError = err;
+    g.__piLtmServiceErrorAt = Date.now();
     // Best-effort close of the instance we are replacing — otherwise a
     // failed config migration leaks the old DatabaseSync handle (Windows
     // keeps the WAL file open).
@@ -226,6 +244,7 @@ export function getMemoryService(agentDir?: string): MemoryService {
   g.__piLtmService = next;
   g.__piLtmServiceKey = key;
   g.__piLtmServiceError = undefined;
+  g.__piLtmServiceErrorAt = undefined;
 
   // Best-effort close of previous instance (different dbPath / config).
   if (previous) {
@@ -242,6 +261,7 @@ export function resetMemoryServiceForTests(): void {
   g.__piLtmService = undefined;
   g.__piLtmServiceKey = undefined;
   g.__piLtmServiceError = undefined;
+  g.__piLtmServiceErrorAt = undefined;
   if (prev) {
     void prev.close().catch(() => {});
   }

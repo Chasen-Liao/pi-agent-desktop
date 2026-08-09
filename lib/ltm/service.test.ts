@@ -11,6 +11,7 @@ import {
 } from "./config.ts";
 import {
   getMemoryService,
+  LTM_FAILURE_RETRY_MS,
   MemoryService,
   resetMemoryServiceForTests,
 } from "./service.ts";
@@ -370,4 +371,90 @@ test("getMemoryService closes the previous instance when construction fails (LTM
       () => a.rememberFromCwd(join(agentDir, "proj"), { content: "x" })
     );
   });
+});
+
+test("getMemoryService rebuilds when old join(|) key collides on different dbPaths (P2-1)", async () => {
+  await withTempAgentDir(async (agentDir) => {
+    resetMemoryServiceForTests();
+    const writeSettings = (ltm: Record<string, unknown>) =>
+      writeFileSync(
+        join(agentDir, "desktop-settings.json"),
+        JSON.stringify({ ltm }),
+        "utf-8"
+      );
+
+    // Two different dbPaths that the old join("|") encoding maps to the SAME
+    // key: dbPath ".../mem|true" shifts a boolean token and agentmemoryUrl
+    // "true|http://..." shifts it back, so the concatenated string is
+    // identical. agentmemory backend never touches disk, so both constructions
+    // succeed on every platform.
+    writeSettings({
+      backend: "agentmemory",
+      dbPath: join(agentDir, "mem|true"),
+      enabled: true,
+      agentmemoryUrl: "http://127.0.0.1:3111",
+    });
+    const a = getMemoryService(agentDir);
+
+    writeSettings({
+      backend: "agentmemory",
+      dbPath: join(agentDir, "mem"),
+      enabled: true,
+      agentmemoryUrl: "true|http://127.0.0.1:3111",
+    });
+    const b = getMemoryService(agentDir);
+
+    assert.notEqual(
+      a,
+      b,
+      "different dbPath must rebuild the service despite the old key collision"
+    );
+    assert.equal(b.getConfig().dbPath, join(agentDir, "mem"));
+  });
+});
+
+test("getMemoryService retries construction after failure-cache TTL expires (P2-2)", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"] });
+  try {
+    await withTempAgentDir(async (agentDir) => {
+      resetMemoryServiceForTests();
+      // Block the DB directory with a regular file so SqliteBackend mkdir fails.
+      writeFileSync(join(agentDir, "memory"), "blocked", "utf-8");
+      writeFileSync(
+        join(agentDir, "desktop-settings.json"),
+        JSON.stringify({ ltm: { enabled: true } }),
+        "utf-8"
+      );
+
+      let first: unknown;
+      try {
+        getMemoryService(agentDir);
+      } catch (e) {
+        first = e;
+      }
+      assert.ok(first instanceof Error);
+
+      // Within the TTL the cached failure is still thrown (no re-construction,
+      // so the same Error instance is returned).
+      let second: unknown;
+      try {
+        getMemoryService(agentDir);
+      } catch (e) {
+        second = e;
+      }
+      assert.equal(second, first);
+
+      // Unblock the DB directory, then advance the clock past the retry TTL.
+      rmSync(join(agentDir, "memory"), { force: true });
+      t.mock.timers.tick(LTM_FAILURE_RETRY_MS + 1000);
+
+      const svc = getMemoryService(agentDir);
+      assert.equal(svc.isEnabled(), true);
+      const health = await svc.health();
+      assert.equal(health.ok, true);
+      assert.equal(health.backend, "sqlite");
+    });
+  } finally {
+    t.mock.timers.reset();
+  }
 });
