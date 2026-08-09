@@ -222,25 +222,31 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (result.isCompacting !== undefined) setIsCompacting(result.isCompacting);
       if (result.compactError !== undefined) setCompactError(result.compactError);
       if (result.appendMessages?.length) {
-        setMessages((prev) => {
-          const next = [...prev, ...result.appendMessages!];
-          if (agentModeRef.current === "plan") {
-            const last = result.appendMessages![result.appendMessages!.length - 1];
-            if (last && last.role === "assistant") {
-              const text =
-                typeof last.content === "string"
+        const appended = result.appendMessages!;
+        // Pure updater: a side-effect-free spread (React StrictMode can
+        // double-invoke updaters during render, so setCanExecutePlan must live
+        // outside the updater, below).
+        setMessages((prev) => [...prev, ...appended]);
+        // Keep entryIds parallel with messages. SSE message events don't carry
+        // the session entry id, so the new slots stay undefined until the next
+        // reload populates real ids; MessageList falls back to idx keys, gates
+        // fork/navigate on a truthy entryId, and handleFork guards empty ids.
+        setEntryIds((prev) => [...prev, ...appended.map(() => undefined as unknown as string)]);
+        if (agentModeRef.current === "plan") {
+          const last = appended[appended.length - 1];
+          if (last && last.role === "assistant") {
+            const text =
+              typeof last.content === "string"
+                ? last.content
+                : Array.isArray(last.content)
                   ? last.content
-                  : Array.isArray(last.content)
-                    ? last.content
-                        .filter((b): b is { type: "text"; text: string } => b.type === "text")
-                        .map((b) => b.text)
-                        .join("")
-                    : "";
-              if (text.trim()) setCanExecutePlan(true);
-            }
+                      .filter((b): b is { type: "text"; text: string } => b.type === "text")
+                      .map((b) => b.text)
+                      .join("")
+                  : "";
+            if (text.trim()) setCanExecutePlan(true);
           }
-          return next;
-        });
+        }
       }
 
       for (const effect of result.effects) {
@@ -295,7 +301,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
       }
     },
-    [loadSession, onAgentEnd, onAgentEndEvent, setMessages]
+    [loadSession, onAgentEnd, onAgentEndEvent, setMessages, setEntryIds, setCanExecutePlan]
   );
   handleAgentEventRef.current = handleAgentEvent;
 

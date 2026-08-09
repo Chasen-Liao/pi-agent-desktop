@@ -32,7 +32,8 @@ export type AgentEventSideEffect =
 export type AgentPhaseOp =
   | { type: "set"; phase: AgentPhase }
   | { type: "addTool"; id: string; name: string }
-  | { type: "removeTool"; id: string };
+  | { type: "removeTool"; id: string }
+  | { type: "clear" };
 
 export type AgentEventApplyResult = {
   agentRunning?: boolean;
@@ -108,7 +109,11 @@ export function applyAgentEvent(
     case "message_update": {
       const { message: msg } = event;
       const result: AgentEventApplyResult = {
-        phaseOp: { type: "set", phase: null },
+        // Clear the current phase (e.g. waiting_model) but keep an active
+        // running_tools phase — a streaming update that carries tool-call
+        // content must not wipe the tool indicator. "clear" is resolved by
+        // applyPhaseOp against the current phase.
+        phaseOp: { type: "clear" },
         effects,
       };
       if (msg) {
@@ -206,5 +211,9 @@ export function applyAgentEvent(
 export function applyPhaseOp(phase: AgentPhase, op: AgentPhaseOp): AgentPhase {
   if (op.type === "set") return op.phase;
   if (op.type === "addTool") return addRunningTool(phase, op.id, op.name);
-  return removeRunningTool(phase, op.id);
+  if (op.type === "removeTool") return removeRunningTool(phase, op.id);
+  // "clear": null out the phase unless tools are actively running — a
+  // streaming message update must not wipe the running_tools indicator.
+  if (op.type === "clear") return phase?.kind === "running_tools" ? phase : null;
+  return phase;
 }

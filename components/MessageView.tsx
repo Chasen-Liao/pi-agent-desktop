@@ -185,6 +185,15 @@ const UserMessageView = React.memo(function UserMessageView({
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Auto-clear "Copied" feedback. Scheduling the reset in an effect (instead
+  // of a bare setTimeout in the handler) gives us a cleanup that stops the
+  // timer from calling setState after unmount.
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+
   const content =
     typeof message.content === "string"
       ? message.content
@@ -205,7 +214,6 @@ const UserMessageView = React.memo(function UserMessageView({
   const copyContent = () => {
     copyText(content).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
     });
   };
 
@@ -365,6 +373,14 @@ const AssistantMessageView = React.memo(function AssistantMessageView({
   const blocks = useMemo(() => message.content ?? [], [message.content]);
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Auto-clear "Copied" feedback with a cleanup (see UserMessageView).
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+
   const streamStartRef = useRef<number | null>(null);
   const [tps, setTps] = useState<number | null>(null);
 
@@ -400,7 +416,6 @@ const AssistantMessageView = React.memo(function AssistantMessageView({
   const copyContent = () => {
     copyText(textContent).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
     });
   };
 
@@ -806,10 +821,16 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
   const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
 
+  // Auto-clear "copied" feedback with a cleanup (see UserMessageView).
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+
   const copy = () => {
     copyText(code).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
     });
   };
 

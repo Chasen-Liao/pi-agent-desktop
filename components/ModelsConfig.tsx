@@ -49,6 +49,15 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     loadApiKeyProviders();
   }, [loadOAuthProviders, loadApiKeyProviders]);
 
+  // Auto-clear the "Saved" confirmation. Scheduling the reset in an effect
+  // gives a cleanup so the timer can't call setState after unmount (the modal
+  // can close before the 2s reset fires).
+  useEffect(() => {
+    if (!savedOk) return;
+    const t = setTimeout(() => setSavedOk(false), 2000);
+    return () => clearTimeout(t);
+  }, [savedOk]);
+
   const addCustomProvider = useCallback(() => {
     let finalName = "new-provider";
     let n = 1;
@@ -134,7 +143,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       });
       const d = await res.json() as { success?: boolean; error?: string };
       if (!res.ok || d.error) setSaveError(d.error ?? `HTTP ${res.status}`);
-      else { setSavedOk(true); setTimeout(() => setSavedOk(false), 2000); }
+      else setSavedOk(true);
     } catch (e) {
       setSaveError(String(e));
     } finally {

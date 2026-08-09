@@ -12,6 +12,21 @@ export function useAudio() {
   const enabledRef = useRef(enabled);
   useEffect(() => { enabledRef.current = enabled; }, [enabled]);
 
+  // Tracks the in-flight AudioContext and its deferred close timer so unmount
+  // can clear the timer and close the context — avoiding a dangling timer and
+  // a leaked WebAudio context after the chime.
+  const pendingAudioRef = useRef<{ timer: ReturnType<typeof setTimeout>; ctx: AudioContext } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      const pending = pendingAudioRef.current;
+      if (pending) {
+        clearTimeout(pending.timer);
+        pending.ctx.close().catch(() => {});
+      }
+    };
+  }, []);
+
   const toggle = useCallback(() => {
     setEnabled((prev) => {
       const next = !prev;
@@ -40,7 +55,10 @@ export function useAudio() {
         osc.start(t);
         osc.stop(t + 0.45);
       });
-      setTimeout(() => ctx.close(), 1200);
+      const timer = setTimeout(() => {
+        ctx.close().catch(() => {});
+      }, 1200);
+      pendingAudioRef.current = { timer, ctx };
     } catch {
       // AudioContext not available
     }

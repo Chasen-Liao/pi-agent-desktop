@@ -286,6 +286,9 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
 
   const handleAgentModeChange = useCallback(
     async (mode: AgentMode) => {
+      const prevMode = agentMode;
+      // Optimistic update; roll back to the previous mode if the server call
+      // fails so the UI never diverges from the server's agent mode.
       setAgentMode(mode);
       setCanExecutePlan(false);
       const sid = sessionIdRef.current;
@@ -294,9 +297,10 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
         await sendAgentCommand(sid, { type: "set_agent_mode", mode });
       } catch (e) {
         console.error("Failed to set agent mode:", e);
+        setAgentMode(prevMode);
       }
     },
-    [isNew, sessionIdRef, setAgentMode, setCanExecutePlan]
+    [agentMode, isNew, sessionIdRef, setAgentMode, setCanExecutePlan]
   );
 
   const handleExecutePlan = useCallback(async () => {
@@ -315,17 +319,31 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
     if (!sid) return;
+    // Optimistically reflect the abort so agentRunning isn't stuck true if the
+    // agent_end SSE event is lost; roll back + reconnect if the command fails.
+    setAgentRunning(false);
     try {
       await sendAgentCommand(sid, { type: "abort" });
+      // agentRunning=false tears down the SSE stream (see useAgentEvents), so
+      // agent_end won't arrive — end streaming state and reload the transcript
+      // to sync the final (aborted) message state.
+      dispatch({ type: "end" });
+      setAgentPhase(null);
+      await loadSession(sid);
     } catch (e) {
       console.error("Failed to abort:", e);
+      setAgentRunning(true);
+      connectEvents(sid);
     }
-  }, [sessionIdRef]);
+  }, [connectEvents, dispatch, loadSession, sessionIdRef, setAgentPhase, setAgentRunning]);
 
   const handleFork = useCallback(
     async (entryId: string) => {
       const sid = sessionIdRef.current;
-      if (!sid) return;
+      // entryId can be undefined/empty while a message is streaming (SSE events
+      // don't carry the session entry id until the transcript is reloaded).
+      // Never send an empty fork entryId to the server.
+      if (!sid || !entryId) return;
       setForkingEntryId(entryId);
       try {
         const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(sid, {

@@ -107,6 +107,29 @@ test("contract: last tool_execution_end returns to waiting_model", () => {
   assert.deepEqual(phase, { kind: "waiting_model" });
 });
 
+test("contract: message_update keeps an active running_tools phase", () => {
+  // Streaming message_update carries tool-call content while tools are
+  // executing; it must NOT null out the running_tools phase. Only an explicit
+  // tool_execution_end / agent_end may clear it.
+  const { phase } = reduceEvents([
+    { type: "agent_start" },
+    { type: "tool_execution_start", toolCallId: "t1", toolName: "bash" },
+    { type: "message_update", message: { role: "assistant", content: [] } },
+    { type: "message_update", message: { role: "assistant", content: [] } },
+  ]);
+  assert.deepEqual(phase, { kind: "running_tools", tools: [{ id: "t1", name: "bash" }] });
+});
+
+test("contract: message_update still clears a waiting_model phase", () => {
+  // Without tools running, message_start/update should keep clearing the
+  // waiting_model phase (the no-spinner state while text streams).
+  const { phase } = reduceEvents([
+    { type: "agent_start" },
+    { type: "message_update", message: { role: "assistant", content: [] } },
+  ]);
+  assert.equal(phase, null);
+});
+
 test("contract: auto_retry and compaction lifecycle", () => {
   const mid = reduceEvents([
     { type: "agent_start" },
