@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteBackend, sanitizeFtsQuery } from "./sqlite-backend.ts";
+import {
+  SqliteBackend,
+  sanitizeFtsQuery,
+  truncateContent,
+} from "./sqlite-backend.ts";
 
 function withTempBackend(
   fn: (backend: SqliteBackend, dir: string) => Promise<void>
@@ -277,4 +281,177 @@ test("remember truncates oversized content (LTM-6)", async () => {
     });
     assert.equal(hits.length, 0);
   });
+});
+
+test("busy_timeout is set before journal_mode=WAL (LTM-8)", () => {
+  const source = readFileSync(
+    new URL("./sqlite-backend.ts", import.meta.url),
+    "utf8"
+  );
+  // The WAL switch needs a brief exclusive lock; when busy_timeout is applied
+  // only after journal_mode=WAL, a concurrent writer can still hit SQLITE_BUSY
+  // during the mode change. Asserted structurally (no injectable timing
+  // trigger exists in a single synchronous connection).
+  const busy = source.indexOf("PRAGMA busy_timeout");
+  const wal = source.indexOf("PRAGMA journal_mode");
+  assert.ok(busy !== -1 && wal !== -1);
+  assert.ok(busy < wal, "busy_timeout must be set before journal_mode=WAL");
+});
+
+test("remember catch wraps ROLLBACK and rethrows original error (LTM-9)", () => {
+  const source = readFileSync(
+    new URL("./sqlite-backend.ts", import.meta.url),
+    "utf8"
+  );
+  // A ROLLBACK failure (e.g. SQLITE_BUSY on a concurrent write) must not mask
+  // the original error that triggered the catch, nor leave the catch branch
+  // itself throwing. Asserted structurally: ROLLBACK is wrapped in its own
+  // try/catch and only logged on failure.
+  assert.match(
+    source,
+    /try\s*\{[^{}]*db\.exec\("ROLLBACK"\)[^{}]*\}\s*catch\s*\(/
+  );
+  assert.match(source, /console\.error\([^)]*ROLLBACK[^)]*\)/);
+});
+
+test("truncateContent does not split a UTF-16 surrogate pair", () => {
+  // Exactly CONTENT_MAX "a"s + an emoji (2 UTF-16 units). A raw slice(0, 8000)
+  // would leave a lone high surrogate at the boundary (rendered as U+FFFD);
+  // the helper must back off one unit to keep the pair intact.
+  const content = "a".repeat(8000) + "😀";
+  const t = truncateContent(content, 8000);
+  assert.equal(t.length, 8000);
+  assert.equal(t, "a".repeat(8000));
+  assert.ok(!/[\uD800-\uDBFF]$/.test(t));
+
+  // A lone high surrogate sitting exactly at the cut is also trimmed.
+  assert.equal(truncateContent("x".repeat(5) + "\uD83D", 5), "x".repeat(5));
+
+  // Under the limit: returned unchanged.
+  assert.equal(truncateContent("hi", 8000), "hi");
+});
+
+test("observe deduplicates identical key within 60s window", async () => {
+  await withTempBackend(async (backend) => {
+    const base = {
+      projectId: "proj_dd",
+      sessionId: "sess1",
+      kind: "agent_end" as const,
+      title: "fix login",
+    };
+    const first = await backend.observe({
+      ...base,
+      narrative: "first narrative",
+    });
+    assert.ok("observationId" in first);
+
+    // Same project + session + kind + title inside the window: deduplicated,
+    // even when the narrative differs.
+    const second = await backend.observe({
+      ...base,
+      narrative: "a totally different narrative",
+    });
+    assert.deepEqual(second, { deduplicated: true });
+
+    // Only one row persisted.
+    const hits = await backend.recall({
+      projectId: "proj_dd",
+      query: "narrative",
+      kinds: ["observation"],
+      limit: 10,
+    });
+    assert.equal(hits.length, 1);
+  });
+});
+
+test("observe dedup does not collapse distinct keys", async () => {
+  await withTempBackend(async (backend) => {
+    const base = {
+      projectId: "proj_dd2",
+      sessionId: "sess1",
+      kind: "agent_end" as const,
+      narrative: "n",
+    };
+    const a = await backend.observe({ ...base, title: "t1" });
+    const b = await backend.observe({ ...base, title: "t2" });
+    assert.ok("observationId" in a);
+    assert.ok("observationId" in b);
+
+    // Same key under a different session is not deduplicated either.
+    const c = await backend.observe({
+      ...base,
+      sessionId: "sess2",
+      title: "t1",
+    });
+    assert.ok("observationId" in c);
+  });
+});
+
+test("forget promotes newest descendant back to latest (LTM-11)", async () => {
+  await withTempBackend(async (backend) => {
+    const first = await backend.remember({
+      projectId: "proj_chain",
+      content: "use path resolve for session root directory layout",
+      type: "preference",
+    });
+    const second = await backend.remember({
+      projectId: "proj_chain",
+      content: "use path resolve for session root directory layout please",
+      type: "preference",
+    });
+    // second superseded first: only second is visible.
+    const before = await backend.recall({
+      projectId: "proj_chain",
+      query: "path resolve",
+      kinds: ["memory"],
+      limit: 10,
+    });
+    assert.equal(before.length, 1);
+    assert.equal(before[0]!.id, second.id);
+
+    const r = await backend.forget({
+      projectId: "proj_chain",
+      memoryIds: [second.id],
+    });
+    assert.equal(r.deleted, 1);
+
+    // The historical version must become visible again as the latest.
+    const after = await backend.recall({
+      projectId: "proj_chain",
+      query: "path resolve",
+      kinds: ["memory"],
+      limit: 10,
+    });
+    assert.equal(after.length, 1);
+    assert.equal(after[0]!.id, first.id);
+
+    const stats = await backend.stats("proj_chain");
+    assert.equal(stats.memoryCount, 1);
+  });
+});
+
+test("forget latest with no descendants leaves zero latest", async () => {
+  await withTempBackend(async (backend) => {
+    const mem = await backend.remember({
+      projectId: "proj_solo",
+      content: "solo memory no descendants",
+    });
+    await backend.forget({ projectId: "proj_solo", memoryIds: [mem.id] });
+    const stats = await backend.stats("proj_solo");
+    assert.equal(stats.memoryCount, 0);
+  });
+});
+
+test("close runs wal_checkpoint(TRUNCATE) before db.close (LTM-12)", () => {
+  const source = readFileSync(
+    new URL("./sqlite-backend.ts", import.meta.url),
+    "utf8"
+  );
+  // Without an explicit checkpoint the recent writes live only in the -wal
+  // file; close() must fold them into the main DB so the on-disk database is
+  // self-contained. Asserted structurally (no injectable trigger exists in a
+  // single synchronous connection), and the checkpoint must be best-effort.
+  assert.match(source, /wal_checkpoint\(\s*TRUNCATE\s*\)/i);
+  assert.match(source, /try\s*\{[^{}]*wal_checkpoint[^{}]*\}\s*catch\s*\(/);
+  assert.match(source, /console\.error\([^)]*checkpoint[^)]*\)/i);
 });

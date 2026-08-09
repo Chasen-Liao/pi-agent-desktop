@@ -19,6 +19,7 @@ const SNIPPET_MAX = 240;
 const TITLE_MAX = 80;
 const NARRATIVE_MAX = 4000;
 const CONTENT_MAX = 8000;
+const OBSERVE_DEDUP_WINDOW_MS = 60_000;
 
 /** Strip FTS5 operators; return space-joined quoted tokens for safe MATCH. */
 export function sanitizeFtsQuery(q: string): string {
@@ -57,16 +58,28 @@ function clampLimit(limit: number | undefined): number {
   return Math.min(MAX_LIMIT, Math.max(1, Math.floor(limit)));
 }
 
+/** Truncate to `max` UTF-16 units; if the cut splits a surrogate pair, back off one. */
+export function truncateContent(content: string, max: number): string {
+  if (content.length <= max) return content;
+  const cut = content.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) {
+    return cut.slice(0, -1);
+  }
+  return cut;
+}
+
 export class SqliteBackend implements MemoryBackend {
   private readonly db: DatabaseSync;
 
   constructor(dbPath: string) {
     mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new DatabaseSync(dbPath);
-    this.db.exec("PRAGMA journal_mode = WAL;");
-    // A second handle (HMR-stale instance, concurrent open) writing at the
-    // same time would throw SQLITE_BUSY immediately without this timeout.
+    // Set the busy timeout before journal_mode=WAL: the mode switch needs a
+    // brief exclusive lock, so a concurrent writer can otherwise still throw
+    // SQLITE_BUSY before the timeout is in place.
     this.db.exec("PRAGMA busy_timeout = 5000;");
+    this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA foreign_keys = ON;");
     this.initSchema();
   }
@@ -122,10 +135,7 @@ export class SqliteBackend implements MemoryBackend {
     input: RememberInput
   ): Promise<{ id: string; type: MemoryType }> {
     const type: MemoryType = input.type ?? "fact";
-    const content =
-      input.content.length > CONTENT_MAX
-        ? input.content.slice(0, CONTENT_MAX)
-        : input.content;
+    const content = truncateContent(input.content, CONTENT_MAX);
     const title = titleFromContent(content);
     const now = nowIso();
     const id = newId("mem");
@@ -188,7 +198,14 @@ export class SqliteBackend implements MemoryBackend {
 
       this.db.exec("COMMIT");
     } catch (err) {
-      this.db.exec("ROLLBACK");
+      // A failed ROLLBACK (e.g. SQLITE_BUSY on a concurrent write) must not
+      // mask the original error that triggered this catch, nor leave the
+      // catch branch itself throwing.
+      try {
+        this.db.exec("ROLLBACK");
+      } catch (rollbackErr) {
+        console.error("LTM: ROLLBACK failed after remember error", rollbackErr);
+      }
       throw err;
     }
 
@@ -281,6 +298,31 @@ export class SqliteBackend implements MemoryBackend {
   async observe(
     input: ObserveInput
   ): Promise<{ observationId: string } | { deduplicated: true }> {
+    // Drop repeated observations of the same project/session/kind/title within
+    // a short window (e.g. the same agent_end firing twice) so one session does
+    // not accumulate duplicate rows. The dedup key intentionally ignores the
+    // narrative — only the identity of the observation matters.
+    const dedupCutoff = new Date(
+      Date.now() - OBSERVE_DEDUP_WINDOW_MS
+    ).toISOString();
+    const existing = this.db
+      .prepare(
+        `SELECT id FROM observations
+         WHERE project_id = ? AND session_id = ? AND kind = ? AND title = ?
+           AND created_at >= ?
+         LIMIT 1`
+      )
+      .get(
+        input.projectId,
+        input.sessionId,
+        input.kind,
+        input.title,
+        dedupCutoff
+      );
+    if (existing) {
+      return { deduplicated: true };
+    }
+
     const id = newId("obs");
     const narrative =
       input.narrative.length > NARRATIVE_MAX
@@ -321,15 +363,32 @@ export class SqliteBackend implements MemoryBackend {
     let deleted = 0;
 
     if (input.memoryIds?.length) {
+      const getRow = this.db.prepare(
+        `SELECT is_latest, parent_id FROM memories WHERE id = ? AND project_id = ?`
+      );
       const delMem = this.db.prepare(
         `DELETE FROM memories WHERE id = ? AND project_id = ?`
       );
       const delMemFts = this.db.prepare(`DELETE FROM memories_fts WHERE id = ?`);
+      const setLatest = this.db.prepare(
+        `UPDATE memories SET is_latest = 1 WHERE id = ? AND project_id = ?`
+      );
       for (const id of input.memoryIds) {
+        const row = getRow.get(id, input.projectId) as
+          | { is_latest: number; parent_id: string | null }
+          | undefined;
         const result = delMem.run(id, input.projectId) as { changes: number };
         if (result.changes > 0) {
           delMemFts.run(id);
           deleted += result.changes;
+          // Deleting a latest memory strands every superseded version in its
+          // parent chain as is_latest=0, invisible to recall. Promote the
+          // newest remaining version (the direct parent, since each new
+          // version supersedes the previous) back to latest so one version
+          // always stays visible. No parent means no versions remain.
+          if (row && row.is_latest === 1 && row.parent_id) {
+            setLatest.run(row.parent_id, input.projectId);
+          }
         }
       }
     }
@@ -385,6 +444,15 @@ export class SqliteBackend implements MemoryBackend {
   }
 
   async close(): Promise<void> {
+    try {
+      // Fold the WAL into the main DB file so the on-disk database is
+      // self-contained (recent writes are not left stranded in the -wal file).
+      this.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch (err) {
+      // Close is best-effort: a failed checkpoint must not block releasing the
+      // handle, and must not throw out of close().
+      console.error("LTM: wal_checkpoint failed on close", err);
+    }
     this.db.close();
   }
 }
