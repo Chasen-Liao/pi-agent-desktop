@@ -4,6 +4,12 @@ import { useCallback, useRef, useState } from "react";
 import type { AgentMessage, SessionTreeNode } from "../../lib/types";
 import { fetchSession, fetchContext } from "./session-loader-api";
 
+/** Latest-request-wins guard: stale() goes true once a newer call bumps the ref. */
+function latestRequestStale(ref: { current: number }): () => boolean {
+  const reqId = ++ref.current;
+  return () => reqId !== ref.current;
+}
+
 export interface SessionData {
   sessionId: string;
   filePath: string;
@@ -48,8 +54,7 @@ export function useSessionLoader(isNew: boolean) {
   const loadContextReqIdRef = useRef(0);
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false): Promise<LoadedSessionState | null> => {
-    const reqId = ++loadReqIdRef.current;
-    const stale = () => reqId !== loadReqIdRef.current;
+    const stale = latestRequestStale(loadReqIdRef);
     try {
       if (showLoading) setLoading(true);
       const d = await fetchSession(sid, includeState) as SessionData & { agentState?: LoadedAgentState } | null;
@@ -82,8 +87,7 @@ export function useSessionLoader(isNew: boolean) {
   }, []);
 
   const loadContext = useCallback(async (sid: string, leafId: string | null) => {
-    const reqId = ++loadContextReqIdRef.current;
-    const stale = () => reqId !== loadContextReqIdRef.current;
+    const stale = latestRequestStale(loadContextReqIdRef);
     try {
       const d = await fetchContext(sid, leafId);
       if (stale()) return;

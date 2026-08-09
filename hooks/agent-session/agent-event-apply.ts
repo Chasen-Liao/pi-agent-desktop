@@ -214,6 +214,5 @@ export function applyPhaseOp(phase: AgentPhase, op: AgentPhaseOp): AgentPhase {
   if (op.type === "removeTool") return removeRunningTool(phase, op.id);
   // "clear": null out the phase unless tools are actively running — a
   // streaming message update must not wipe the running_tools indicator.
-  if (op.type === "clear") return phase?.kind === "running_tools" ? phase : null;
-  return phase;
+  return phase?.kind === "running_tools" ? phase : null;
 }

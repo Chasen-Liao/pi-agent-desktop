@@ -835,10 +835,15 @@ test("signal cleanup uses process.on with a re-entry guard so a second signal ca
     /signalCleanupStarted = true;[\s\S]*?await Promise\.allSettled\(sessions\.map\(\(s\) => s\.destroy\(\)\)\);/
   );
   // A second signal while a cleanup is draining exits immediately instead of
-  // racing a duplicate destroy pass over the same wrappers.
+  // racing a duplicate destroy pass over the same wrappers. The exit is
+  // factored into exitNow() but the guard branch must still call it and return.
   assert.match(
     source,
-    /if \(signalCleanupStarted\) \{\s*\n\s*process\.exit\(signal === "SIGINT" \? 130 : 143\);\s*\n\s*return;/
+    /const exitNow = \(\) => process\.exit\(signal === "SIGINT" \? 130 : 143\);/i
+  );
+  assert.match(
+    source,
+    /if \(signalCleanupStarted\) \{\s*\n\s*exitNow\(\);\s*\n\s*return;/
   );
   // The 'exit' event stays fire-and-forget (unawaitable) with per-wrapper catch.
   assert.match(source, /process\.once\("exit"/);

@@ -97,6 +97,10 @@ export class SqliteBackend implements MemoryBackend {
         created_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_obs_project ON observations(project_id);
+      -- dedup 查询(project_id, session_id, kind, title, created_at)在每次 observe 跑,
+      -- 组合索引把单 session 窗口内的点查降到 O(log n),避免随项目观察数线性扫描。
+      CREATE INDEX IF NOT EXISTS idx_obs_dedup
+        ON observations(project_id, session_id, kind, title);
 
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,

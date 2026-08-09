@@ -56,6 +56,9 @@ export function useAudio() {
         osc.stop(t + 0.45);
       });
       const timer = setTimeout(() => {
+        // Clear the ref once the deferred close fires so unmount's cleanup
+        // doesn't close an already-closed context.
+        if (pendingAudioRef.current?.ctx === ctx) pendingAudioRef.current = null;
         ctx.close().catch(() => {});
       }, 1200);
       pendingAudioRef.current = { timer, ctx };

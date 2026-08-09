@@ -14,42 +14,21 @@ export const dynamic = "force-dynamic";
 /** GET /api/memory/stats?cwd= */
 export async function GET(req: Request) {
   const requestId = getRequestId(req);
+  const jsonError = (message: string, status: number) =>
+    NextResponse.json({ error: message }, { status, headers: { "x-request-id": requestId } });
   try {
     const parsed = parseStatsQuery(new URL(req.url));
-    if (!parsed.ok) {
-      return NextResponse.json(
-        { error: parsed.error },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
-    }
+    if (!parsed.ok) return jsonError(parsed.error, 400);
 
     const service = getMemoryService();
-    if (!service.isEnabled()) {
-      return NextResponse.json(
-        { error: LTM_DISABLED },
-        { status: 503, headers: { "x-request-id": requestId } }
-      );
-    }
+    if (!service.isEnabled()) return jsonError(LTM_DISABLED, 503);
 
     const stats = await service.statsFromCwd(parsed.value.cwd);
     return NextResponse.json(stats, { headers: { "x-request-id": requestId } });
   } catch (error) {
-    if (isLtmDisabledError(error)) {
-      return NextResponse.json(
-        { error: LTM_DISABLED },
-        { status: 503, headers: { "x-request-id": requestId } }
-      );
-    }
-    if (isStatsNotSupportedError(error)) {
-      return NextResponse.json(
-        { error: LTM_STATS_NOT_SUPPORTED },
-        { status: 501, headers: { "x-request-id": requestId } }
-      );
-    }
+    if (isLtmDisabledError(error)) return jsonError(LTM_DISABLED, 503);
+    if (isStatsNotSupportedError(error)) return jsonError(LTM_STATS_NOT_SUPPORTED, 501);
     logApiError({ route: "/api/memory/stats", method: "GET", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(errorMessage(error), 500);
   }
 }

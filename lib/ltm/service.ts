@@ -2,7 +2,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { MemoryBackend } from "./backend.ts";
 import { AgentMemoryRestBackend } from "./agentmemory-backend.ts";
 import { getLtmConfig, type LtmConfig } from "./config.ts";
-import { LTM_STATS_NOT_SUPPORTED } from "./http.ts";
+import { LTM_DISABLED, LTM_STATS_NOT_SUPPORTED } from "./http.ts";
 import { projectIdFromCwd } from "./project-id.ts";
 import { SqliteBackend } from "./sqlite-backend.ts";
 import type {
@@ -13,8 +13,6 @@ import type {
   RecallInput,
   RememberInput,
 } from "./types.ts";
-
-const DISABLED_ERROR = "ltm_disabled";
 
 /** How long a cached backend-construction failure is trusted before the
  * singleton retries construction once (see getMemoryService). */
@@ -41,11 +39,11 @@ function ltmGlobal(): LtmServiceGlobal {
 class NoopMemoryBackend implements MemoryBackend {
   async remember(input: RememberInput): Promise<{ id: string; type: MemoryType }> {
     void input;
-    throw new Error(DISABLED_ERROR);
+    throw new Error(LTM_DISABLED);
   }
   async recall(input: RecallInput): Promise<RecallHit[]> {
     void input;
-    throw new Error(DISABLED_ERROR);
+    throw new Error(LTM_DISABLED);
   }
   async observe(input: ObserveInput): Promise<{ observationId: string } | { deduplicated: true }> {
     void input;
@@ -53,10 +51,10 @@ class NoopMemoryBackend implements MemoryBackend {
   }
   async forget(input: ForgetInput): Promise<{ deleted: number }> {
     void input;
-    throw new Error(DISABLED_ERROR);
+    throw new Error(LTM_DISABLED);
   }
   async health(): Promise<{ ok: boolean; backend: string; detail?: string }> {
-    return { ok: false, backend: "disabled", detail: DISABLED_ERROR };
+    return { ok: false, backend: "disabled", detail: LTM_DISABLED };
   }
 }
 
@@ -109,7 +107,7 @@ export class MemoryService {
 
   async health(): Promise<{ ok: boolean; backend: string; detail?: string }> {
     if (!this.config.enabled) {
-      return { ok: false, backend: this.config.backend, detail: DISABLED_ERROR };
+      return { ok: false, backend: this.config.backend, detail: LTM_DISABLED };
     }
     return this.backend.health();
   }
@@ -189,7 +187,7 @@ export class MemoryService {
 
   private assertEnabled(): void {
     if (!this.config.enabled) {
-      throw new Error(DISABLED_ERROR);
+      throw new Error(LTM_DISABLED);
     }
   }
 }

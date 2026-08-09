@@ -45,11 +45,15 @@ export interface ForgetBody {
 }
 
 export function isLtmDisabledError(err: unknown): boolean {
-  return err instanceof Error && err.message === LTM_DISABLED;
+  return isLtmError(err, LTM_DISABLED);
 }
 
 export function isStatsNotSupportedError(err: unknown): boolean {
-  return err instanceof Error && err.message === LTM_STATS_NOT_SUPPORTED;
+  return isLtmError(err, LTM_STATS_NOT_SUPPORTED);
+}
+
+function isLtmError(err: unknown, code: string): boolean {
+  return err instanceof Error && err.message === code;
 }
 
 export function isMemoryType(value: unknown): value is MemoryType {

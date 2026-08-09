@@ -652,14 +652,15 @@ function getRegistry(): Map<string, AgentSessionWrapper> {
     //     duplicate cleanup flow is ever started
     let signalCleanupStarted = false;
     const gracefulCleanup = async (signal: string) => {
+      const exitNow = () => process.exit(signal === "SIGINT" ? 130 : 143);
       if (signalCleanupStarted) {
-        process.exit(signal === "SIGINT" ? 130 : 143);
+        exitNow();
         return;
       }
       signalCleanupStarted = true;
       const sessions = globalThis.__piSessions ? [...globalThis.__piSessions.values()] : [];
       await Promise.allSettled(sessions.map((s) => s.destroy()));
-      process.exit(signal === "SIGINT" ? 130 : 143);
+      exitNow();
     };
     process.once("exit", exitCleanup);
     process.on("SIGINT", () => { void gracefulCleanup("SIGINT"); });
