@@ -640,14 +640,30 @@ function getRegistry(): Map<string, AgentSessionWrapper> {
     // fire-and-forget destroy. destroy() never rejects (every step is wrapped),
     // allSettled is belt-and-suspenders. Conventional signal exit codes are
     // preserved (128 + signal).
+    //
+    // The event system never awaits the handler's Promise, so a one-shot `once`
+    // binding would be consumed by the first signal — a second SIGINT/SIGTERM
+    // would then fall back to default behavior and kill the process mid-destroy,
+    // losing the final .jsonl writes. The handlers therefore stay `process.on`
+    // (repeatable) behind a "cleaning in progress" guard flag:
+    //   - first signal → start the cleanup, await every destroy(), then exit
+    //   - second signal while cleaning → immediate exit (the first cleanup is
+    //     already draining destroys; a repeat Ctrl+C means force-quit), and no
+    //     duplicate cleanup flow is ever started
+    let signalCleanupStarted = false;
     const gracefulCleanup = async (signal: string) => {
+      if (signalCleanupStarted) {
+        process.exit(signal === "SIGINT" ? 130 : 143);
+        return;
+      }
+      signalCleanupStarted = true;
       const sessions = globalThis.__piSessions ? [...globalThis.__piSessions.values()] : [];
       await Promise.allSettled(sessions.map((s) => s.destroy()));
       process.exit(signal === "SIGINT" ? 130 : 143);
     };
     process.once("exit", exitCleanup);
-    process.once("SIGINT", () => { void gracefulCleanup("SIGINT"); });
-    process.once("SIGTERM", () => { void gracefulCleanup("SIGTERM"); });
+    process.on("SIGINT", () => { void gracefulCleanup("SIGINT"); });
+    process.on("SIGTERM", () => { void gracefulCleanup("SIGTERM"); });
   }
   return globalThis.__piSessions;
 }

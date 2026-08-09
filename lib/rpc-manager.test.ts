@@ -803,14 +803,43 @@ test("resolveSessionPath revalidates a stale negative cache when the session is 
 // is already tearing down) so it stays fire-and-forget per wrapper; SIGINT /
 // SIGTERM handlers CAN await and must drain every wrapper's destroy() before
 // the process continues, or the final batch of .jsonl writes is lost.
+//
+// Important fix: the event system never awaits the handler's Promise, so a
+// one-shot `once` binding is consumed by the first signal — a second
+// SIGINT/SIGTERM would then fall back to default behavior and kill the
+// process mid-destroy, losing the final .jsonl writes. The handlers must stay
+// `process.on` (repeatable) behind a "cleaning in progress" guard flag:
+//   - first signal → start cleanup, await every destroy(), then exit
+//   - second signal while cleaning → immediate exit (user's force-quit), no
+//     duplicate cleanup flow started
 
-test("process signal cleanup awaits destroys on SIGINT/SIGTERM (P2-3, source contract)", () => {
-  // The core contract: signal cleanup must collect all wrappers and wait for
-  // each destroy() via Promise.allSettled before the process exits.
+test("signal cleanup uses process.on with a re-entry guard so a second signal cannot interrupt destroy (P2-3, source contract)", () => {
+  // The core contract: the first signal must collect all wrappers and wait
+  // for each destroy() via Promise.allSettled before the process exits.
   assert.match(source, /Promise\.allSettled\(sessions\.map\(\(s\) => s\.destroy\(\)\)\)/);
-  // Both signals must be wired to the awaiting path.
-  assert.match(source, /process\.once\("SIGINT"/);
-  assert.match(source, /process\.once\("SIGTERM"/);
+  // Handlers must be `process.on` (repeatable) — never one-shot `once`, so a
+  // second signal while the first cleanup drains still reaches the guard
+  // instead of restoring default signal behavior (immediate process kill).
+  assert.match(source, /process\.on\("SIGINT"/);
+  assert.match(source, /process\.on\("SIGTERM"/);
+  assert.doesNotMatch(source, /process\.once\("SIGINT"/);
+  assert.doesNotMatch(source, /process\.once\("SIGTERM"/);
+  // A "cleaning in progress" guard flag gates re-entry: exactly one cleanup
+  // flow may run at a time.
+  assert.match(source, /signalCleanupStarted\s*=\s*false/);
+  assert.match(source, /signalCleanupStarted\s*=\s*true/);
+  // The flag is set synchronously before any await, so a second signal during
+  // the drain can never start a duplicate cleanup flow.
+  assert.match(
+    source,
+    /signalCleanupStarted = true;[\s\S]*?await Promise\.allSettled\(sessions\.map\(\(s\) => s\.destroy\(\)\)\);/
+  );
+  // A second signal while a cleanup is draining exits immediately instead of
+  // racing a duplicate destroy pass over the same wrappers.
+  assert.match(
+    source,
+    /if \(signalCleanupStarted\) \{\s*\n\s*process\.exit\(signal === "SIGINT" \? 130 : 143\);\s*\n\s*return;/
+  );
   // The 'exit' event stays fire-and-forget (unawaitable) with per-wrapper catch.
   assert.match(source, /process\.once\("exit"/);
   assert.match(source, /s\.destroy\(\)\.catch\(\(err\) => console\.error\("Error during exit destroy:", err\)\)/);
