@@ -71,8 +71,17 @@ export async function resolveSessionPath(sessionId: string): Promise<string | nu
   const state = getPathCacheState();
   const cached = getCachedSessionPath(state, sessionId);
   if (cached.hit) return cached.path;
-  // Negative cache: avoid full-scan thrash on unknown ids
-  if (cached.negative) return null;
+
+  // A negative entry can go stale within its TTL: the session file may have
+  // been created right after the miss was recorded (先查后建 — a fork/clone
+  // registering a brand-new id), which would hide the now-existing session
+  // from real requests → false 404. If a live RPC wrapper exists for this id,
+  // the file is guaranteed to exist (startRpcSession opened it), so drop the
+  // stale negative and fall through to a re-scan instead of returning null.
+  if (cached.negative) {
+    if (!getLiveRpcSession(sessionId)) return null;
+    state.misses.delete(sessionId);
+  }
 
   // Cache miss: scan all sessions to populate cache, then retry
   await listAllSessions();
@@ -80,6 +89,15 @@ export async function resolveSessionPath(sessionId: string): Promise<string | nu
   if (!after) markSessionPathMiss(state, sessionId);
   else state.misses.delete(sessionId);
   return after;
+}
+
+/** Live RPC wrappers are stored on globalThis by lib/rpc-manager.ts (HMR-safe). */
+type LiveRpcSession = { isAlive(): boolean };
+
+function getLiveRpcSession(sessionId: string): LiveRpcSession | undefined {
+  const registry = (globalThis as { __piSessions?: Map<string, LiveRpcSession> }).__piSessions;
+  const session = registry?.get(sessionId);
+  return session?.isAlive() ? session : undefined;
 }
 
 export function cacheSessionPath(sessionId: string, filePath: string): void {

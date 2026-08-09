@@ -46,11 +46,12 @@ function makeStubInner(overrides: {
   followUp?: (msg: string, imgs?: unknown) => Promise<unknown>;
   setActiveToolsByName?: (names: string[]) => void;
   abort?: () => Promise<void>;
+  isStreaming?: boolean;
 } = {}) {
   return {
     sessionId: "stub",
     sessionFile: "stub.jsonl",
-    isStreaming: false,
+    isStreaming: overrides.isStreaming ?? false,
     isCompacting: false,
     autoCompactionEnabled: false,
     autoRetryEnabled: false,
@@ -716,3 +717,165 @@ test("startRpcSession restores historical agentMode from session entries when no
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ============================================================================
+// Task P2: concurrency / robustness fixes in the RPC session layer
+// ============================================================================
+
+// --- P2-1: prompt/fork/compact must be rejected while the inner session is
+// streaming. The UI pre-disables these controls, but the server guard is the
+// deterministic backstop against double-fired prompts, mid-stream forks (which
+// copy a half-written .jsonl and then destroy() aborts the running loop), and
+// mid-stream compacts (which read an in-flux branch).
+
+test("send prompt is rejected while streaming (P2-1)", async () => {
+  const inner = makeStubInner({ isStreaming: true });
+  const w = new AgentSessionWrapper(inner);
+  w.start();
+  await assert.rejects(w.send({ type: "prompt", message: "hi" }), /Session is streaming/);
+});
+
+test("send fork is rejected while streaming (P2-1)", async () => {
+  const inner = makeStubInner({ isStreaming: true });
+  const w = new AgentSessionWrapper(inner);
+  w.start();
+  await assert.rejects(w.send({ type: "fork", entryId: "x" }), /Session is streaming/);
+});
+
+test("send compact is rejected while streaming (P2-1)", async () => {
+  const inner = makeStubInner({ isStreaming: true });
+  const w = new AgentSessionWrapper(inner);
+  w.start();
+  await assert.rejects(w.send({ type: "compact" }), /Session is streaming/);
+});
+
+// --- P2-2: a negative path-cache entry recorded just before a session file
+// was created (先查后建) must not hide the now-existing session from real
+// requests for up to the 30s TTL. A live RPC wrapper means startRpcSession
+// opened the file, so a stale negative is dropped and the lookup re-scans.
+// resolveSessionPath is a behaviorally-testable exported function; we drive it
+// with a real session file (pointing the agent dir at a temp dir via env) and
+// a live wrapper in the registry.
+
+test("resolveSessionPath revalidates a stale negative cache when the session is live (P2-2)", async () => {
+  const { SessionManager } = await import("@earendil-works/pi-coding-agent");
+  const { mkdtempSync, rmSync } = await import("fs");
+  const { tmpdir } = await import("os");
+  const { join } = await import("path");
+
+  const dir = mkdtempSync(join(tmpdir(), "pi-pathcache-reval-"));
+  const prevAgentDir = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = dir;
+  try {
+    // SessionManager.create(cwd) puts the file in the env-pointed default
+    // session dir (<agentDir>/sessions/<encoded-cwd>), which is exactly what
+    // SessionManager.listAll() scans — so the re-scan can find it.
+    const sm = SessionManager.create(dir);
+    sm.appendMessage({ role: "user", content: "hello" } as never);
+    (sm as unknown as { _rewriteFile?: () => void })._rewriteFile?.();
+    const file = sm.getSessionFile()!;
+    const id = sm.getSessionId();
+
+    // Simulate a lookup that ran BEFORE the file existed: a fresh cache state
+    // carrying a 30s negative entry for this id.
+    const { createSessionPathCacheState, markSessionPathMiss } = await import("./session-path-cache.ts");
+    const state = createSessionPathCacheState();
+    markSessionPathMiss(state, id, Date.now(), 30_000);
+    (globalThis as { __piSessionPathCacheState?: unknown }).__piSessionPathCacheState = state;
+
+    // A live RPC wrapper now exists for the id (startRpcSession opened it).
+    const w = new AgentSessionWrapper(makeStubInner());
+    (globalThis as { __piSessions?: Map<string, unknown> }).__piSessions = new Map([[id, w]]);
+
+    const { resolveSessionPath } = await import("./session-reader.ts");
+    const resolved = await resolveSessionPath(id);
+    assert.equal(resolved, file, "a live session must not be hidden by a stale negative cache entry");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    if (prevAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = prevAgentDir;
+    delete (globalThis as { __piSessionPathCacheState?: unknown }).__piSessionPathCacheState;
+    delete (globalThis as { __piSessions?: unknown }).__piSessions;
+  }
+});
+
+// --- P2-3: process-exit cleanup. The 'exit' event cannot await (the process
+// is already tearing down) so it stays fire-and-forget per wrapper; SIGINT /
+// SIGTERM handlers CAN await and must drain every wrapper's destroy() before
+// the process continues, or the final batch of .jsonl writes is lost.
+
+test("process signal cleanup awaits destroys on SIGINT/SIGTERM (P2-3, source contract)", () => {
+  // The core contract: signal cleanup must collect all wrappers and wait for
+  // each destroy() via Promise.allSettled before the process exits.
+  assert.match(source, /Promise\.allSettled\(sessions\.map\(\(s\) => s\.destroy\(\)\)\)/);
+  // Both signals must be wired to the awaiting path.
+  assert.match(source, /process\.once\("SIGINT"/);
+  assert.match(source, /process\.once\("SIGTERM"/);
+  // The 'exit' event stays fire-and-forget (unawaitable) with per-wrapper catch.
+  assert.match(source, /process\.once\("exit"/);
+  assert.match(source, /s\.destroy\(\)\.catch\(\(err\) => console\.error\("Error during exit destroy:", err\)\)/);
+});
+
+// --- P2-4: the onDestroy → registry.delete(realSessionId) callback must not
+// evict a NEWER wrapper that was registered under the same id while the old
+// wrapper's destroy() was still in flight (its onDestroy runs only after
+// awaiting abort/unsubscribe).
+
+test("destroy of a replaced wrapper does not unregister the new wrapper (P2-4)", async () => {
+  const { SessionManager } = await import("@earendil-works/pi-coding-agent");
+  const { mkdtempSync, rmSync } = await import("fs");
+  const { tmpdir } = await import("os");
+  const { join } = await import("path");
+
+  const dir = mkdtempSync(join(tmpdir(), "pi-rpc-owner-test-"));
+  let id: string | undefined;
+  try {
+    const sm = SessionManager.create(dir, dir);
+    sm.appendMessage({ role: "user", content: "hello" } as never);
+    (sm as unknown as { _rewriteFile?: () => void })._rewriteFile?.();
+    const file = sm.getSessionFile()!;
+    id = sm.getSessionId();
+
+    // Start a real wrapper — this registers it under `id` and installs the real
+    // onDestroy → registry.delete(id) callback from lib/rpc-manager.ts.
+    const first = await startRpcSession(id, file, dir);
+    const registry = (globalThis as { __piSessions: Map<string, AgentSessionWrapper> }).__piSessions;
+    assert.equal(registry.get(id), first.session);
+
+    // Simulate the race: while the old wrapper is being destroyed, a NEW
+    // wrapper is registered under the same id.
+    const replacement = new AgentSessionWrapper(makeStubInner());
+    registry.set(id, replacement);
+
+    // Fire the old wrapper's onDestroy callbacks.
+    await first.session.destroy();
+
+    // The old wrapper's registry.delete(id) must NOT remove the replacement.
+    assert.equal(registry.get(id), replacement);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    // Best-effort cleanup so later tests don't observe a half-dead registry.
+    if (id) (globalThis as { __piSessions?: Map<string, unknown> }).__piSessions?.delete(id);
+  }
+});
+
+// --- P2-5: destroy() must unsubscribe BEFORE aborting. abort() emits terminal
+// events (agent_end, agent_error, …) as it tears down the loop; with the SSE
+// listener still attached those would be delivered to a stream that is about
+// to close (previously papered over by the M2 try/catch per listener).
+// Unsubscribing first shrinks the delivery window to ~zero.
+
+test("destroy() unsubscribes before aborting to stop event delivery (P2-5)", async () => {
+  const order: string[] = [];
+  const inner = makeStubInner({
+    abort: async () => { order.push("abort"); },
+    subscribe: () => {
+      return () => { order.push("unsubscribe"); };
+    },
+  });
+  const w = new AgentSessionWrapper(inner);
+  w.start();
+  await w.destroy();
+  assert.deepEqual(order, ["unsubscribe", "abort"]);
+});
+

@@ -294,6 +294,12 @@ export class AgentSessionWrapper {
 
     switch (type) {
       case "prompt": {
+        // Server-side backstop: the UI disables the send button while
+        // streaming, but a racing / double-fired prompt (double-click, retry
+        // after a dropped agent_end) must not start a second agent loop in
+        // parallel with the in-flight one. Reject deterministically here
+        // instead of relying on pi's internal isStreaming handling.
+        if (this.inner.isStreaming) throw new Error("Session is streaming");
         // Fire and forget — events come via subscribe
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined)
@@ -321,6 +327,12 @@ export class AgentSessionWrapper {
       }
 
       case "fork": {
+        // Refuse to fork while the session is actively streaming: the branch
+        // copy below reads the .jsonl up to the fork point, which is unsafe
+        // mid-write (a half-appended line), and the trailing this.destroy()
+        // would abort the running loop mid-turn. The UI disables fork while
+        // streaming; this is the deterministic server-side backstop.
+        if (this.inner.isStreaming) throw new Error("Session is streaming");
         const entryId = command.entryId as string;
         const sessionManager = this.inner.sessionManager;
         const currentSessionFile = this.inner.sessionFile;
@@ -397,6 +409,11 @@ export class AgentSessionWrapper {
       }
 
       case "compact": {
+        // Refuse to compact while streaming: the pre-check reads
+        // sessionManager.getBranch() (possibly mid-write) and pi's compact()
+        // aborts the running loop as a side effect. The UI hides the compact
+        // button while streaming; this is the server-side backstop.
+        if (this.inner.isStreaming) throw new Error("Session is streaming");
         // pi's compact() does not guard against empty messagesToSummarize — use findCutPoint
         // to pre-check and throw a clean error instead of generating a useless empty summary.
         const { findCutPoint, DEFAULT_COMPACTION_SETTINGS } = await import("@earendil-works/pi-coding-agent");
@@ -540,6 +557,19 @@ export class AgentSessionWrapper {
     if (!this._alive) return;
     this._alive = false;
     if (this.idleTimer) clearTimeout(this.idleTimer);
+    // Unsubscribe BEFORE aborting. abort() emits terminal events (agent_end,
+    // agent_error, …) as it tears down the loop; with the SSE listener still
+    // attached, those would be delivered to a stream that is about to close
+    // (previously papered over by the per-listener try/catch, M2). Detaching
+    // first shrinks that delivery window to ~zero.
+    // Await unsubscribe in case pi's subscribe() returns an async cleanup fn
+    // in the future. Current type is `() => void` (sync) — awaiting a void
+    // expression is a no-op but future-proof.
+    try {
+      await this.unsubscribe?.();
+    } catch (err) {
+      console.error("Error during unsubscribe:", err);
+    }
     // Terminate the inner pi agent loop. Without this, a forked/deleted
     // session keeps running and writing its .jsonl (snapshot after fork is
     // lost; DELETE fails on Windows with EPERM because the file is open), and
@@ -556,14 +586,6 @@ export class AgentSessionWrapper {
       console.error("Error destroying UI bridge:", err);
     }
     this._uiBridge = null;
-    // Await unsubscribe in case pi's subscribe() returns an async cleanup fn
-    // in the future. Current type is `() => void` (sync) — awaiting a void
-    // expression is a no-op but future-proof.
-    try {
-      await this.unsubscribe?.();
-    } catch (err) {
-      console.error("Error during unsubscribe:", err);
-    }
     for (const cb of this.onDestroyCallbacks) {
       try {
         await cb();
@@ -606,14 +628,26 @@ function normalizeStartOptions(
 function getRegistry(): Map<string, AgentSessionWrapper> {
   if (!globalThis.__piSessions) {
     globalThis.__piSessions = new Map();
-    const cleanup = () => {
+    // The 'exit' event cannot await (the process is already tearing down), so
+    // per-wrapper destroy stays fire-and-forget here.
+    const exitCleanup = () => {
       globalThis.__piSessions?.forEach((s) => {
         s.destroy().catch((err) => console.error("Error during exit destroy:", err));
       });
     };
-    process.once("exit", cleanup);
-    process.once("SIGINT", cleanup);
-    process.once("SIGTERM", cleanup);
+    // SIGINT/SIGTERM handlers CAN await: drain every wrapper's destroy() before
+    // the process exits, so the final batch of .jsonl writes is not lost to a
+    // fire-and-forget destroy. destroy() never rejects (every step is wrapped),
+    // allSettled is belt-and-suspenders. Conventional signal exit codes are
+    // preserved (128 + signal).
+    const gracefulCleanup = async (signal: string) => {
+      const sessions = globalThis.__piSessions ? [...globalThis.__piSessions.values()] : [];
+      await Promise.allSettled(sessions.map((s) => s.destroy()));
+      process.exit(signal === "SIGINT" ? 130 : 143);
+    };
+    process.once("exit", exitCleanup);
+    process.once("SIGINT", () => { void gracefulCleanup("SIGINT"); });
+    process.once("SIGTERM", () => { void gracefulCleanup("SIGTERM"); });
   }
   return globalThis.__piSessions;
 }
@@ -739,7 +773,13 @@ export async function startRpcSession(
     const realSessionFile = inner.sessionFile as string | undefined;
     if (realSessionFile) cacheSessionPath(realSessionId, realSessionFile);
 
-    wrapper.onDestroy(() => registry.delete(realSessionId));
+    // Ownership guard on the registry delete: destroy() is async and only runs
+    // onDestroy callbacks after awaiting abort/unsubscribe, so a NEWER wrapper
+    // started for the same id during that window can already be registered
+    // here. An unconditional delete would evict the live wrapper (P2-4).
+    wrapper.onDestroy(() => {
+      if (registry.get(realSessionId) === wrapper) registry.delete(realSessionId);
+    });
     registry.set(realSessionId, wrapper);
 
     return { session: wrapper, realSessionId };
