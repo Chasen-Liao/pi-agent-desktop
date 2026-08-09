@@ -320,20 +320,30 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
     const sid = sessionIdRef.current;
     if (!sid) return;
     // Optimistically reflect the abort so agentRunning isn't stuck true if the
-    // agent_end SSE event is lost; roll back + reconnect if the command fails.
+    // agent_end SSE event is lost; roll back + reconnect if the abort command
+    // itself fails.
     setAgentRunning(false);
     try {
       await sendAgentCommand(sid, { type: "abort" });
       // agentRunning=false tears down the SSE stream (see useAgentEvents), so
-      // agent_end won't arrive — end streaming state and reload the transcript
-      // to sync the final (aborted) message state.
+      // agent_end won't arrive — end streaming state now and reload the
+      // transcript below to sync the final (aborted) message state.
       dispatch({ type: "end" });
       setAgentPhase(null);
-      await loadSession(sid);
     } catch (e) {
       console.error("Failed to abort:", e);
       setAgentRunning(true);
       connectEvents(sid);
+      return;
+    }
+    // The abort succeeded. A reload failure (e.g. a network blip on the GET)
+    // must NOT be treated as an abort failure — the agent is already stopped,
+    // so restoring agentRunning here would leave it stuck true forever (no
+    // agent_end will ever arrive).
+    try {
+      await loadSession(sid);
+    } catch (e) {
+      console.error("Failed to reload session after abort:", e);
     }
   }, [connectEvents, dispatch, loadSession, sessionIdRef, setAgentPhase, setAgentRunning]);
 

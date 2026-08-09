@@ -36,6 +36,34 @@ test("handleAbort optimistically stops the agent and restores on failure", () =>
   assert.match(block, /connectEvents\(sid\);/);
 });
 
+test("handleAbort separates abort failure from transcript reload failure", () => {
+  // Regression: if the abort POST succeeds but the transcript reload GET
+  // throws (network blip), the reload failure must NOT be treated as an abort
+  // failure — restoring agentRunning after a successful abort would leave the
+  // UI stuck running forever (agent_end will never arrive).
+  const block = source.slice(
+    source.indexOf("const handleAbort"),
+    source.indexOf("const handleFork")
+  );
+
+  const abortIdx = block.indexOf('await sendAgentCommand(sid, { type: "abort" })');
+  const loadIdx = block.indexOf("await loadSession(sid)");
+  const restoreIdx = block.indexOf("setAgentRunning(true)");
+
+  assert.ok(abortIdx >= 0, "abort POST expected");
+  assert.ok(loadIdx >= 0, "transcript reload expected");
+  assert.ok(restoreIdx >= 0, "running restore expected");
+
+  // The restore (in the abort catch) must appear BEFORE the reload, so the
+  // reload is never wrapped by the abort failure path…
+  assert.ok(restoreIdx < loadIdx, "abort-catch restore must precede the reload");
+  // …and nothing after the reload may restore agentRunning.
+  assert.ok(
+    !block.slice(loadIdx).includes("setAgentRunning(true)"),
+    "a reload throw must never restore agentRunning"
+  );
+});
+
 // P2: while a message is streaming the transcript may be longer than
 // entryIds (SSE events carry no entry id until reload) — fork must never send
 // an empty entryId to the server.
