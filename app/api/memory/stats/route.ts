@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
-import { isLtmDisabledError, LTM_DISABLED, parseStatsQuery } from "@/lib/ltm/http";
+import {
+  isLtmDisabledError,
+  isStatsNotSupportedError,
+  LTM_DISABLED,
+  LTM_STATS_NOT_SUPPORTED,
+  parseStatsQuery,
+} from "@/lib/ltm/http";
 import { getMemoryService } from "@/lib/ltm/service";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +38,12 @@ export async function GET(req: Request) {
       return NextResponse.json(
         { error: LTM_DISABLED },
         { status: 503, headers: { "x-request-id": requestId } }
+      );
+    }
+    if (isStatsNotSupportedError(error)) {
+      return NextResponse.json(
+        { error: LTM_STATS_NOT_SUPPORTED },
+        { status: 501, headers: { "x-request-id": requestId } }
       );
     }
     logApiError({ route: "/api/memory/stats", method: "GET", requestId, error });

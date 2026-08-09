@@ -7,7 +7,15 @@ export type AgentMode = "plan" | "ask" | "full";
 export type ToolPreset = "none" | "default" | "full";
 
 export const PLAN_TOOLS: readonly string[] = ["read", "grep", "find", "ls"];
-export const ASK_CONFIRM_TOOLS: readonly string[] = ["bash", "write", "edit"];
+export const ASK_CONFIRM_TOOLS: readonly string[] = [
+  "bash",
+  "write",
+  "edit",
+  // LTM write/delete channels mutate durable project memory; keep them behind
+  // the same Ask confirm as filesystem writes.
+  "memory_save",
+  "memory_forget",
+];
 
 export const PRESET_NONE: readonly string[] = [];
 export const PRESET_DEFAULT: readonly string[] = ["read", "bash", "edit", "write"];

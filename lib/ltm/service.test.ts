@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { AgentMemoryRestBackend } from "./agentmemory-backend.ts";
@@ -14,6 +14,7 @@ import {
   MemoryService,
   resetMemoryServiceForTests,
 } from "./service.ts";
+import { LTM_STATS_NOT_SUPPORTED } from "./http.ts";
 import { projectIdFromCwd } from "./project-id.ts";
 
 function withTempAgentDir(
@@ -217,6 +218,25 @@ test("MemoryService with agentmemory backend health + throw", async () => {
   });
 });
 
+test("statsFromCwd on agentmemory backend throws structured not-supported (LTM-7)", async () => {
+  await withTempAgentDir(async (agentDir) => {
+    const cfg = mergeLtmConfig(agentDir, { backend: "agentmemory" });
+    const svc = MemoryService.create(cfg);
+    try {
+      await assert.rejects(
+        () => svc.statsFromCwd(agentDir),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.equal(err.message, LTM_STATS_NOT_SUPPORTED);
+          return true;
+        }
+      );
+    } finally {
+      await svc.close();
+    }
+  });
+});
+
 test("getMemoryService singleton reuses same instance for same agentDir", async () => {
   await withTempAgentDir(async (agentDir) => {
     resetMemoryServiceForTests();
@@ -253,5 +273,101 @@ test("rememberFromCwd scopes by projectId from cwd", async () => {
     } finally {
       await svc.close();
     }
+  });
+});
+
+test("getMemoryService rebuilds when observe flags change (LTM-1)", async () => {
+  await withTempAgentDir(async (agentDir) => {
+    resetMemoryServiceForTests();
+    const writeSettings = (ltm: Record<string, unknown>) =>
+      writeFileSync(
+        join(agentDir, "desktop-settings.json"),
+        JSON.stringify({ ltm }),
+        "utf-8"
+      );
+
+    writeSettings({ observeAgentEnd: true, agentmemoryUrl: "http://127.0.0.1:3111" });
+    const a = getMemoryService(agentDir);
+
+    // Runtime toggle of observeAgentEnd must invalidate the cached singleton;
+    // otherwise hooks read a stale config and the switch silently no-ops.
+    writeSettings({ observeAgentEnd: false, agentmemoryUrl: "http://127.0.0.1:3111" });
+    const b = getMemoryService(agentDir);
+
+    assert.notEqual(a, b, "observeAgentEnd change should rebuild the service");
+  });
+});
+
+test("getMemoryService with disabled config does not touch the sqlite file (LTM-2)", async () => {
+  await withTempAgentDir(async (agentDir) => {
+    resetMemoryServiceForTests();
+    writeFileSync(
+      join(agentDir, "desktop-settings.json"),
+      JSON.stringify({ ltm: { enabled: false } }),
+      "utf-8"
+    );
+    const svc = getMemoryService(agentDir);
+    assert.equal(svc.isEnabled(), false);
+    // Disabling LTM must not mkdir/open/create the DB at all — otherwise a
+    // read-only or missing directory turns a disabled feature into 500s and
+    // repeated error logs on every observe hook.
+    const dbPath = join(agentDir, "memory", "ltm.sqlite");
+    assert.equal(existsSync(dbPath), false);
+  });
+});
+
+test("getMemoryService caches a backend construction failure (LTM-3)", async () => {
+  await withTempAgentDir(async (agentDir) => {
+    resetMemoryServiceForTests();
+    // Block the DB directory with a regular file so SqliteBackend mkdir fails.
+    writeFileSync(join(agentDir, "memory"), "blocked", "utf-8");
+    writeFileSync(
+      join(agentDir, "desktop-settings.json"),
+      JSON.stringify({ ltm: { enabled: true } }),
+      "utf-8"
+    );
+
+    let first: unknown;
+    let second: unknown;
+    try {
+      getMemoryService(agentDir);
+    } catch (e) {
+      first = e;
+    }
+    try {
+      getMemoryService(agentDir);
+    } catch (e) {
+      second = e;
+    }
+
+    assert.ok(first instanceof Error);
+    // Same Error instance: the failure is cached, not re-constructed on every
+    // hook/tool call (which previously repeated mkdir + error logs per event).
+    assert.equal(second, first);
+  });
+});
+
+test("getMemoryService closes the previous instance when construction fails (LTM-3)", async () => {
+  await withTempAgentDir(async (agentDir) => {
+    resetMemoryServiceForTests();
+    // Working default config first.
+    const a = getMemoryService(agentDir);
+    assert.equal(a.isEnabled(), true);
+
+    // Switch to a config whose DB path is blocked by a regular file, so the
+    // new SqliteBackend construction fails mid-migration.
+    writeFileSync(join(agentDir, "blocked"), "x", "utf-8");
+    writeFileSync(
+      join(agentDir, "desktop-settings.json"),
+      JSON.stringify({ ltm: { dbPath: join(agentDir, "blocked", "ltm.sqlite") } }),
+      "utf-8"
+    );
+    assert.throws(() => getMemoryService(agentDir));
+
+    // The replaced instance must have been closed (its DatabaseSync handle
+    // released) even though construction of the new one failed.
+    await assert.rejects(
+      () => a.rememberFromCwd(join(agentDir, "proj"), { content: "x" })
+    );
   });
 });

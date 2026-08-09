@@ -2,6 +2,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { MemoryBackend } from "./backend.ts";
 import { AgentMemoryRestBackend } from "./agentmemory-backend.ts";
 import { getLtmConfig, type LtmConfig } from "./config.ts";
+import { LTM_STATS_NOT_SUPPORTED } from "./http.ts";
 import { projectIdFromCwd } from "./project-id.ts";
 import { SqliteBackend } from "./sqlite-backend.ts";
 import type {
@@ -23,13 +24,43 @@ export type ForgetFromCwdInput = Omit<ForgetInput, "projectId">;
 type LtmServiceGlobal = {
   __piLtmService?: MemoryService;
   __piLtmServiceKey?: string;
+  __piLtmServiceError?: unknown;
 };
 
 function ltmGlobal(): LtmServiceGlobal {
   return globalThis as typeof globalThis & LtmServiceGlobal;
 }
 
+/** Placeholder used when LTM is disabled: never touches disk. Service methods
+ * short-circuit on enabled=false, so this only needs to satisfy the interface. */
+class NoopMemoryBackend implements MemoryBackend {
+  async remember(input: RememberInput): Promise<{ id: string; type: MemoryType }> {
+    void input;
+    throw new Error(DISABLED_ERROR);
+  }
+  async recall(input: RecallInput): Promise<RecallHit[]> {
+    void input;
+    throw new Error(DISABLED_ERROR);
+  }
+  async observe(input: ObserveInput): Promise<{ observationId: string } | { deduplicated: true }> {
+    void input;
+    return { deduplicated: true };
+  }
+  async forget(input: ForgetInput): Promise<{ deleted: number }> {
+    void input;
+    throw new Error(DISABLED_ERROR);
+  }
+  async health(): Promise<{ ok: boolean; backend: string; detail?: string }> {
+    return { ok: false, backend: "disabled", detail: DISABLED_ERROR };
+  }
+}
+
 function createBackend(config: LtmConfig): MemoryBackend {
+  if (!config.enabled) {
+    // Disabled: no mkdir / open / schema. Prevents a read-only or missing
+    // directory from turning a disabled feature into 500s and error logs.
+    return new NoopMemoryBackend();
+  }
   if (config.backend === "agentmemory") {
     return new AgentMemoryRestBackend(config.agentmemoryUrl);
   }
@@ -37,7 +68,14 @@ function createBackend(config: LtmConfig): MemoryBackend {
 }
 
 function serviceKey(config: LtmConfig): string {
-  return `${config.backend}|${config.dbPath}|${config.enabled}`;
+  return [
+    config.backend,
+    config.dbPath,
+    config.enabled,
+    config.observeAgentEnd,
+    config.observePreCompact,
+    config.agentmemoryUrl,
+  ].join("|");
 }
 
 export class MemoryService {
@@ -135,7 +173,7 @@ export class MemoryService {
     if (this.backend instanceof SqliteBackend) {
       return this.backend.stats(projectId);
     }
-    throw new Error("stats not supported for this backend");
+    throw new Error(LTM_STATS_NOT_SUPPORTED);
   }
 
   async close(): Promise<void> {
@@ -162,11 +200,32 @@ export function getMemoryService(agentDir?: string): MemoryService {
   if (g.__piLtmService && g.__piLtmServiceKey === key) {
     return g.__piLtmService;
   }
+  // A previous construction attempt for this exact config failed: throw the
+  // cached failure instead of rebuilding (and re-logging) on every hook/tool
+  // call. A config change produces a different key and retries fresh.
+  if (g.__piLtmServiceKey === key && g.__piLtmServiceError !== undefined) {
+    throw g.__piLtmServiceError;
+  }
 
   const previous = g.__piLtmService;
-  const next = MemoryService.create(config);
+  let next: MemoryService;
+  try {
+    next = MemoryService.create(config);
+  } catch (err) {
+    g.__piLtmService = undefined;
+    g.__piLtmServiceKey = key;
+    g.__piLtmServiceError = err;
+    // Best-effort close of the instance we are replacing — otherwise a
+    // failed config migration leaks the old DatabaseSync handle (Windows
+    // keeps the WAL file open).
+    if (previous) {
+      void previous.close().catch(() => {});
+    }
+    throw err;
+  }
   g.__piLtmService = next;
   g.__piLtmServiceKey = key;
+  g.__piLtmServiceError = undefined;
 
   // Best-effort close of previous instance (different dbPath / config).
   if (previous) {
@@ -182,6 +241,7 @@ export function resetMemoryServiceForTests(): void {
   const prev = g.__piLtmService;
   g.__piLtmService = undefined;
   g.__piLtmServiceKey = undefined;
+  g.__piLtmServiceError = undefined;
   if (prev) {
     void prev.close().catch(() => {});
   }

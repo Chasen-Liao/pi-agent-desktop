@@ -140,6 +140,26 @@ describe("AgentEventsManager", () => {
     manager.cleanup();
   });
 
+  test("connect expectRunning=true reconnects on an early onerror without a prior setAgentRunning (M4)", async () => {
+    const manager = new AgentEventsManager(10);
+    // Reproduces the handleSend timing: connectEvents() fires before the
+    // [agentRunning] effect has propagated manager.setAgentRunning(true),
+    // so agentRunning is still false when onerror arrives. The stream is
+    // expected, so an early onerror must reconnect — not silently
+    // disconnect and leave the UI stuck on "Waiting for model…".
+    manager.connect("session-123", true, true);
+
+    const es1 = MockEventSource.instances[0];
+    es1.onerror!();
+
+    assert.equal(es1.closed, true);
+    assert.equal(manager.getStatus(), "connecting");
+
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    assert.equal(MockEventSource.instances.length, 2);
+    manager.cleanup();
+  });
+
   test("exponential backoff delay doubles on consecutive errors", async () => {
     const manager = new AgentEventsManager(10); // 10ms base delay
     manager.setAgentRunning(true);

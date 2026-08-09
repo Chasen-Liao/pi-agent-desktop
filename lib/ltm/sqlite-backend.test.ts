@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteBackend, sanitizeFtsQuery } from "./sqlite-backend.ts";
@@ -236,5 +236,45 @@ test("stats counts memories and observations", async () => {
       memoryCount: 0,
       observationCount: 0,
     });
+  });
+});
+
+test("remember wraps supersede + insert in a transaction (LTM-4)", () => {
+  const source = readFileSync(new URL("./sqlite-backend.ts", import.meta.url), "utf8");
+  // Crash consistency: the supersede UPDATE and the new-row INSERT must share
+  // one transaction. Without it, a crash between the two leaves the old memory
+  // un-latest (is_latest=0) with no replacement row — the fact "vanishes" from
+  // recall. Not behavior-testable here: DatabaseSync is single synchronous
+  // connection with no injectable failure point, so the guard is asserted
+  // structurally (BEGIN/COMMIT/ROLLBACK around the writes).
+  assert.match(source, /db\.exec\("BEGIN"/);
+  assert.match(source, /db\.exec\("COMMIT"/);
+  assert.match(source, /db\.exec\("ROLLBACK"/);
+});
+
+test("constructor sets a busy_timeout to avoid SQLITE_BUSY (LTM-5)", () => {
+  const source = readFileSync(new URL("./sqlite-backend.ts", import.meta.url), "utf8");
+  // WAL is enabled but a second handle (HMR-stale instance, concurrent test
+  // open) writing at the same time would immediately throw SQLITE_BUSY
+  // without a busy_timeout. Asserted structurally: no injectable timing
+  // trigger exists in a single synchronous connection.
+  assert.match(source, /PRAGMA busy_timeout\s*=\s*\d+/i);
+});
+
+test("remember truncates oversized content (LTM-6)", async () => {
+  await withTempBackend(async (backend) => {
+    const tail = "unique_tail_marker_xyz";
+    const content = "A".repeat(20000) + " " + tail;
+    await backend.remember({ projectId: "proj_l", content });
+
+    // If content were stored untruncated, the tail token would be indexed and
+    // searchable. Truncation must cut it away so the DB cannot bloat.
+    const hits = await backend.recall({
+      projectId: "proj_l",
+      query: tail,
+      kinds: ["memory"],
+      limit: 10,
+    });
+    assert.equal(hits.length, 0);
   });
 });

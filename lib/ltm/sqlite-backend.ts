@@ -18,6 +18,7 @@ const SUPERSEDE_THRESHOLD = 0.7;
 const SNIPPET_MAX = 240;
 const TITLE_MAX = 80;
 const NARRATIVE_MAX = 4000;
+const CONTENT_MAX = 8000;
 
 /** Strip FTS5 operators; return space-joined quoted tokens for safe MATCH. */
 export function sanitizeFtsQuery(q: string): string {
@@ -63,6 +64,9 @@ export class SqliteBackend implements MemoryBackend {
     mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new DatabaseSync(dbPath);
     this.db.exec("PRAGMA journal_mode = WAL;");
+    // A second handle (HMR-stale instance, concurrent open) writing at the
+    // same time would throw SQLITE_BUSY immediately without this timeout.
+    this.db.exec("PRAGMA busy_timeout = 5000;");
     this.db.exec("PRAGMA foreign_keys = ON;");
     this.initSchema();
   }
@@ -118,62 +122,75 @@ export class SqliteBackend implements MemoryBackend {
     input: RememberInput
   ): Promise<{ id: string; type: MemoryType }> {
     const type: MemoryType = input.type ?? "fact";
-    const content = input.content;
+    const content =
+      input.content.length > CONTENT_MAX
+        ? input.content.slice(0, CONTENT_MAX)
+        : input.content;
     const title = titleFromContent(content);
     const now = nowIso();
     const id = newId("mem");
 
-    let parentId: string | null = null;
-    const latest = this.db
-      .prepare(
-        `SELECT id, content FROM memories
-         WHERE project_id = ? AND is_latest = 1`
-      )
-      .all(input.projectId) as Array<{ id: string; content: string }>;
+    // Supersede UPDATE + new-row INSERT must be atomic: a crash between them
+    // would leave the old memory un-latest with no replacement row.
+    this.db.exec("BEGIN");
+    try {
+      let parentId: string | null = null;
+      const latest = this.db
+        .prepare(
+          `SELECT id, content FROM memories
+           WHERE project_id = ? AND is_latest = 1`
+        )
+        .all(input.projectId) as Array<{ id: string; content: string }>;
 
-    for (const row of latest) {
-      if (jaccardSimilarity(content, row.content) > SUPERSEDE_THRESHOLD) {
-        parentId = row.id;
-        this.db
-          .prepare(
-            `UPDATE memories SET is_latest = 0, updated_at = ? WHERE id = ?`
-          )
-          .run(now, row.id);
-        // One supersede parent is enough; first high match wins.
-        break;
+      for (const row of latest) {
+        if (jaccardSimilarity(content, row.content) > SUPERSEDE_THRESHOLD) {
+          parentId = row.id;
+          this.db
+            .prepare(
+              `UPDATE memories SET is_latest = 0, updated_at = ? WHERE id = ?`
+            )
+            .run(now, row.id);
+          // One supersede parent is enough; first high match wins.
+          break;
+        }
       }
+
+      this.db
+        .prepare(
+          `INSERT INTO memories (
+            id, project_id, type, title, content,
+            concepts_json, files_json, source_observation_ids_json,
+            is_latest, parent_id, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
+        )
+        .run(
+          id,
+          input.projectId,
+          type,
+          title,
+          content,
+          input.concepts ? JSON.stringify(input.concepts) : null,
+          input.files ? JSON.stringify(input.files) : null,
+          input.sourceObservationIds
+            ? JSON.stringify(input.sourceObservationIds)
+            : null,
+          parentId,
+          now,
+          now
+        );
+
+      this.db
+        .prepare(
+          `INSERT INTO memories_fts(id, project_id, title, content)
+           VALUES (?, ?, ?, ?)`
+        )
+        .run(id, input.projectId, title, content);
+
+      this.db.exec("COMMIT");
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
     }
-
-    this.db
-      .prepare(
-        `INSERT INTO memories (
-          id, project_id, type, title, content,
-          concepts_json, files_json, source_observation_ids_json,
-          is_latest, parent_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
-      )
-      .run(
-        id,
-        input.projectId,
-        type,
-        title,
-        content,
-        input.concepts ? JSON.stringify(input.concepts) : null,
-        input.files ? JSON.stringify(input.files) : null,
-        input.sourceObservationIds
-          ? JSON.stringify(input.sourceObservationIds)
-          : null,
-        parentId,
-        now,
-        now
-      );
-
-    this.db
-      .prepare(
-        `INSERT INTO memories_fts(id, project_id, title, content)
-         VALUES (?, ?, ?, ?)`
-      )
-      .run(id, input.projectId, title, content);
 
     return { id, type };
   }

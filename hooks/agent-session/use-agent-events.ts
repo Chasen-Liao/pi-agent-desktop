@@ -36,7 +36,10 @@ export function useAgentEvents({ agentRunning }: UseAgentEventsOptions) {
   }, []);
 
   const connectEvents = useCallback((sid: string) => {
-    managerRef.current?.connect(sid);
+    // expectRunning=true: connect may fire before the [agentRunning] effect
+    // reaches the manager (see handleSend ordering); express intent now so an
+    // early SSE onerror reconnects instead of leaving the UI stuck on Waiting.
+    managerRef.current?.connect(sid, true, true);
   }, []);
 
   const eventSourceRef = {

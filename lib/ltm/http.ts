@@ -1,6 +1,7 @@
 import type { MemoryType } from "./types.ts";
 
 export const LTM_DISABLED = "ltm_disabled";
+export const LTM_STATS_NOT_SUPPORTED = "ltm_stats_not_supported";
 
 const MEMORY_TYPES = new Set<MemoryType>([
   "pattern",
@@ -45,6 +46,10 @@ export interface ForgetBody {
 
 export function isLtmDisabledError(err: unknown): boolean {
   return err instanceof Error && err.message === LTM_DISABLED;
+}
+
+export function isStatsNotSupportedError(err: unknown): boolean {
+  return err instanceof Error && err.message === LTM_STATS_NOT_SUPPORTED;
 }
 
 export function isMemoryType(value: unknown): value is MemoryType {

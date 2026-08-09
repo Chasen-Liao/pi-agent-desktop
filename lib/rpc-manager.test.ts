@@ -25,6 +25,17 @@ test("startRpcSession registers desktopLtmInlineExtension", () => {
   assert.match(source, /withMemoryTools/);
 });
 
+test("startRpcSession passes agentMode to withMemoryTools so plan drops write tools (S2)", () => {
+  // Regression: the start/restore path previously called
+  // withMemoryTools(effectiveToolsForMode(...)) without mode, so a plan
+  // session restored from history re-enabled memory_save/memory_forget
+  // (LTM write/delete) with no Ask confirm.
+  assert.match(
+    source,
+    /withMemoryTools\(\s*effectiveToolsForMode\(agentMode, toolPreset\),\s*agentMode\s*\)/
+  );
+});
+
 function makeStubInner(overrides: {
   subscribe?: SubscribeFn;
   sessionManager?: unknown;
@@ -34,6 +45,7 @@ function makeStubInner(overrides: {
   steer?: (msg: string, imgs?: unknown) => Promise<unknown>;
   followUp?: (msg: string, imgs?: unknown) => Promise<unknown>;
   setActiveToolsByName?: (names: string[]) => void;
+  abort?: () => Promise<void>;
 } = {}) {
   return {
     sessionId: "stub",
@@ -51,6 +63,7 @@ function makeStubInner(overrides: {
     steer: overrides.steer ?? (() => Promise.resolve()),
     followUp: overrides.followUp ?? (() => Promise.resolve()),
     setActiveToolsByName: overrides.setActiveToolsByName ?? (() => {}),
+    abort: overrides.abort ?? (async () => {}),
     getAllTools: () => [],
     getActiveToolNames: () => [],
     subscribe: overrides.subscribe ?? ((cb: (event: unknown) => void) => { void cb; return () => {}; }),
@@ -370,6 +383,22 @@ test("destroy() is idempotent (async)", async () => {
   assert.equal(w.isAlive(), false);
 });
 
+test("destroy() aborts the inner agent session (M1)", async () => {
+  let aborted = false;
+  const inner = makeStubInner({
+    abort: async () => {
+      aborted = true;
+    },
+  });
+  const w = new AgentSessionWrapper(inner);
+  await w.destroy();
+  assert.equal(
+    aborted,
+    true,
+    "destroy() must terminate the inner pi agent loop so a forked/deleted session stops writing its .jsonl"
+  );
+});
+
 // Source-text contract: guards all the Task B3 invariants at compile time so
 // that an accidental revert (e.g. someone drops the await or the .catch on
 // the idle timer) is caught without constructing a live inner.
@@ -563,6 +592,38 @@ test("non-Error prompt rejection is stringified in agent_error", async () => {
   assert.deepEqual(events[0], { type: "agent_error", errorMessage: "string error" });
 });
 
+test("agent event reaches every listener even if an earlier listener throws (M2)", async () => {
+  const events: unknown[] = [];
+  let capturedCb: ((event: unknown) => void) | undefined;
+  const inner = makeStubInner({
+    subscribe: (cb) => {
+      capturedCb = cb as (event: unknown) => void;
+      return () => {};
+    },
+  });
+  const w = new AgentSessionWrapper(inner);
+  // First listener throws — must not prevent the second from receiving the
+  // event, and must not escape the subscribe callback into pi's loop.
+  w.onEvent(() => {
+    throw new Error("listener broken");
+  });
+  w.onEvent((e) => {
+    events.push(e);
+  });
+  w.start();
+
+  let thrown: unknown;
+  try {
+    capturedCb?.({ type: "custom_event" });
+  } catch (err) {
+    thrown = err;
+  }
+
+  assert.equal(thrown, undefined, "listener exception escaped the subscribe callback");
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0], { type: "custom_event" });
+});
+
 test("set_agent_mode plan forces read tools", async () => {
   const applied: string[][] = [];
   const w = new AgentSessionWrapper(makeStubInner({
@@ -571,9 +632,10 @@ test("set_agent_mode plan forces read tools", async () => {
   w.initPolicy("ask", "default");
   const result = await w.send({ type: "set_agent_mode", mode: "plan" }) as { agentMode: string };
   assert.equal(result.agentMode, "plan");
+  // Plan is read-only: memory_recall stays, write/delete channels are dropped.
   assert.deepEqual(
     applied.at(-1)?.slice().sort(),
-    ["find", "grep", "ls", "memory_forget", "memory_recall", "memory_save", "read"]
+    ["find", "grep", "ls", "memory_recall", "read"]
   );
 });
 

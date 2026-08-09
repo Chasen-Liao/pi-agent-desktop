@@ -123,7 +123,7 @@ export class AgentSessionWrapper {
     }
     this._agentMode = mode;
     this._modeRef.current = mode;
-    const tools = withMemoryTools(effectiveToolsForMode(mode, this._toolPreset));
+    const tools = withMemoryTools(effectiveToolsForMode(mode, this._toolPreset), mode);
     this.inner.setActiveToolsByName(tools);
     if (tools.length === 0) {
       const state = this.inner.agent?.state as { systemPrompt?: string } | undefined;
@@ -178,7 +178,16 @@ export class AgentSessionWrapper {
           console.error("ltm agent_end observe wire failed:", err);
         }
       }
-      for (const l of this.listeners) l(event);
+      for (const l of this.listeners) {
+        try {
+          l(event);
+        } catch (err) {
+          // One throwing listener (e.g. an SSE encoder whose stream died) must
+          // not prevent the others from receiving the event, nor escape into
+          // pi's subscribe callback and break the in-flight agent loop.
+          console.error("Error in agent event listener:", err);
+        }
+      }
     });
     this.resetIdleTimer();
   }
@@ -458,10 +467,10 @@ export class AgentSessionWrapper {
         if (this._agentMode === "plan") {
           this._toolPresetBeforePlan = this._toolPreset;
           this.inner.setActiveToolsByName(
-            withMemoryTools([...effectiveToolsForMode("plan", this._toolPreset)])
+            withMemoryTools([...effectiveToolsForMode("plan", this._toolPreset)], "plan")
           );
         } else {
-          this.inner.setActiveToolsByName(withMemoryTools(toolNames));
+          this.inner.setActiveToolsByName(withMemoryTools(toolNames, this._agentMode));
         }
         return null;
       }
@@ -531,6 +540,16 @@ export class AgentSessionWrapper {
     if (!this._alive) return;
     this._alive = false;
     if (this.idleTimer) clearTimeout(this.idleTimer);
+    // Terminate the inner pi agent loop. Without this, a forked/deleted
+    // session keeps running and writing its .jsonl (snapshot after fork is
+    // lost; DELETE fails on Windows with EPERM because the file is open), and
+    // stale wrappers accumulate live AgentSessions holding runtime resources.
+    // Best-effort: abort() is a no-op when the loop is already idle.
+    try {
+      await this.inner.abort();
+    } catch (err) {
+      console.error("Error aborting inner agent session:", err);
+    }
     try {
       this._uiBridge?.destroy();
     } catch (err) {
@@ -659,7 +678,8 @@ export async function startRpcSession(
     }
 
     const effectiveTools = withMemoryTools(
-      effectiveToolsForMode(agentMode, toolPreset)
+      effectiveToolsForMode(agentMode, toolPreset),
+      agentMode
     );
 
     const modeRef: AgentModeRef = { current: agentMode };

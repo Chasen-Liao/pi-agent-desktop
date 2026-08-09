@@ -100,11 +100,17 @@ export class AgentEventsManager {
     return this.eventSource;
   }
 
-  connect(sid: string, resetAttempts = true) {
+  connect(sid: string, resetAttempts = true, expectRunning?: boolean) {
     this.sid = sid;
     if (resetAttempts) {
       this.reconnectAttempts = 0;
     }
+    // Callers (use-agent-events.connectEvents) may fire connect() before the
+    // React [agentRunning] effect has propagated setAgentRunning(true). Pass
+    // expectRunning to express intent synchronously so an early onerror takes
+    // the reconnect path instead of silently disconnecting (which left the UI
+    // stuck on "Waiting for model…").
+    if (expectRunning !== undefined) this.agentRunning = expectRunning;
     this.disconnect();
     this.setStatus("connecting");
 

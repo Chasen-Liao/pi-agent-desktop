@@ -10,6 +10,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { isLtmDisabledError, isMemoryType, LTM_DISABLED } from "./ltm/http.ts";
 import { getMemoryService } from "./ltm/service.ts";
+import type { AgentMode } from "./approval-policy.ts";
 
 export const MEMORY_TOOL_NAMES = [
   "memory_save",
@@ -28,11 +29,16 @@ export type DesktopLtmExtensionOptions = {
   agentDir?: string;
 };
 
-/** Append memory_* tools when any coding tools are active; empty stay empty (noTools: all). */
-export function withMemoryTools(tools: string[]): string[] {
+/** Append memory_* tools when any coding tools are active; empty stay empty (noTools: all).
+ * Plan mode is read-only: keep only memory_recall, dropping the write/delete
+ * channels (memory_save / memory_forget) that would let a plan loop mutate
+ * durable project memory. */
+export function withMemoryTools(tools: string[], mode?: AgentMode): string[] {
   if (tools.length === 0) return tools;
   const next = [...tools];
-  for (const name of MEMORY_TOOL_NAMES) {
+  const memoryTools =
+    mode === "plan" ? (["memory_recall"] as const) : MEMORY_TOOL_NAMES;
+  for (const name of memoryTools) {
     if (!next.includes(name)) next.push(name);
   }
   return next;

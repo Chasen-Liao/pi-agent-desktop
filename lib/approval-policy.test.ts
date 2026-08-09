@@ -33,6 +33,12 @@ test("needsAskConfirm only for bash/write/edit in ask mode", () => {
   assert.equal(needsAskConfirm("plan", "write"), false);
 });
 
+test("needsAskConfirm requires confirm for memory write tools in ask mode (S2)", () => {
+  assert.equal(needsAskConfirm("ask", "memory_save"), true);
+  assert.equal(needsAskConfirm("ask", "memory_forget"), true);
+  assert.equal(needsAskConfirm("ask", "memory_recall"), false);
+});
+
 test("askBlockResult shape", () => {
   const r = askBlockResult();
   assert.equal(r.block, true);
