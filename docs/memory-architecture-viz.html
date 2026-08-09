@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi Agent · 记忆架构可视化</title>
+<style>
+  /* — dataviz 参考色板(slot 固定顺序,非循环) — */
+  .viz-root {
+    color-scheme: light;
+    --surface-1:   #fcfcfb;   /* chart surface */
+    --page:        #f9f9f7;
+    --ink:         #0b0b0b;   /* primary */
+    --ink-2:       #52514e;   /* secondary */
+    --ink-3:       #898781;   /* muted */
+    --grid:        #e1e0d9;   /* hairline */
+    --axis:        #c3c2b7;
+    --border:      rgba(11,11,11,0.10);
+    --s1: #2a78d6;  /* slot 1 blue   — L1 JSONL */
+    --s2: #eb6834;  /* slot 2 orange — L2 LTM    */
+    --s3: #1baf7a;  /* slot 3 aqua   — backend   */
+    --s4: #eda100;  /* slot 4 yellow — 机制/边界 */
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --page:      #0d0d0d;
+      --ink:       #ffffff;
+      --ink-2:     #c3c2b7;
+      --ink-3:     #898781;
+      --grid:      #2c2c2a;
+      --axis:      #383835;
+      --border:    rgba(255,255,255,0.10);
+      --s1: #3987e5;
+      --s2: #d95926;
+      --s3: #199e70;
+      --s4: #c98500;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page:      #0d0d0d;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --ink-3:     #898781;
+    --grid:      #2c2c2a;
+    --axis:      #383835;
+    --border:    rgba(255,255,255,0.10);
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --s4: #c98500;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.55; }
+  .viz-root { max-width: 980px; margin: 0 auto; padding: 40px 28px 72px; }
+
+  /* — 页头 — */
+  header { margin-bottom: 36px; }
+  h1 { font-size: 26px; font-weight: 650; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .lede { color: var(--ink-2); font-size: 15px; max-width: 720px; margin: 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 22px; margin-top: 18px;
+    padding-top: 14px; border-top: 1px solid var(--border); }
+  .legend .item { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+  section { margin-bottom: 44px; }
+  h2 { font-size: 18px; font-weight: 640; margin: 0 0 4px; letter-spacing: -0.005em; }
+  .sec-sub { color: var(--ink-3); font-size: 13px; margin: 0 0 16px; }
+  .panel { background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px; }
+
+  /* — 分层/流程盒子 — */
+  .layer { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .layer .name { font-size: 13px; font-weight: 620; }
+  .layer .desc { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; }
+  .layer .tag { display: inline-block; font-size: 11px; font-weight: 600;
+    border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: 1px; }
+  .flow { display: flex; flex-direction: column; gap: 0; }
+  .flow .arrow { text-align: center; color: var(--ink-3); font-size: 16px; line-height: 1; padding: 3px 0; }
+  .flow .arrow:before { content: "↓"; }
+
+  .b1 { border-color: color-mix(in srgb, var(--s1) 55%, var(--border)); }
+  .b2 { border-color: color-mix(in srgb, var(--s2) 55%, var(--border)); }
+  .b3 { border-color: color-mix(in srgb, var(--s3) 55%, var(--border)); }
+  .t1 { background: color-mix(in srgb, var(--s1) 16%, transparent); }
+  .t2 { background: color-mix(in srgb, var(--s2) 16%, transparent); }
+  .t3 { background: color-mix(in srgb, var(--s3) 16%, transparent); }
+  .t4 { background: color-mix(in srgb, var(--s4) 16%, transparent); }
+  .dot-s1 { color: var(--s1); } .dot-s2 { color: var(--s2); }
+  .dot-s3 { color: var(--s3); } .dot-s4 { color: var(--s4); }
+
+  /* — 双列总览 — */
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .duo { grid-template-columns: 1fr; } }
+
+  /* — 表格 — */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--ink-3); font-weight: 600; }
+  td code, .mono { font-family: var(--mono); font-size: 12px; }
+  td .note { color: var(--ink-3); font-size: 12px; }
+  .row-pk td { border-top: 1px solid var(--axis); }
+
+  /* — 卡片网格 — */
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
+  .card { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; background: var(--surface-1); }
+  .card h3 { font-size: 13px; margin: 0 0 6px; font-weight: 640; display: flex; align-items: center; gap: 6px; }
+  .card p { font-size: 12.5px; color: var(--ink-2); margin: 0; }
+  .card code { font-family: var(--mono); font-size: 11.5px;
+    background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 3px; padding: 0 4px; }
+
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 4px;
+    padding: 1px 7px; background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-2); }
+  .badge-write { color: var(--s2); }
+  .badge-read  { color: var(--s3); }
+
+  .foot { color: var(--ink-3); font-size: 12.5px; margin-top: 40px;
+    padding-top: 14px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="viz-root" id="root">
+
+  <header>
+    <h1>Pi Agent · 记忆架构</h1>
+    <p class="lede">会话级 JSONL 流水账 + 项目级 SQLite 长期记忆，两层互补。LTM 是可插拔后端，经
+      <code>MemoryService</code> 门面对外统一暴露（工具 / HTTP API / 自动观察），best-effort 不阻塞对话。</p>
+    <div class="legend">
+      <div class="item"><span class="swatch t1"></span> L1 会话 JSONL（episodic）</div>
+      <div class="item"><span class="swatch t2"></span> L2 长期记忆 LTM</div>
+      <div class="item"><span class="swatch t3"></span> 存储 / 后端</div>
+      <div class="item"><span class="swatch t4"></span> 机制 / 边界</div>
+    </div>
+  </header>
+
+  <!-- 01 两层总览 -->
+  <section>
+    <h2>01 · 两层记忆模型</h2>
+    <p class="sec-sub">L1 逐字记录“这次会话发生过什么”；L2 可检索索引“这个项目长期该记住什么”。通过 sessionId / projectId 关联，互不干扰。</p>
+    <div class="duo">
+      <div class="layer b1 t1">
+        <div class="name">L1 · 会话 JSONL <span class="badge">未改动</span></div>
+        <div class="desc">每个会话一个 <code>.jsonl</code>，热写（AgentSession）与冷读（session-reader）双路径；Fork/Branch 是记忆分裂策略，compact 是唯一的“遗忘”机制。</div>
+      </div>
+      <div class="layer b2 t2">
+        <div class="name">L2 · 长期记忆 LTM <span class="badge">v0.7.19</span></div>
+        <div class="desc">项目级 SQLite（<code>~/.pi/agent/memory/ltm.sqlite</code>），跨会话持久。六类 memories + 自动 observations，FTS5 全文检索。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 LTM 分层 -->
+  <section>
+    <h2>02 · LTM 内部分层</h2>
+    <p class="sec-sub">所有入口只调用 MemoryService，绝不直接碰 SQL 或具体后端——这是未来切换 agentmemory 的干净接缝。</p>
+    <div class="panel">
+      <div class="flow">
+        <div class="layer b2 t2">
+          <div class="name">入口 <span class="dot-s2">●</span> Agent 工具 + HTTP <span class="badge">3 工具 · 5 路由</span></div>
+          <div class="desc">memory_save / memory_recall / memory_forget（plan 模式只留 recall）· /api/memory/{remember,recall,forget,health,stats}</div>
+        </div>
+        <div class="arrow"></div>
+        <div class="layer b2 t2">
+          <div class="name">MemoryService <span class="dot-s2">●</span> 门面（单例）</div>
+          <div class="desc">由 cwd 算 projectId、校验输入、resolve backend；单例挂 <code>globalThis.__piLtmService</code>（HMR 安全）</div>
+        </div>
+        <div class="arrow"></div>
+        <div class="layer b3 t3">
+          <div class="name">MemoryBackend <span class="dot-s3">●</span> 可插拔接口</div>
+          <div class="desc">remember / recall / observe / forget / health；实现可替换</div>
+        </div>
+        <div class="duo" style="margin-top:12px">
+          <div class="layer b3 t3">
+            <div class="name">SqliteBackend <span class="badge">当前默认</span></div>
+            <div class="desc">node:sqlite · FTS5 · WAL + busy_timeout · 事务原子 · 60s 去重</div>
+          </div>
+          <div class="layer b3 t3">
+            <div class="name">AgentMemoryRestBackend <span class="badge">stub</span></div>
+            <div class="desc">连 agentmemory 服务器；v1 未实现，health 报 not_implemented</div>
+          </div>
+        </div>
+        <div class="arrow"></div>
+        <div class="layer b3 t3">
+          <div class="name">SQLite <span class="dot-s3">●</span> ltm.sqlite</div>
+          <div class="desc">memories + observations 两表 + 各自 FTS5 虚表</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 数据模型 -->
+  <section>
+    <h2>03 · 数据模型</h2>
+    <p class="sec-sub">memories 有版本链（supersede 靠 is_latest + parent_id）；observations 是自动留档。</p>
+    <div class="duo">
+      <div class="panel">
+        <h2 style="font-size:14px">memories</h2>
+        <table>
+          <thead><tr><th>字段</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr class="row-pk"><td><code>id</code></td><td><code>mem_&lt;ts&gt;_&lt;rand&gt;</code></td></tr>
+            <tr><td><code>project_id</code></td><td>项目隔离，有索引</td></tr>
+            <tr><td><code>type</code></td><td>pattern · preference · architecture · bug · workflow · fact</td></tr>
+            <tr><td><code>title</code> / <code>content</code></td><td>标题 / 正文（≥8000 截断）</td></tr>
+            <tr><td><code>concepts_json</code> · <code>files_json</code></td><td>可选结构化</td></tr>
+            <tr><td><code>is_latest</code> · <code>parent_id</code></td><td>版本链：最新可见，旧版指向 parent</td></tr>
+            <tr><td><code>created_at</code> · <code>updated_at</code></td><td>ISO-8601</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <h2 style="font-size:14px">observations</h2>
+        <table>
+          <thead><tr><th>字段</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr class="row-pk"><td><code>id</code></td><td><code>obs_&lt;ts&gt;_&lt;rand&gt;</code></td></tr>
+            <tr><td><code>project_id</code></td><td>项目隔离，有索引</td></tr>
+            <tr><td><code>session_id</code></td><td>来源会话</td></tr>
+            <tr><td><code>kind</code></td><td><code>agent_end</code> · <code>pre_compact</code></td></tr>
+            <tr><td><code>title</code> / <code>narrative</code></td><td>标题 / 正文（≥4000 截断）</td></tr>
+            <tr><td><code>source_json</code></td><td>可选原始片段</td></tr>
+            <tr><td><code>created_at</code></td><td>ISO-8601</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p style="font-size:12.5px;color:var(--ink-3);margin-top:10px">FTS：memories_fts(title,content) · observations_fts(title,narrative)；recall 分表 LIMIT 后合并按 FTS 分数排序。</p>
+  </section>
+
+  <!-- 04 数据流 -->
+  <section>
+    <h2>04 · 读写路径</h2>
+    <p class="sec-sub">三条写（一显式 + 二自动零-LLM）+ 一条读。</p>
+    <div class="cards">
+      <div class="card">
+        <h3><span class="badge badge-write">显式写</span> memory_save</h3>
+        <p>工具调用 → service → <code>remember</code> → supersede 检查（jaccard&gt;0.7 置旧版非 latest）→ 事务内写新行 + FTS。ask 模式走确认。</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge badge-write">自动写</span> agent_end observe</h3>
+        <p>agent 循环结束（rpc-manager 的 agent_end 事件）→ 零-LLM 合成 <code>User:/Assistant:</code> 摘要 → 60s 内同 session+kind+title 去重。</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge badge-write">自动写</span> pre_compact observe</h3>
+        <p>compact 触发前 → 保留将被打包压缩的分支/消息快照，避免“遗忘”后 context 视图丢信号。</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge badge-read">读</span> memory_recall</h3>
+        <p>工具查询 → FTS 检索 memories（主）+ observations（次）→ 合并排序 → 返回紧凑 hits；模型自主决定使用，<b>不自动注入</b> system prompt。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 关键机制 -->
+  <section>
+    <h2>05 · 关键机制</h2>
+    <p class="sec-sub">本会话修复加固过的边界语义。</p>
+    <div class="cards">
+      <div class="card">
+        <h3><span class="swatch t4" style="border-radius:3px"></span> projectId</h3>
+        <p>规范化 cwd（Win 小写）→ sha256 取前 16 位 → <code>proj_…</code>。目录移动 = 新项目（v1 已知取舍）。</p>
+      </div>
+      <div class="card">
+        <h3><span class="swatch t4" style="border-radius:3px"></span> supersede 版本链</h3>
+        <p>新行 <code>parent_id</code> 指向旧 latest，旧版 <code>is_latest=0</code>。UPDATE + INSERT 在同一事务（崩溃窗口不丢）。</p>
+      </div>
+      <div class="card">
+        <h3><span class="swatch t4" style="border-radius:3px"></span> observe 去重</h3>
+        <p>60s 窗口内同 project+session+kind+title 返回 <code>{deduplicated:true}</code>，不重复插入。</p>
+      </div>
+      <div class="card">
+        <h3><span class="swatch t4" style="border-radius:3px"></span> 单例 + 失败缓存</h3>
+        <p><code>__piLtmService</code> 抗 HMR；构造失败缓存 30s（TTL 后重试一次）；disabled 用 NoopBackend 不碰磁盘。</p>
+      </div>
+      <div class="card">
+        <h3><span class="swatch t4" style="border-radius:3px"></span> config 热更新</h3>
+        <p>serviceKey 覆盖全部 6 个配置字段（JSON 编码），改 observe 开关 / agentmemoryUrl 即重建单例。</p>
+      </div>
+      <div class="card">
+        <h3><span class="swatch t4" style="border-radius:3px"></span> 权限语义</h3>
+        <p>plan 只读：工具列表剔除 memory_save/forget；ask：memory_save/forget 走确认（与 bash/write/edit 同级）。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 配置 + API -->
+  <section>
+    <h2>06 · 配置与 API 速查</h2>
+    <div class="duo">
+      <div class="panel">
+        <h2 style="font-size:14px">配置（desktop-settings 的 <code>ltm.*</code>）</h2>
+        <table>
+          <thead><tr><th>键</th><th>默认</th></tr></thead>
+          <tbody>
+            <tr><td><code>enabled</code></td><td><code>true</code></td></tr>
+            <tr><td><code>backend</code></td><td><code>sqlite</code></td></tr>
+            <tr><td><code>dbPath</code></td><td><code>~/.pi/agent/memory/ltm.sqlite</code></td></tr>
+            <tr><td><code>observeAgentEnd</code></td><td><code>true</code></td></tr>
+            <tr><td><code>observePreCompact</code></td><td><code>true</code></td></tr>
+            <tr><td><code>agentmemoryUrl</code></td><td><code>http://127.0.0.1:3111</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <h2 style="font-size:14px">HTTP API（本地信任模型）</h2>
+        <table>
+          <thead><tr><th>路由</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET /api/memory/health</code></td><td>可用性</td></tr>
+            <tr><td><code>GET /api/memory/recall</code></td><td><code>cwd&q&limit</code> → hits</td></tr>
+            <tr><td><code>POST /api/memory/remember</code></td><td><code>cwd,content,type…</code> → id</td></tr>
+            <tr><td><code>POST /api/memory/forget</code></td><td>memoryIds / observationIds</td></tr>
+            <tr><td><code>GET /api/memory/stats</code></td><td>counts（调试）；agentmemory 下 501</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:12px;color:var(--ink-3);margin:8px 0 0">disabled → 503 <code>ltm_disabled</code>；缺参 → 400。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 边界语义 -->
+  <section>
+    <h2>07 · 设计边界</h2>
+    <div class="duo">
+      <div class="layer b4 t4">
+        <div class="name">best-effort 永不阻塞</div>
+        <div class="desc">observe 失败只 log 并吞掉；对话 / compact / 工具 UX 不受 LTM 影响。禁用 LTM 时工具与 API 返回结构化 disabled 文案。</div>
+      </div>
+      <div class="layer b4 t4">
+        <div class="name">v1 明确非目标</div>
+        <div class="desc">无向量检索、无自动上下文注入、无记忆管理 UI、不依赖常驻 agentmemory 进程、不把 JSONL 当 LTM 源。</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    颜色遵循 dataviz 参考色板（分类色固定顺序）；深色模式自动。组件目录：lib/ltm（服务与后端）· app/api/memory（路由）· lib/desktop-ltm-extension.ts（工具注册）。
+  </div>
+</div>
+</body>
+</html>
