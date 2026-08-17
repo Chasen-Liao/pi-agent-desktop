@@ -11,6 +11,7 @@ import { killProcessTree } from "./process-tree";
 import { pickApiKeys } from "./env-filter";
 import { choosePort } from "./port-selection";
 import { getNextRestartState, type ServerState } from "./restart-policy";
+import { loadPageWithRetry } from "./navigation";
 import { formatElectronLogLine, deriveScope, type ElectronLogLevel } from "./log-format";
 import {
   createUpdateInstallState,
@@ -212,10 +213,11 @@ async function restartNextServer(label: string) {
     activePort = port;
     nextProcess = startNextServer(port);
     await waitForNextServerReady(port, nextProcess, nextServerReadyOptions());
-    showApp(port);
+    await showApp(port);
   } catch (err) {
     logError("Failed to restart Next.js server", err);
     serverState = "stopped";
+    cleanup();
     activePort = null;
     showStartupState("stopped", "本地服务重启失败");
   }
@@ -339,11 +341,86 @@ function createWindow() {
   });
 }
 
-function showApp(port: number) {
+async function showApp(port: number): Promise<void> {
   activePort = port;
-  serverState = "ready";
   logStartupTiming("loading app url", { port });
-  mainWindow?.loadURL(`http://127.0.0.1:${port}`);
+  const window = mainWindow;
+  const proc = nextProcess;
+  if (!window || window.isDestroyed()) {
+    throw new Error("Main window unavailable while loading app URL");
+  }
+  if (!proc) {
+    throw new Error("Next.js server process unavailable while loading app URL");
+  }
+
+  const navigationAbort = new AbortController();
+  const abortForProcessExit = () => {
+    navigationAbort.abort(new Error("App navigation cancelled: Next.js server process exited"));
+  };
+  const abortForWindowClose = () => {
+    navigationAbort.abort(new Error("App navigation cancelled: main window was destroyed"));
+  };
+  const abortForQuit = () => {
+    navigationAbort.abort(new Error("App navigation cancelled: application is quitting"));
+  };
+  proc.once("exit", abortForProcessExit);
+  proc.once("error", abortForProcessExit);
+  window.once("closed", abortForWindowClose);
+  app.once("before-quit", abortForQuit);
+
+  const assertCurrentNavigation = () => {
+    if (isQuitting) {
+      throw new Error("App navigation cancelled: application is quitting");
+    }
+    if (mainWindow !== window) {
+      throw new Error("App navigation cancelled: main window changed");
+    }
+    if (window.isDestroyed()) {
+      throw new Error("App navigation cancelled: main window was destroyed");
+    }
+    if (nextProcess !== proc) {
+      throw new Error("App navigation cancelled: Next.js server process changed");
+    }
+    if (proc.exitCode !== null) {
+      throw new Error("App navigation cancelled: Next.js server process exited");
+    }
+    if (serverState !== "starting") {
+      throw new Error(`App navigation cancelled from server state: ${serverState}`);
+    }
+  };
+
+  try {
+    await loadPageWithRetry(
+      `http://127.0.0.1:${port}`,
+      async (url) => {
+        assertCurrentNavigation();
+        await window.loadURL(url);
+      },
+      {
+        signal: navigationAbort.signal,
+        cancelAttempt: () => {
+          if (!window.isDestroyed()) {
+            window.webContents.stop();
+          }
+        },
+        shouldRetry: () => {
+          try {
+            assertCurrentNavigation();
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      }
+    );
+  } finally {
+    proc.off("exit", abortForProcessExit);
+    proc.off("error", abortForProcessExit);
+    window.off("closed", abortForWindowClose);
+    app.off("before-quit", abortForQuit);
+  }
+  assertCurrentNavigation();
+  serverState = "ready";
 }
 
 function isAllowedAppUrl(rawUrl: string): boolean {
@@ -461,7 +538,7 @@ app.whenReady().then(async () => {
     await waitForNextServerReady(port, nextProcess, nextServerReadyOptions());
     logStartupTiming("next server ready");
     logInfo("Next.js server is ready");
-    showApp(port);
+    await showApp(port);
 
     // Auto-update check (production only, delayed 30s)
     if (app.isPackaged) {
@@ -576,8 +653,8 @@ app.whenReady().then(async () => {
       }, 30_000);
     }
   } catch (err) {
-    cleanup();
     serverState = "stopped";
+    cleanup();
     activePort = null;
     const message = err instanceof Error ? err.message : String(err);
     const disposition = getStartupFailureDisposition({ uiReady: startupUiReady, message });

@@ -591,13 +591,12 @@ components/models-config/     模型配置弹窗的子组件
 职责链：
 
 1. **端口选择**（`port-selection.ts`）— 找一个可用端口
-2. **启动 Next.js 子进程** — `spawn(process.execPath, [server.js], { env: ELECTRON_RUN_AS_NODE=1 })`
-3. **等待就绪**（`server-wait.ts`）— 双重探测：
-   - 端口探测：请求 `/api/health`
-   - stdout 嗅探：匹配 Next.js 输出的 "Ready"
-4. **创建 `BrowserWindow`** → `loadURL("http://127.0.0.1:PORT")`
-5. **托盘**（`tray.ts`）— 最小化到托盘 / 右键退出
-6. **自动更新**（`autoUpdater`）— 检查 GitHub Releases
+2. **创建 `BrowserWindow`** — 先显示本地 `startup.html`
+3. **启动 Next.js 子进程** — `spawn(process.execPath, [server.js], { env: ELECTRON_RUN_AS_NODE=1 })`
+4. **等待服务就绪**（`server-wait.ts`）— 打包模式必须取得 `/api/health` 成功响应；开发模式可接受 health 或 stdout `Ready`
+5. **等待页面就绪**（`navigation.ts`）— `loadURL("http://127.0.0.1:PORT")` 有界重试，页面真正加载完成后才把服务标记为 `ready`
+6. **托盘**（`tray.ts`）— 最小化到托盘 / 右键退出
+7. **自动更新**（`autoUpdater`）— 检查 GitHub Releases
 
 ### 辅助模块
 
@@ -607,6 +606,7 @@ components/models-config/     模型配置弹窗的子组件
 | `process-tree.ts` | 杀掉子进程树（不只是直接子进程） |
 | `restart-policy.ts` | 子进程崩溃后的重启策略 |
 | `startup-failure.ts` | 启动失败诊断 UI（`startup.html`） |
+| `navigation.ts` | 主页面导航的单次超时、有限重试与错误封装 |
 | `log-format.ts` | 日志格式化 |
 | `env-filter.ts` | 过滤敏感环境变量传给子进程 |
 
@@ -696,14 +696,14 @@ extraResources:
 | `lib/npx.ts` | `npx.cmd` shell 限制（CVE-2024-27980） | 直接 spawn，绕过 shell |
 | `bin/pi-web.js` | 路径含空格 | 直接调用 next JS 入口 |
 
-### 14.8 桌面端启动双重就绪探测
+### 14.8 桌面端启动的服务与页面双门槛
 
-冷启动时 Next.js 子进程的端口监听晚于 `BrowserWindow.loadURL`，会导致 race。`server-wait.ts` 同时做：
+冷启动时必须依次跨过两个边界，不能把 Next.js 输出 `Ready` 等同于用户已经看到主页面：
 
-1. **端口探测**：循环请求 `/api/health`
-2. **stdout 嗅探**：监听子进程 stdout，匹配 "Ready" 字样
+1. **服务就绪**（`server-wait.ts`）：打包模式只接受 `/api/health` 的 2xx–3xx 响应；开发模式可由 health 或 stdout `Ready` 任一信号通过。
+2. **页面就绪**（`navigation.ts`）：主进程等待 `BrowserWindow.loadURL()` 完成。瞬时失败最多重试 3 次，间隔为 100 / 250 / 500ms，每次导航最长 15 秒；窗口、Next 子进程或退出状态改变时立即取消旧导航。
 
-任一通过即视为就绪。
+只有同一窗口、同一 Next 子进程的导航成功后，`serverState` 才会从 `starting` 变成 `ready`。重试耗尽时，首次启动进入错误页；自动重启阶段进入 stopped 状态并清理对应子进程，避免启动页永久转圈或旧生命周期写回 ready。
 
 ### 14.9 Compaction SSE 事件版本兼容
 

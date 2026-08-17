@@ -20,6 +20,25 @@ test("packaged readiness requires HTTP health", () => {
   assert.match(source, /waitForNextServerReady\(port, nextProcess, nextServerReadyOptions\(\)\)/);
 });
 
+test("main waits for app navigation before marking the server ready", () => {
+  const awaitedShowAppCalls = source.match(/await showApp\(port\)/g) ?? [];
+  assert.equal(awaitedShowAppCalls.length, 2, "initial startup and restart must both await navigation");
+
+  const showAppStart = source.indexOf("async function showApp(port: number): Promise<void>");
+  const showAppEnd = source.indexOf("\nfunction isAllowedAppUrl", showAppStart);
+  assert.ok(showAppStart >= 0 && showAppEnd > showAppStart, "showApp implementation must exist");
+
+  const showAppSource = source.slice(showAppStart, showAppEnd);
+  const navigationIndex = showAppSource.indexOf("await loadPageWithRetry");
+  const readyIndex = showAppSource.indexOf('serverState = "ready"');
+  assert.ok(navigationIndex >= 0, "showApp must await bounded app navigation");
+  assert.ok(readyIndex > navigationIndex, "ready must only be set after navigation completes");
+  assert.match(showAppSource, /nextProcess !== proc/);
+  assert.match(showAppSource, /proc\.exitCode !== null/);
+  assert.match(showAppSource, /signal: navigationAbort\.signal/);
+  assert.match(showAppSource, /window\.webContents\.stop\(\)/);
+});
+
 test("main process CSP uses shared electron CSP builder", () => {
   assert.match(source, /import \{ buildElectronCspHeader \} from "\.\/csp"/);
   assert.match(source, /buildElectronCspHeader\(port\)/);
