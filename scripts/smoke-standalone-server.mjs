@@ -54,7 +54,7 @@ async function stopChild(child) {
       windowsHide: true,
     });
   } else {
-    child.kill("SIGTERM");
+    process.kill(-child.pid, "SIGTERM");
   }
 
   await Promise.race([
@@ -62,7 +62,8 @@ async function stopChild(child) {
     new Promise((resolveTimeout) => setTimeout(resolveTimeout, 2_000)),
   ]);
   if (child.exitCode === null && child.signalCode === null) {
-    child.kill("SIGKILL");
+    if (process.platform === "win32" || !child.pid) child.kill("SIGKILL");
+    else process.kill(-child.pid, "SIGKILL");
     await Promise.race([
       exited,
       new Promise((resolveTimeout) => setTimeout(resolveTimeout, 2_000)),
@@ -119,6 +120,7 @@ const child = spawn(process.execPath, [serverScript], {
     PORT: String(port),
   },
   stdio: ["ignore", "ignore", "pipe"],
+  detached: process.platform !== "win32",
   windowsHide: true,
 });
 

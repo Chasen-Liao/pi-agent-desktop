@@ -29,8 +29,8 @@
     "release": "npm version patch --no-git-tag-version && npm run build:standalone && npm publish --access public",
     "build:electron": "tsc -p electron/tsconfig.json && node -e \"const fs=require('fs'); fs.copyFileSync('electron/startup.html', 'electron/dist/startup.html'); fs.copyFileSync('electron/startup.js', 'electron/dist/startup.js')\"",
     "dev:electron": "npm run build:electron && npx electron .",
-    "pack": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --dir && node scripts/smoke-standalone-server.mjs release/win-unpacked/resources/standalone",
-    "dist": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --publish never && node scripts/smoke-standalone-server.mjs release/win-unpacked/resources/standalone"
+    "pack": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --dir && node scripts/smoke-packaged-standalone.mjs",
+    "dist": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --publish never && node scripts/smoke-packaged-standalone.mjs"
   },
   "build": {
     "extends": "electron-builder.yml"

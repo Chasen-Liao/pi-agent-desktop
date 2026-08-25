@@ -26,7 +26,7 @@ test("packaging and release scripts call build:standalone", () => {
   for (const scriptName of ["pack", "dist"]) {
     assert.match(
       pkg.scripts[scriptName],
-      /electron-builder.+&& node scripts\/smoke-standalone-server\.mjs release\/win-unpacked\/resources\/standalone/
+      /electron-builder.+&& node scripts\/smoke-packaged-standalone\.mjs/
     );
   }
 });
