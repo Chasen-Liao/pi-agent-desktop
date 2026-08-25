@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/types";
+import type { SessionInfo, SessionTreeNode, UserMessage } from "@/lib/types";
+import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
 import { calculateSessionStats } from "./agent-session/session-stats";
 import { type AgentPhase } from "./agent-session/agent-phase";
 import { initialStreamingState, streamReducer } from "./agent-session/stream-state";
@@ -32,6 +33,23 @@ import { sendAgentCommand } from "@/lib/agent-client";
 
 export type { ThinkingLevelOption };
 export type { AttachedImage };
+
+const EMPTY_FOLLOW_UP_QUEUE: FollowUpQueueSnapshot = { revision: 0, items: [] };
+
+function userMessageText(message: UserMessage): string {
+  return typeof message.content === "string"
+    ? message.content
+    : message.content
+        .filter((block): block is { type: "text"; text: string } => block.type === "text")
+        .map((block) => block.text)
+        .join("\n");
+}
+
+function clearPendingDelivery(message: UserMessage): UserMessage {
+  const delivered = { ...message };
+  delete delivered.deliveryState;
+  return delivered;
+}
 
 export interface UseAgentSessionOptions {
   session: SessionInfo | null;
@@ -109,9 +127,55 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     notifyType: "info" | "warning" | "error";
   } | null>(null);
   const [trustPrompt, setTrustPrompt] = useState<NeedsTrustPayload | null>(null);
+  const [followUpQueue, setFollowUpQueue] = useState<FollowUpQueueSnapshot>(EMPTY_FOLLOW_UP_QUEUE);
+  const [followUpQueueBusy, setFollowUpQueueBusy] = useState(false);
+  const followUpQueueRef = useRef(followUpQueue);
+  followUpQueueRef.current = followUpQueue;
+  const pendingSteersRef = useRef<Array<{ id: string; message: string; glowing: boolean }>>([]);
   const trustResolverRef = useRef<((optionId: string | null) => void) | null>(null);
   const agentModeRef = useRef(agentMode);
   agentModeRef.current = agentMode;
+
+  const acceptFollowUpQueue = useCallback((snapshot: FollowUpQueueSnapshot) => {
+    if (snapshot.revision < followUpQueueRef.current.revision) return;
+    followUpQueueRef.current = snapshot;
+    setFollowUpQueue(snapshot);
+  }, []);
+
+  const handlePendingSteerQueued = useCallback((item: { id: string; message: string }) => {
+    pendingSteersRef.current.push({ ...item, glowing: true });
+  }, []);
+
+  const handlePendingSteerFailed = useCallback((id: string) => {
+    pendingSteersRef.current = pendingSteersRef.current.filter((item) => item.id !== id);
+    setMessages((prev) => prev.map((message) => {
+      if (message.role !== "user" || message.clientMessageId !== id) return message;
+      return clearPendingDelivery(message);
+    }));
+  }, [setMessages]);
+
+  const reconcileSteeringQueue = useCallback((steering: readonly string[]) => {
+    const remaining = new Map<string, number>();
+    for (const message of steering) remaining.set(message, (remaining.get(message) ?? 0) + 1);
+    const deliveredIds = new Set<string>();
+    pendingSteersRef.current = pendingSteersRef.current.map((item) => {
+      if (!item.glowing) return item;
+      const count = remaining.get(item.message) ?? 0;
+      if (count > 0) {
+        remaining.set(item.message, count - 1);
+        return item;
+      }
+      deliveredIds.add(item.id);
+      return { ...item, glowing: false };
+    });
+    if (!deliveredIds.size) return;
+    setMessages((prev) => prev.map((message) => {
+      if (message.role !== "user" || !message.clientMessageId || !deliveredIds.has(message.clientMessageId)) {
+        return message;
+      }
+      return clearPendingDelivery(message);
+    }));
+  }, [setMessages]);
 
   const {
     messagesEndRef,
@@ -211,7 +275,32 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const handleAgentEvent = useCallback(
     (event: Parameters<typeof applyAgentEvent>[0]) => {
+      if (event.type === "follow_up_queue_update") {
+        acceptFollowUpQueue({ revision: event.revision, items: event.items });
+      } else if (event.type === "queue_update") {
+        reconcileSteeringQueue(event.steering);
+      }
+
+      let reconciledSteerId: string | null = null;
+      if (event.type === "message_end" && event.message.role === "user") {
+        const canonicalText = userMessageText(event.message);
+        const pendingIndex = pendingSteersRef.current.findIndex((item) => item.message === canonicalText);
+        if (pendingIndex !== -1) {
+          reconciledSteerId = pendingSteersRef.current[pendingIndex].id;
+          pendingSteersRef.current.splice(pendingIndex, 1);
+        }
+      }
       const result = applyAgentEvent(event);
+
+      if (reconciledSteerId && event.type === "message_end" && event.message.role === "user") {
+        const clientMessageId = reconciledSteerId;
+        const canonical = event.message;
+        result.appendMessages = undefined;
+        setMessages((prev) => prev.map((message) => {
+          if (message.role !== "user" || message.clientMessageId !== clientMessageId) return message;
+          return { ...canonical, timestamp: message.timestamp };
+        }));
+      }
 
       if (result.agentRunning !== undefined) setAgentRunning(result.agentRunning);
       if (result.phaseOp) {
@@ -270,6 +359,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                       contextUsage?: ContextUsage | null;
                       systemPrompt?: string;
                       agentMode?: AgentMode;
+                      followUpQueue?: FollowUpQueueSnapshot;
                     };
                   }) => {
                     if (d.state?.contextUsage !== undefined) {
@@ -279,6 +369,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                       setSystemPrompt(d.state.systemPrompt ?? null);
                     }
                     if (d.state?.agentMode) setAgentMode(d.state.agentMode);
+                    if (d.state?.followUpQueue) acceptFollowUpQueue(d.state.followUpQueue);
                   }
                 )
                 .catch((err) => {
@@ -301,7 +392,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
       }
     },
-    [loadSession, onAgentEnd, onAgentEndEvent, setMessages, setEntryIds, setCanExecutePlan]
+    [acceptFollowUpQueue, loadSession, onAgentEnd, onAgentEndEvent, reconcileSteeringQueue, setMessages, setEntryIds, setCanExecutePlan]
   );
   handleAgentEventRef.current = handleAgentEvent;
 
@@ -334,7 +425,55 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     connectEvents,
     onSessionCreated,
     onSessionForked,
+    onFollowUpQueueSnapshot: acceptFollowUpQueue,
+    onPendingSteerQueued: handlePendingSteerQueued,
+    onPendingSteerFailed: handlePendingSteerFailed,
   });
+
+  const handleReorderFollowUps = useCallback(async (orderedIds: string[]) => {
+    if (followUpQueueBusy) return;
+    const previous = followUpQueueRef.current;
+    if (
+      orderedIds.length !== previous.items.length ||
+      orderedIds.every((id, index) => id === previous.items[index]?.id)
+    ) return;
+    const byId = new Map(previous.items.map((item) => [item.id, item]));
+    const optimistic: FollowUpQueueSnapshot = {
+      revision: previous.revision,
+      items: orderedIds.map((id) => byId.get(id)).filter((item): item is FollowUpQueueSnapshot["items"][number] => Boolean(item)),
+    };
+    if (optimistic.items.length !== previous.items.length) return;
+    followUpQueueRef.current = optimistic;
+    setFollowUpQueue(optimistic);
+    setFollowUpQueueBusy(true);
+    const sid = sessionIdRef.current;
+    if (!sid) {
+      acceptFollowUpQueue(previous);
+      setFollowUpQueueBusy(false);
+      return;
+    }
+    try {
+      const snapshot = await sendAgentCommand<FollowUpQueueSnapshot>(sid, {
+        type: "reorder_follow_ups",
+        orderedIds,
+        expectedRevision: previous.revision,
+      });
+      acceptFollowUpQueue(snapshot);
+    } catch (error) {
+      console.error("Failed to reorder follow-ups:", error);
+      try {
+        const state = await sendAgentCommand<{ followUpQueue?: FollowUpQueueSnapshot }>(sid, { type: "get_state" });
+        if (state.followUpQueue) acceptFollowUpQueue(state.followUpQueue);
+      } catch {
+        if (followUpQueueRef.current.revision === previous.revision) {
+          followUpQueueRef.current = previous;
+          setFollowUpQueue(previous);
+        }
+      }
+    } finally {
+      setFollowUpQueueBusy(false);
+    }
+  }, [acceptFollowUpQueue, followUpQueueBusy, sessionIdRef]);
 
   // Load session on mount AND on session change.
   //
@@ -369,6 +508,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAgentMode(DEFAULT_AGENT_MODE);
     setCanExecutePlan(false);
     setExtensionUiRequest(null);
+    followUpQueueRef.current = EMPTY_FOLLOW_UP_QUEUE;
+    setFollowUpQueue(EMPTY_FOLLOW_UP_QUEUE);
+    setFollowUpQueueBusy(false);
+    pendingSteersRef.current = [];
 
     fetch("/api/desktop-settings")
       .then((r) => r.json())
@@ -391,6 +534,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (patch.isCompacting !== undefined) setIsCompacting(patch.isCompacting);
       if (patch.contextUsage !== undefined) setContextUsage(patch.contextUsage);
       if (patch.systemPrompt !== undefined) setSystemPrompt(patch.systemPrompt);
+      const loadedQueue = loaded?.agentState?.state?.followUpQueue;
+      if (loadedQueue) acceptFollowUpQueue(loadedQueue);
     });
 
     return () => {
@@ -472,6 +617,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     displayModel,
     sessionStats,
     agentPhase,
+    followUpQueue,
+    followUpQueueBusy,
     isNew,
     // Refs
     sessionIdRef,
@@ -492,6 +639,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleCompact: commands.handleCompact,
     handleSteer: commands.handleSteer,
     handleFollowUp: commands.handleFollowUp,
+    handleReorderFollowUps,
     handleAbortCompaction: commands.handleAbortCompaction,
     handleToolPresetChange,
     handleThinkingLevelChange,

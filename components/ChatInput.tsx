@@ -10,13 +10,16 @@ import { AttachmentPreview } from "./chat-input/AttachmentPreview";
 import { ModelSelector } from "./chat-input/ModelSelector";
 import { PresetSelector } from "./chat-input/PresetSelector";
 import { AgentModeSelector } from "./AgentModeSelector";
+import { resolveComposerSubmitAction } from "./chat-input/submit-action";
+import { QueuedMessageList } from "./chat-input/QueuedMessageList";
 import type { AgentMode } from "@/lib/approval-policy";
+import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
 
 interface Props {
   onSend: (message: string, images?: AttachedImage[]) => void;
   onAbort: () => void;
-  onSteer?: (message: string, images?: AttachedImage[]) => void;
-  onFollowUp?: (message: string, images?: AttachedImage[]) => void;
+  onSteer?: (message: string, images?: AttachedImage[]) => Promise<void>;
+  onFollowUp?: (message: string, images?: AttachedImage[]) => Promise<void>;
   isStreaming: boolean;
   currentCwd?: string | null;
   model?: { provider: string; modelId: string } | null;
@@ -38,6 +41,9 @@ interface Props {
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
+  followUpQueue?: FollowUpQueueSnapshot;
+  followUpQueueBusy?: boolean;
+  onReorderFollowUps?: (orderedIds: string[]) => void;
 }
 
 const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
@@ -59,6 +65,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   soundEnabled, onSoundToggle,
+  followUpQueue, followUpQueueBusy, onReorderFollowUps,
 }: Props, ref) {
   const [value, setValue] = useState("");
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
@@ -256,20 +263,60 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     clearImages();
   }, [value, attachedImages, isStreaming, onSend, clearImages]);
 
-  const sendQueued = useCallback((mode: "steer" | "followup") => {
+  const sendQueued = useCallback(async (mode: "steer" | "followup") => {
     const msg = value.trim();
-    if (!msg && !attachedImages.length) return;
-    if (mode === "steer" && onSteer) {
-      onSteer(msg, attachedImages.length ? attachedImages : undefined);
-    } else if (mode === "followup" && onFollowUp) {
-      onFollowUp(msg, attachedImages.length ? attachedImages : undefined);
+    const submittedImages = attachedImages.length ? attachedImages : undefined;
+    if (!msg && !submittedImages?.length) return;
+
+    const submit = mode === "steer" ? onSteer : onFollowUp;
+    if (!submit) return;
+
+    try {
+      await submit(msg, submittedImages);
+      setValue((current) => current === value ? "" : current);
+      if (submittedImages?.length) {
+        const submittedUrls = new Set(submittedImages.map((image) => image.previewUrl));
+        setAttachedImages((current) => {
+          const delivered = current.filter((image) => submittedUrls.has(image.previewUrl));
+          delivered.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+          return current.filter((image) => !submittedUrls.has(image.previewUrl));
+        });
+      }
+    } catch {
+      // Keep the draft and previews intact so the user can retry.
+      requestAnimationFrame(() => textareaRef.current?.focus());
     }
-    setValue("");
-    clearImages();
-  }, [value, attachedImages, onSteer, onFollowUp, clearImages]);
+  }, [value, attachedImages, onSteer, onFollowUp]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter") {
+        const action = resolveComposerSubmitAction({
+          altKey: e.altKey,
+          shiftKey: e.shiftKey,
+          isComposing: e.nativeEvent.isComposing,
+          isStreaming,
+          slashMenuOpen,
+          canSteer: Boolean(onSteer),
+          canFollowUp: Boolean(onFollowUp),
+        });
+
+        if (action === "none") return;
+        e.preventDefault();
+
+        if (action === "slash") {
+          const item = slashItems[Math.min(slashActiveIndex, slashItems.length - 1)];
+          if (item) selectSlashItem(item);
+          return;
+        }
+        if (action === "steer" || action === "followup") {
+          void sendQueued(action);
+          return;
+        }
+        handleSend();
+        return;
+      }
+
       if (slashMenuOpen) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
@@ -281,7 +328,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           setSlashActiveIndex((index) => (index - 1 + slashItems.length) % slashItems.length);
           return;
         }
-        if ((e.key === "Enter" && !e.shiftKey) || e.key === "Tab") {
+        if (e.key === "Tab") {
           e.preventDefault();
           const item = slashItems[Math.min(slashActiveIndex, slashItems.length - 1)];
           if (item) selectSlashItem(item);
@@ -294,14 +341,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
 
-      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-        e.preventDefault();
-        if (isStreaming && (onSteer || onFollowUp)) {
-          sendQueued(onSteer ? "steer" : "followup");
-        } else {
-          handleSend();
-        }
-      }
     },
     [slashMenuOpen, slashItems, slashActiveIndex, selectSlashItem, value, isStreaming, onSteer, onFollowUp, sendQueued, handleSend]
   );
@@ -385,6 +424,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
         {/* Image previews */}
         <AttachmentPreview attachedImages={attachedImages} onRemoveImage={removeImage} />
+
+        {followUpQueue && onReorderFollowUps && (
+          <QueuedMessageList
+            items={followUpQueue.items}
+            disabled={followUpQueueBusy}
+            onReorder={onReorderFollowUps}
+          />
+        )}
 
         {/* Main input */}
         <div style={{ position: "relative" }}>
@@ -539,8 +586,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               : isStreaming && (onSteer || onFollowUp)
                 ? "var(--warning-border)"
                 : "color-mix(in srgb, var(--border) 70%, transparent)"}`,
-            borderRadius: 16,
-            padding: "10px 10px 10px 14px",
+            borderRadius: 18,
+            padding: "7px 7px 7px 15px",
           } as React.CSSProperties}
         >
           <textarea
@@ -559,12 +606,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               setCaretIndex(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
             }}
             onBlur={() => setInputFocused(false)}
-            placeholder={
-              isStreaming && (onSteer || onFollowUp)
-                ? "Steer 立即注入 / Follow-up 排队…"
-                : isStreaming ? "Agent is running…"
-                : "Message…"
-            }
+            aria-label="Message"
+            aria-keyshortcuts={isStreaming && onFollowUp ? "Alt+Enter" : undefined}
             rows={1}
             className="t-resize"
             style={{
@@ -584,54 +627,28 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           />
 
           {isStreaming ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
-              {onSteer && (
+            <div style={{ display: "flex", alignItems: "center", flexShrink: 0, alignSelf: "flex-end" }}>
+              {(onSteer || onFollowUp) && (
                 <button
-                  onClick={() => sendQueued("steer")}
+                  onClick={() => void sendQueued(onSteer ? "steer" : "followup")}
                   disabled={!value.trim() && !attachedImages.length}
-                  title="打断 Agent 当前运行，立即注入消息"
-                  aria-label="Steer running agent"
+                  title={onSteer ? "Send now" : "Queue message"}
+                  aria-label={onSteer ? "Send message to running agent" : "Queue follow-up message"}
                   style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "7px 12px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 38, height: 38, padding: 0,
                     background: (value.trim() || attachedImages.length) ? "var(--warning-bg)" : "none",
-                    border: "1px solid var(--warning-border)",
-                    borderRadius: "var(--radius-control)",
+                    border: "none",
+                    borderRadius: 12,
                     color: (value.trim() || attachedImages.length) ? "var(--warning)" : "var(--text-dim)",
                     cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
-                    fontSize: 13, fontWeight: 600, letterSpacing: 0,
-                    transition: "background 0.12s",
                   }}
+                  className="composer-icon-button"
                 >
-                  <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 1 L9 5 L5 9" /><line x1="1" y1="5" x2="9" y2="5" />
+                  <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="2" y1="7" x2="11" y2="7" />
+                    <polyline points="7.5 3 12 7 7.5 11" />
                   </svg>
-                  Steer
-                </button>
-              )}
-              {onFollowUp && (
-                <button
-                  onClick={() => sendQueued("followup")}
-                  disabled={!value.trim() && !attachedImages.length}
-                  title="在 Agent 完成后排队发送"
-                  aria-label="Queue follow-up message"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "7px 12px",
-                    background: (value.trim() || attachedImages.length) ? "var(--info-bg)" : "none",
-                    border: "1px solid var(--info-border)",
-                    borderRadius: "var(--radius-control)",
-                    color: (value.trim() || attachedImages.length) ? "var(--info)" : "var(--text-dim)",
-                    cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
-                    fontSize: 13, fontWeight: 600, letterSpacing: 0,
-                    transition: "background 0.12s",
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="5" y1="1" x2="5" y2="6" /><polyline points="2.5 3.5 5 1 7.5 3.5" />
-                    <line x1="2" y1="9" x2="8" y2="9" />
-                  </svg>
-                  Follow-up
                 </button>
               )}
             </div>
@@ -640,28 +657,25 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               onClick={handleSend}
               disabled={!value.trim() && !attachedImages.length}
               aria-label="Send message"
+              title="Send message"
               style={{
                 flexShrink: 0,
                 alignSelf: "flex-end",
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "7px 14px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 38, height: 38, padding: 0,
                 background: (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
                 border: "none",
-                borderRadius: "var(--radius-control)",
+                borderRadius: 12,
                 color: (value.trim() || attachedImages.length) ? "var(--accent-contrast)" : "var(--text-dim)",
                 cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: 0,
                 boxShadow: (value.trim() || attachedImages.length) ? "0 1px 8px var(--focus-ring)" : "none",
               }}
-              className="transition-[background-color,color,box-shadow,transform] duration-150 active:scale-95"
+              className="composer-icon-button"
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="2" y1="7" x2="11" y2="7" />
                 <polyline points="7.5 3 12 7 7.5 11" />
               </svg>
-              Send
             </button>
           )}
         </div>
@@ -889,25 +903,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 title="停止 Agent"
                 aria-label="Stop agent"
                 style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 14px",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 32, padding: 0,
                   height: "var(--control-height)",
                   background: "var(--danger-bg)",
                   border: "1px solid var(--danger-border)",
                   borderRadius: "var(--radius-control)",
                   color: "var(--danger)",
                   cursor: "pointer",
-                  fontSize: 12, fontWeight: 600,
-                  whiteSpace: "nowrap", letterSpacing: 0,
-                  transition: "background 0.12s",
+                  whiteSpace: "nowrap",
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = "var(--danger-bg)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "var(--danger-bg)"; }}
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
                   <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
                 </svg>
-                Stop
               </button>
             )}
 

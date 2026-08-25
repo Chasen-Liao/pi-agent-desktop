@@ -505,7 +505,7 @@ test("applyDeepSeekXhighWorkaround: no-op when model is null (default stub)", ()
 });
 
 // ============================================================================
-// Task D5: agent_error emission on prompt/steer/followUp failures
+// Task D5: agent_error emission on prompt/steer failures
 // Pi-side failures used to only hit console.error (prompt) or only surface
 // via the HTTP response (steer/follow_up), leaving the client UI hanging
 // in agentRunning=true because no agent_end would ever arrive. These cases
@@ -544,19 +544,124 @@ test("steer failure emits agent_error and rethrows", async () => {
   assert.deepEqual(events[0], { type: "agent_error", errorMessage: "steer boom" });
 });
 
-test("follow_up failure emits agent_error and rethrows", async () => {
-  const events: unknown[] = [];
+test("follow_up dispatches immediately when the final settled event already passed", async () => {
+  const events: Array<{ type?: string; items?: unknown[] }> = [];
+  const prompts: string[] = [];
   const inner = makeStubInner({
-    followUp: () => Promise.reject(new Error("followup boom")),
+    isStreaming: false,
+    prompt: async (message) => {
+      prompts.push(message);
+    },
   });
   const w = new AgentSessionWrapper(inner);
-  w.onEvent((e) => { events.push(e); });
+  w.onEvent((event) => { events.push(event); });
   w.start();
 
-  await assert.rejects(w.send({ type: "follow_up", message: "hi" }), /followup boom/);
+  const snapshot = await w.send({ type: "follow_up", message: "hi" }) as {
+    items: Array<{ message: string }>;
+  };
 
-  assert.equal(events.length, 1);
-  assert.deepEqual(events[0], { type: "agent_error", errorMessage: "followup boom" });
+  assert.deepEqual(prompts, ["hi"]);
+  assert.deepEqual(snapshot.items, []);
+  assert.equal(events.filter((event) => event.type === "follow_up_queue_update").length, 2);
+  assert.deepEqual(events.at(-1)?.items, []);
+  await w.destroy();
+});
+
+test("follow_up waits for the pending settled boundary after agent_end", async () => {
+  let emitInner: ((event: unknown) => void) | null = null;
+  const prompts: string[] = [];
+  const inner = makeStubInner({
+    isStreaming: true,
+    sessionManager: {
+      getBranch: () => [],
+      getHeader: () => ({ cwd: "D:/project" }),
+    },
+    subscribe: (cb) => {
+      emitInner = cb;
+      return () => {};
+    },
+    prompt: async (message) => {
+      prompts.push(message);
+    },
+  });
+  const w = new AgentSessionWrapper(inner);
+  w.start();
+  const emit = (event: unknown) => {
+    const listener = emitInner as ((value: unknown) => void) | null;
+    assert.ok(listener);
+    listener(event);
+  };
+
+  emit({ type: "agent_end", messages: [] });
+  (inner as unknown as { isStreaming: boolean }).isStreaming = false;
+  const queued = await w.send({ type: "follow_up", message: "after" }) as { items: unknown[] };
+  assert.equal(queued.items.length, 1);
+  assert.deepEqual(prompts, []);
+
+  emit({ type: "agent_settled" });
+  await flushMicrotasks();
+  assert.deepEqual(prompts, ["after"]);
+  await w.destroy();
+});
+
+test("queued follow-ups are reordered and dispatched one at each settled boundary", async () => {
+  let emitInner: ((event: unknown) => void) | null = null;
+  const prompts: string[] = [];
+  const events: Array<{ type?: string }> = [];
+  const inner = makeStubInner({
+    isStreaming: true,
+    sessionManager: {
+      getBranch: () => [],
+      getHeader: () => ({ cwd: "D:/project" }),
+    },
+    subscribe: (cb) => {
+      emitInner = cb;
+      return () => {};
+    },
+    prompt: async (message) => {
+      prompts.push(message);
+    },
+  });
+  const w = new AgentSessionWrapper(inner);
+  w.onEvent((event) => events.push(event));
+  w.start();
+  const emit = (event: unknown) => {
+    const listener = emitInner as ((value: unknown) => void) | null;
+    assert.ok(listener);
+    listener(event);
+  };
+
+  const first = await w.send({ type: "follow_up", message: "A" }) as {
+    revision: number;
+    items: Array<{ id: string }>;
+  };
+  const second = await w.send({ type: "follow_up", message: "B" }) as {
+    revision: number;
+    items: Array<{ id: string }>;
+  };
+  await w.send({
+    type: "reorder_follow_ups",
+    orderedIds: [second.items[1].id, first.items[0].id],
+    expectedRevision: second.revision,
+  });
+
+  emit({ type: "agent_end", messages: [] });
+  assert.equal(events.some((event) => event.type === "agent_end"), false);
+  emit({ type: "agent_settled" });
+  await flushMicrotasks();
+  assert.deepEqual(prompts, ["B"]);
+
+  emit({ type: "agent_end", messages: [] });
+  emit({ type: "agent_settled" });
+  await flushMicrotasks();
+  assert.deepEqual(prompts, ["B", "A"]);
+
+  emit({ type: "agent_end", messages: [] });
+  emit({ type: "agent_settled" });
+  await flushMicrotasks();
+  assert.equal(events.filter((event) => event.type === "agent_end").length, 1);
+  await w.destroy();
 });
 
 test("agent_error reaches every listener even if an earlier listener throws", async () => {

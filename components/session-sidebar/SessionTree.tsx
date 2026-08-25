@@ -59,7 +59,7 @@ export function SessionTreeItem({
       </div>
       {hasChildren && (
         <div
-          className={`grid transition-[grid-template-rows,opacity] duration-250 ease-[var(--ease-smooth-out)] ${
+          className={`session-tree-children grid transition-[grid-template-rows,opacity] duration-250 ease-[var(--ease-smooth-out)] ${
             collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
           }`}
         >

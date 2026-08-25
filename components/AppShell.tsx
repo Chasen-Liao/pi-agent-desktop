@@ -47,6 +47,7 @@ export function AppShell() {
   const [extensionsModalOpen, setExtensionsModalOpen] = useState(false);
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
   const shellMenuRef = useRef<HTMLDivElement>(null);
+  const shellMenuButtonRef = useRef<HTMLButtonElement>(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportSessionId, setExportSessionId] = useState<string | null>(null);
   const [branchCloneModal, setBranchCloneModal] = useState<{
@@ -140,9 +141,19 @@ export function AppShell() {
         setShellMenuOpen(false);
       }
     };
+    const closeShellMenuWithKeyboard = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !shellMenuOpen) return;
+      event.preventDefault();
+      setShellMenuOpen(false);
+      shellMenuButtonRef.current?.focus();
+    };
     document.addEventListener("pointerdown", closeShellMenu);
-    return () => document.removeEventListener("pointerdown", closeShellMenu);
-  }, []);
+    document.addEventListener("keydown", closeShellMenuWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeShellMenu);
+      document.removeEventListener("keydown", closeShellMenuWithKeyboard);
+    };
+  }, [shellMenuOpen]);
 
   useEffect(() => {
     if (!activeTopPanel || !topBarRef.current) return;
@@ -551,9 +562,12 @@ export function AppShell() {
             <StatsBar showChat={showChat} sessionStats={sessionStats} contextUsage={contextUsage} />
             <div ref={shellMenuRef} className="relative h-full [-webkit-app-region:no-drag]">
               <button
+                ref={shellMenuButtonRef}
                 type="button"
                 onClick={() => setShellMenuOpen((open) => !open)}
                 aria-label="Workbench menu"
+                aria-haspopup="menu"
+                aria-controls="workbench-menu"
                 aria-expanded={shellMenuOpen}
                 className="flex h-full w-9 items-center justify-center border-none border-l border-divider bg-transparent text-text-muted transition-colors duration-150 hover:text-text"
               >
@@ -561,12 +575,16 @@ export function AppShell() {
                   <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
                 </svg>
               </button>
+              {shellMenuOpen && (
               <div
-                className={`t-dropdown material-popover absolute right-1 top-[calc(100%+6px)] z-[700] w-52 rounded-panel border border-border p-1.5 shadow-popover${shellMenuOpen ? " is-open" : ""}`}
+                id="workbench-menu"
+                role="menu"
+                className="t-dropdown is-open material-popover absolute right-1 top-[calc(100%+6px)] z-[700] w-52 rounded-panel border border-border p-1.5 shadow-popover"
                 data-origin="top-right"
               >
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={(event) => {
                     const rect = event.currentTarget.getBoundingClientRect();
                     setShellMenuOpen(false);
@@ -580,6 +598,7 @@ export function AppShell() {
                 {showChat && (
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => { setShellMenuOpen(false); toggleTopPanel("system"); }}
                     className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
                   >
@@ -588,6 +607,7 @@ export function AppShell() {
                 )}
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => { setShellMenuOpen(false); setExtensionsModalOpen(true); }}
                   className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
                 >
@@ -595,6 +615,7 @@ export function AppShell() {
                 </button>
                 <button
                   type="button"
+                  role="menuitem"
                   disabled={!selectedSession}
                   onClick={() => {
                     setShellMenuOpen(false);
@@ -606,6 +627,7 @@ export function AppShell() {
                   <span className="w-4 text-center">⇩</span> Export session
                 </button>
               </div>
+              )}
             </div>
             {!rightPanelOpen && (
               <>

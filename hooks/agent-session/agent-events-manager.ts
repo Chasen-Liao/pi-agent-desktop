@@ -31,6 +31,7 @@ export type AgentEvent =
   | { type: "connected"; sessionId: string }
   | { type: "agent_start" }
   | { type: "agent_end" }
+  | { type: "agent_settled" }
   | { type: "agent_error"; errorMessage: string }
   | { type: "message_start"; message: Partial<AgentMessage> }
   | { type: "message_update"; message: Partial<AgentMessage> }
@@ -43,6 +44,12 @@ export type AgentEvent =
   | { type: "compaction_start" }
   | { type: "auto_compaction_end"; errorMessage?: string; aborted?: boolean }
   | { type: "compaction_end"; errorMessage?: string; aborted?: boolean }
+  | { type: "queue_update"; steering: readonly string[]; followUp: readonly string[] }
+  | {
+      type: "follow_up_queue_update";
+      revision: number;
+      items: Array<{ id: string; message: string; attachmentCount: number; createdAt: number }>;
+    }
   | ExtensionUiRequestEvent
   | ExtensionUiNotifyEvent;
 

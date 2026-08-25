@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import type { SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
 import { splitActiveThinking } from "@/lib/active-thinking";
 import { MessageList } from "./MessageList";
@@ -30,12 +31,6 @@ interface Props {
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
 }
 
-const STARTER_PROMPTS = [
-  { label: "Explore this project", prompt: "梳理当前工程的目录结构、核心模块和关键入口。" },
-  { label: "Diagnose an issue", prompt: "检查工程中的潜在 bug、性能瓶颈和不规范实现。" },
-  { label: "Review recent changes", prompt: "审查当前工作区的改动，指出风险和可以改进的地方。" },
-];
-
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange }: Props) {
   const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
   const playDoneSoundRef = useRef(playDoneSound);
@@ -56,6 +51,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, displayModel: displayModelValue, sessionStats,
     agentPhase,
+    followUpQueue, followUpQueueBusy,
     isNew,
     agentMode,
     canExecutePlan,
@@ -68,6 +64,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     lastUserMsgRef,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handleAbortCompaction,
+    handleReorderFollowUps,
     handleToolPresetChange, handleThinkingLevelChange,
     handleAgentModeChange, handleExecutePlan,
     connectEvents, connectionStatus,
@@ -185,6 +182,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         onAbort={handleAbort}
         onSteer={agentRunning ? handleSteer : undefined}
         onFollowUp={agentRunning ? handleFollowUp : undefined}
+        followUpQueue={followUpQueue}
+        followUpQueueBusy={followUpQueueBusy}
+        onReorderFollowUps={handleReorderFollowUps}
         isStreaming={agentRunning}
         currentCwd={session?.cwd ?? newSessionCwd}
         model={displayModelValue}
@@ -287,41 +287,22 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       )}
 
       {isEmptyNew ? (
-        <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-4 py-10 md:py-16">
+        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-10 md:py-16">
           <div className="flex w-full max-w-[820px] flex-col justify-center">
-            <div className="mb-7 flex flex-col items-center text-center select-none">
-              <div className="mb-3 grid h-10 w-10 place-items-center rounded-[13px] border border-border bg-bg-elevated font-mono text-[22px] font-semibold text-text-strong shadow-input">
-                π
-              </div>
-              <h1 className="mb-1 text-[24px] font-semibold tracking-[-0.02em] text-text-strong">
-                What do you want to build?
-              </h1>
-              <p className="m-0 text-[13px] text-text-muted">
-                Pi works directly with your project, tools, and files.
-              </p>
-            </div>
-
-            <div className="mb-5 flex flex-wrap justify-center gap-2">
-              {STARTER_PROMPTS.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => handleEditContent(item.prompt)}
-                  className="rounded-full border border-border bg-bg-elevated px-3 py-1.5 text-[12px] text-text-muted shadow-sm transition-[background-color,color,border-color,transform] duration-150 hover:border-focus-ring hover:bg-bg-hover hover:text-text active:scale-[0.98]"
-                >
-                  {item.label}
-                </button>
-              ))}
+            <div className="mb-8 flex justify-center select-none">
+              <Image
+                src="/logo.png"
+                alt=""
+                aria-hidden="true"
+                width={64}
+                height={64}
+                priority
+                draggable={false}
+                className="h-16 w-16 rounded-[18px] shadow-sm"
+              />
             </div>
 
             {chatInputElement}
-
-            <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-text-dim select-none">
-              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              <span>Drop files here to add context</span>
-            </div>
           </div>
         </div>
       ) : (

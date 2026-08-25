@@ -224,7 +224,10 @@ const UserMessageView = React.memo(function UserMessageView({
       onMouseLeave={() => setHovered(false)}
     >
       <div className="flex items-end gap-1.5 max-w-[85%]">
-        <div className="flex-1 min-w-0 bg-user-bg border border-user-border rounded-panel px-3 py-2 text-[14px] leading-[1.6] text-text whitespace-pre-wrap break-words">
+        <div
+          className="user-message-bubble flex-1 min-w-0 bg-user-bg border border-user-border rounded-panel px-3 py-2 text-[14px] leading-[1.6] text-text whitespace-pre-wrap break-words"
+          data-delivery={message.deliveryState ?? "sent"}
+        >
           {imageBlocks.length > 0 && (
             <div className={`flex gap-1.5 flex-wrap ${content ? "mb-2" : "mb-0"}`}>
               {imageBlocks.map((img, i) => {
