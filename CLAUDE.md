@@ -63,6 +63,7 @@ npm run dist
 - **会话导出 (HTML/MD)**：支持将会话流式或静态导出为独立的 HTML（含语法高亮）或 Markdown 文件 (`/api/sessions/[id]/export`)。
 - **AgentMode `.jsonl` 持久化**：在模式切换时向 Session `.jsonl` 追加 `desktop_agent_mode` Custom Entry，Session 重载时自动恢复历史模式。
 - **长期记忆 LTM（v0.7.19）**：项目级 SQLite 记忆库 `lib/ltm`；工具 `memory_save` / `memory_recall` / `memory_forget`；API `/api/memory/*`；`agent_end` 与 compact 前自动 observe。设计见 [docs/superpowers/specs/2026-08-03-long-term-memory-design.md](docs/superpowers/specs/2026-08-03-long-term-memory-design.md)；会话记忆基线见 [docs/memory-architecture.html](docs/memory-architecture.html)。
+- **可重排 Follow-up Queue（v0.8.0）**：Agent 运行中 Enter 发送 steer、Alt+Enter 排队；队列由 `AgentSessionWrapper` 管理并通过 SSE 同步，支持拖拽或键盘重排。
 
 ## 高层架构
 
@@ -81,14 +82,14 @@ npm run dist
 |---|---|
 | `app/api/` | **38** 条 API 路由（含 **memory** 5 条；另有 agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings 等） |
 | `lib/` | 服务端库：`rpc-manager` / `session-reader` / **`ltm/`** / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` 等 |
-| `components/` | 24 个顶层组件（含 `McpConfigModal` / `SessionExportModal` / `ExtensionsConfigModal` / `ProjectTrustDialog` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
-| `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 8 个拆分 hook |
-| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 7 个辅助模块 |
+| `components/` | 26 个顶层组件（含 `AgentThinkingOrb` / `LiquidOrbCanvas` / `McpConfigModal` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
+| `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 12 个拆分模块 |
+| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 10 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
 
 ### 三条最常踩坑的设计决策
 
-- **活跃 session 注册表必须存 `globalThis`**：Next.js HMR 会丢弃模块级变量；至少：`__piSessions` / `__piSessionPathCache` / `__piStartLocks` / `__piWriteLocks` / `__piAllowedRootsCache`；LTM 另有 `__piLtmService`（见 `lib/ltm/service.ts`）。详见 [AGENTS.md](AGENTS.md#五个必须存-globalthis-的原因) 与 [docs/ARCHITECTURE.md §14.1](docs/ARCHITECTURE.md)。
+- **活跃 session 注册表必须存 `globalThis`**：Next.js HMR 会丢弃模块级变量；至少：`__piSessions` / `__piSessionPathCache` / `__piStartLocks` / `__piWriteLocks` / `__piAllowedRootsCache`；LTM 另有 `__piLtmService`（见 `lib/ltm/service.ts`）。详见 [AGENTS.md](AGENTS.md#必须存-globalthis-的原因) 与 [docs/ARCHITECTURE.md §14.1](docs/ARCHITECTURE.md)。
 - **Electron 打包 + Next 16 Turbopack**：`next build` 后必须跑 `scripts/ensure-standalone-next-runtimes.mjs`，否则 standalone 缺 `app-route-turbo.runtime.prod.js`，桌面端会卡在启动页。
 - **两种分支不要混淆**：**Fork / Branch** = 跨文件新 `.jsonl`（`POST /api/sessions/[id]/branch` 或 `POST /api/agent/[id]` with `{type:"fork"}`）；**会话内分支** = 同文件 `navigate_tree` + `GET /api/sessions/[id]/context?leafId=`。
 - **Fork 后必须立即销毁旧 wrapper**：Fork 在文件层通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）创建新 `.jsonl`，再用 `startRpcSession()` 构造全新 AgentSession 实例；旧 wrapper 不再会被请求到，立即 `destroy()` 可及时释放资源（而非等 10 分钟 idle 超时）。详见 [docs/ARCHITECTURE.md §14.2](docs/ARCHITECTURE.md#142-fork-的执行顺序预注册--销毁旧-wrapper)。

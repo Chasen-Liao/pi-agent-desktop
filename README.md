@@ -26,6 +26,8 @@
 - **原生桌面体验** — 基于 Electron 的独立窗口应用，支持系统托盘、最小化到托盘
 - **会话浏览器** — 按工作目录分组展示所有 pi 会话
 - **实时对话** — 通过 SSE 流式输出与智能体实时交互
+- **运行中消息队列** — Enter 立即 steer，Alt+Enter 排队；支持拖拽与键盘重排 Follow-up
+- **原生工作区界面** — Apple 风格桌面布局、液态思考球与更紧凑的消息输入体验
 - **Agent 模式** — 支持 Plan / Ask / Full 三种安全模式与 Ask 工具拦截确认
 - **Extension UI Bridge** — 原生弹窗支持 Extension `confirm`/`select`/`input`/`editor`/`notify` 交互
 - **项目信任机制** — Project Trust 409 握手与授权弹窗
@@ -104,10 +106,6 @@ scripts/
 - **桌面**：Electron
 - **打包**：electron-builder (NSIS)
 - **通信**：SSE (Server-Sent Events) 实时流式传输
-
-## 界面截图
-
-![Pi Agent Desktop Interface](image-2.png)
 
 ## 致谢
 

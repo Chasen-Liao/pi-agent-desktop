@@ -879,12 +879,12 @@
       pi coding agent 的原生桌面客户端 — 基于 Next.js 16 + React 19 + Electron 构建的双模式全栈 AI 编程助手
     </p>
     <div class="badges">
-      <span class="badge"><b>Next.js</b> 16.2</span>
+      <span class="badge"><b>Next.js</b> 16.3</span>
       <span class="badge"><b>React</b> 19</span>
       <span class="badge"><b>Electron</b> 36</span>
       <span class="badge"><b>Tailwind</b> 4</span>
       <span class="badge"><b>TypeScript</b> strict</span>
-      <span class="badge"><b>pi-agent</b> ^0.79</span>
+      <span class="badge"><b>pi-agent</b> ^0.84.3</span>
       <span class="badge">零状态库</span>
       <span class="badge">零UI库</span>
       <span class="badge">SSE 流式</span>
@@ -957,7 +957,7 @@
           <div class="arch-node"><span class="icon">🔒</span> session-lock.ts <code>文件锁</code></div>
           <div class="arch-node"><span class="icon">📁</span> files API <code>安全根限制</code></div>
           <div class="arch-node"><span class="icon">🔐</span> auth API <code>OAuth + API Key (5)</code></div>
-          <div class="arch-node"><span class="icon">🤖</span> agent API <code>24 条路由</code></div>
+          <div class="arch-node"><span class="icon">🤖</span> App Router API <code>38 条路由</code></div>
         </div>
       </div>
 
@@ -1088,7 +1088,7 @@
 <section id="components">
   <div class="section-inner">
     <div class="section-tag">// Components</div>
-    <h2 class="section-title">17 个顶层组件 + 3 个子组件目录</h2>
+    <h2 class="section-title">核心组件与子组件目录</h2>
     <p class="section-desc">
       全部手写，零 UI 组件库依赖。每个组件通过 CSS 变量实现暗色/亮色主题，使用 React 19 的最新特性构建。CodeGraph 索引实际统计：顶层 17 个 + 子组件目录 3 个（<code>chat-input/</code>、<code>session-sidebar/</code>、<code>models-config/</code>）。
     </p>
@@ -1230,7 +1230,7 @@
     <div class="tech-grid">
       <div class="tech-item" style="transition-delay:0.05s">
         <div class="tech-icon">▲</div>
-        <div><div class="tech-name">Next.js</div><div class="tech-ver">16.2.1 App Router</div></div>
+        <div><div class="tech-name">Next.js</div><div class="tech-ver">16.3.2 App Router</div></div>
       </div>
       <div class="tech-item" style="transition-delay:0.1s">
         <div class="tech-icon">⚛️</div>
@@ -1254,11 +1254,11 @@
       </div>
       <div class="tech-item" style="transition-delay:0.35s">
         <div class="tech-icon">🤖</div>
-        <div><div class="tech-name">pi-coding-agent</div><div class="tech-ver">^0.79.8 SDK</div></div>
+        <div><div class="tech-name">pi-coding-agent</div><div class="tech-ver">^0.84.3 SDK</div></div>
       </div>
       <div class="tech-item" style="transition-delay:0.4s">
         <div class="tech-icon">🧠</div>
-        <div><div class="tech-name">pi-ai</div><div class="tech-ver">^0.79.8</div></div>
+        <div><div class="tech-name">pi-ai</div><div class="tech-ver">^0.84.3</div></div>
       </div>
       <div class="tech-item" style="transition-delay:0.45s">
         <div class="tech-icon">🏷️</div>
@@ -1270,11 +1270,11 @@
       </div>
       <div class="tech-item" style="transition-delay:0.55s">
         <div class="tech-icon">📦</div>
-        <div><div class="tech-name">electron-builder</div><div class="tech-ver">^26.8.1 NSIS</div></div>
+        <div><div class="tech-name">electron-builder</div><div class="tech-ver">^26.15.3 NSIS</div></div>
       </div>
       <div class="tech-item" style="transition-delay:0.6s">
         <div class="tech-icon">🔄</div>
-        <div><div class="tech-name">electron-updater</div><div class="tech-ver">^6.8.3 自动更新</div></div>
+        <div><div class="tech-name">electron-updater</div><div class="tech-ver">^6.8.9 自动更新</div></div>
       </div>
       <div class="tech-item" style="transition-delay:0.65s">
         <div class="tech-icon">🚀</div>
@@ -1306,7 +1306,7 @@
         <div class="dec-icon">💥</div>
         <div>
           <h4>Fork 后立即销毁旧 Wrapper</h4>
-          <p><code>AgentSession.fork()</code> 会原地修改 wrapper 内部状态 — fork 后 <code>inner.sessionId</code> 变为新会话 id。若旧 wrapper 仍留在注册表中，后续对原始 session 的请求会拿到已 fork 的错误状态。解决方案：fork 后立即 <code>this.destroy()</code>。</p>
+          <p>Fork 在文件层创建新的 <code>.jsonl</code>，随后通过 <code>startRpcSession()</code> 预注册全新的 wrapper；只有新 wrapper 注册成功后才销毁旧 wrapper。失败时旧会话保持可用，并清理孤儿文件。</p>
         </div>
       </div>
 
@@ -1372,7 +1372,7 @@
 
     <div class="file-tree">
       <div class="ft-line ft-dir" style="--depth:0"><span class="ft-icon">📁</span><span class="ft-name">pi-agent-desktop/</span></div>
-      <div class="ft-line" style="--depth:1"><span class="ft-icon">📦</span><span class="ft-name">package.json</span><span class="ft-comment">@chasen-liao/pi-agent-desktop v0.7.16</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">📦</span><span class="ft-name">package.json</span><span class="ft-comment">@chasen-liao/pi-agent-desktop v0.8.0</span></div>
       <div class="ft-line" style="--depth:1"><span class="ft-icon">⚙️</span><span class="ft-name">next.config.ts</span><span class="ft-comment">standalone + 外部包</span></div>
       <div class="ft-line" style="--depth:1"><span class="ft-icon">🎨</span><span class="ft-name">tailwind.config.ts</span></div>
       <div class="ft-line" style="--depth:1"><span class="ft-icon">📘</span><span class="ft-name">tsconfig.json</span><span class="ft-comment">strict + bundler</span></div>
@@ -1388,7 +1388,7 @@
       <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">layout.tsx</span><span class="ft-comment">主题初始化 + 防 FOUC</span></div>
       <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">page.tsx</span><span class="ft-comment">AppShell 挂载</span></div>
       <div class="ft-line" style="--depth:2"><span class="ft-icon">📄</span><span class="ft-name">globals.css</span><span class="ft-comment">CSS变量 + View Transitions</span></div>
-      <div class="ft-line ft-dir" style="--depth:2"><span class="ft-icon">📁</span><span class="ft-name">api/</span><span class="ft-comment">24 条路由</span></div>
+      <div class="ft-line ft-dir" style="--depth:2"><span class="ft-icon">📁</span><span class="ft-name">api/</span><span class="ft-comment">38 条路由</span></div>
       <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔌</span><span class="ft-name">agent/new/route.ts</span><span class="ft-comment">创建会话</span></div>
       <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">🔌</span><span class="ft-name">agent/[id]/route.ts</span><span class="ft-comment">GET状态 / POST命令</span></div>
       <div class="ft-line ft-api" style="--depth:3"><span class="ft-icon">📡</span><span class="ft-name">agent/[id]/events/route.ts</span><span class="ft-comment">SSE 事件流</span></div>
@@ -1507,7 +1507,7 @@
 </section>
 
 <footer>
-  <p>Pi Agent Desktop 架构深度解析 · 版本 0.7.16 · 2026-06-24 · <a href="https://github.com/Chasen-Liao/pi-agent-desktop" style="color:var(--accent3);text-decoration:none;">pi-agent-desktop</a></p>
+  <p>Pi Agent Desktop 架构深度解析 · 版本 0.8.0 · 2026-08-25 · <a href="https://github.com/Chasen-Liao/pi-agent-desktop" style="color:var(--accent3);text-decoration:none;">pi-agent-desktop</a></p>
 </footer>
 
 <script>

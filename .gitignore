@@ -48,8 +48,9 @@ yarn-error.log*
 next-env.d.ts
 .factory
 
-# local Claude Code worktrees
+# local Claude Code worktrees and generated Skill mirrors
 /.claude/worktrees/
+/.claude/skills/
 
 # dev server stdout/stderr captures (should never be committed)
 /tmp/

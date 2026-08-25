@@ -1,4 +1,4 @@
-# Pi Agent Web - Development Notes
+# Pi Agent Desktop - Development Notes
 
 ## Quick Start
 
@@ -16,6 +16,8 @@ npm run dist         # Next.js build + Electron build + NSIS installer
 Typecheck: `npx tsc --noEmit`  
 Lint: `npm run lint`  
 **Never run `next build` during dev** — pollutes `.next/` and breaks `npm run dev`.
+
+Release：按 [docs/RELEASING.md](docs/RELEASING.md) 执行；桌面 GitHub Release 不使用会自动 bump patch 的 `npm run release`。
 
 ---
 
@@ -53,16 +55,17 @@ CodeGraph provides MCP (Model Context Protocol) tools for efficient symbol searc
 - **SSE 流**：`GET /api/agent/[id]/events` —— 30s 心跳，单向推送
 - **UI 主入口**：`app/page.tsx` → `components/AppShell.tsx` → `components/ChatWindow.tsx` → `hooks/useAgentSession.ts`
 - **长期记忆 LTM**：`lib/ltm` · API `/api/memory/*` · tools `memory_save` / `memory_recall` / `memory_forget`（设计见 [docs/superpowers/specs/2026-08-03-long-term-memory-design.md](docs/superpowers/specs/2026-08-03-long-term-memory-design.md)）
+- **运行中消息**：Enter 立即 steer，Alt+Enter 加入 wrapper 管理的 Follow-up Queue；队列支持重排，不能改回 Pi SDK 原生不可变队列
 
 ### 顶层目录速查
 
 | 目录 | 用途 |
 |---|---|
-| `app/api/` | API 路由（agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings / **memory**） |
+| `app/api/` | API 路由（agent / sessions / files / models / models-config / skills / auth / health / mcp / extensions / trust / desktop-settings / statusline / **memory** 等共 38 条） |
 | `lib/` | 服务端库：`rpc-manager` / `session-reader` / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` / **`ltm`** 等 |
-| `components/` | 24 个顶层组件（含 `McpConfigModal` / `SessionExportModal` / `ExtensionsConfigModal` / `ProjectTrustDialog` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
-| `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 8 个拆分 hook |
-| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 7 个辅助模块 |
+| `components/` | 26 个顶层组件（含 `McpConfigModal` / `SessionExportModal` / `ExtensionsConfigModal` / `ProjectTrustDialog` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
+| `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 12 个拆分模块 |
+| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 10 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
 ### 必须存 `globalThis` 的原因
 
@@ -125,3 +128,13 @@ Quick reference for code: `entryIds[]` in `SessionContext` is a parallel array t
 --accent --user-bg --tool-bg
 --font-mono
 ```
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
