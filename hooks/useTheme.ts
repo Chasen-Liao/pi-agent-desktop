@@ -70,8 +70,8 @@ export function useTheme() {
             ],
           },
           {
-            duration: 450,
-            easing: "cubic-bezier(0.22, 0.61, 0.36, 1)",
+            duration: 250,
+            easing: "cubic-bezier(0.22, 1, 0.36, 1)",
             pseudoElement: "::view-transition-new(root)",
           },
         );

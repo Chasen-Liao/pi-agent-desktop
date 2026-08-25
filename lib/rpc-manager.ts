@@ -1,5 +1,6 @@
 import { existsSync } from "fs";
 import { unlink } from "fs/promises";
+import { randomUUID } from "node:crypto";
 import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionPathCache } from "./session-reader.ts";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
@@ -28,6 +29,7 @@ import {
   safeLtmAgentEndObserve,
   safeLtmPreCompactObserve,
 } from "./ltm/observe-hooks.ts";
+import { FollowUpQueue, type FollowUpQueueSnapshot, type QueuedFollowUp } from "./follow-up-queue.ts";
 
 // ============================================================================
 // Constants
@@ -66,6 +68,9 @@ export class AgentSessionWrapper {
   private _toolPresetBeforePlan: ToolPreset | null = null;
   private _modeRef: AgentModeRef = { current: DEFAULT_AGENT_MODE };
   private _uiBridge: ExtensionUiBridge | null = null;
+  private followUpQueue = new FollowUpQueue();
+  private pendingAgentEnd: AgentEvent | null = null;
+  private suppressQueuedDispatchOnSettled = false;
 
   readonly inner: AgentSessionLike;
 
@@ -178,18 +183,62 @@ export class AgentSessionWrapper {
           console.error("ltm agent_end observe wire failed:", err);
         }
       }
-      for (const l of this.listeners) {
-        try {
-          l(event);
-        } catch (err) {
-          // One throwing listener (e.g. an SSE encoder whose stream died) must
-          // not prevent the others from receiving the event, nor escape into
-          // pi's subscribe callback and break the in-flight agent loop.
-          console.error("Error in agent event listener:", err);
-        }
+      if (event.type === "agent_end") {
+        this.pendingAgentEnd = event;
+        return;
       }
+      if (event.type === "agent_settled") {
+        this.handleAgentSettled();
+        return;
+      }
+      this.emitEvent(event);
     });
     this.resetIdleTimer();
+  }
+
+  private emitFollowUpQueue(snapshot = this.followUpQueue.snapshot()): FollowUpQueueSnapshot {
+    this.emitEvent({ type: "follow_up_queue_update", ...snapshot });
+    return snapshot;
+  }
+
+  private handleQueuedPromptFailure(item: QueuedFollowUp, completedEvent: AgentEvent | null, error: unknown): void {
+    this.emitFollowUpQueue(this.followUpQueue.restoreFront(item));
+    if (completedEvent) this.emitEvent(completedEvent);
+    this.emitAgentError(error instanceof Error ? error.message : String(error));
+  }
+
+  private dispatchNextFollowUp(completedEvent: AgentEvent | null): FollowUpQueueSnapshot {
+    const claimed = this.followUpQueue.shift();
+    if (!claimed) {
+      if (completedEvent) this.emitEvent(completedEvent);
+      return this.followUpQueue.snapshot();
+    }
+
+    const snapshot = this.emitFollowUpQueue(claimed.snapshot);
+    const { item } = claimed;
+    try {
+      const prompt = this.inner.prompt(
+        item.message,
+        item.images?.length ? { images: item.images } : undefined,
+      );
+      void prompt.catch((error) => this.handleQueuedPromptFailure(item, completedEvent, error));
+    } catch (error) {
+      this.handleQueuedPromptFailure(item, completedEvent, error);
+    }
+    return snapshot;
+  }
+
+  private handleAgentSettled(): void {
+    const completedEvent = this.pendingAgentEnd;
+    this.pendingAgentEnd = null;
+
+    if (this.suppressQueuedDispatchOnSettled) {
+      this.suppressQueuedDispatchOnSettled = false;
+      if (completedEvent) this.emitEvent(completedEvent);
+      return;
+    }
+
+    this.dispatchNextFollowUp(completedEvent);
   }
 
   private resetIdleTimer(): void {
@@ -252,6 +301,7 @@ export class AgentSessionWrapper {
   private buildStateSnapshot(): Record<string, unknown> {
     const model = this.inner.model;
     const contextUsage = this.inner.getContextUsage();
+    const followUpQueue = this.followUpQueue.snapshot();
     return {
       sessionId: this.inner.sessionId,
       sessionFile: this.inner.sessionFile ?? "",
@@ -261,7 +311,8 @@ export class AgentSessionWrapper {
       autoRetryEnabled: this.inner.autoRetryEnabled,
       model: model ? { id: model.id, provider: model.provider } : undefined,
       messageCount: 0,
-      pendingMessageCount: 0,
+      pendingMessageCount: followUpQueue.items.length,
+      followUpQueue,
       contextUsage: contextUsage
         ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
         : null,
@@ -300,6 +351,7 @@ export class AgentSessionWrapper {
         // parallel with the in-flight one. Reject deterministically here
         // instead of relying on pi's internal isStreaming handling.
         if (this.inner.isStreaming) throw new Error("Session is streaming");
+        this.suppressQueuedDispatchOnSettled = false;
         // Fire and forget — events come via subscribe
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined)
@@ -311,8 +363,14 @@ export class AgentSessionWrapper {
       }
 
       case "abort":
-        await this.inner.abort();
-        return null;
+        this.suppressQueuedDispatchOnSettled = true;
+        try {
+          await this.inner.abort();
+          return null;
+        } catch (error) {
+          this.suppressQueuedDispatchOnSettled = false;
+          throw error;
+        }
 
       case "get_state": {
         return this.buildStateSnapshot();
@@ -458,14 +516,31 @@ export class AgentSessionWrapper {
 
       case "follow_up": {
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        try {
-          await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
-        } catch (err) {
-          console.error("pi followUp failed:", err);
-          this.emitAgentError(err instanceof Error ? err.message : String(err));
-          throw err;
+        const snapshot = this.followUpQueue.enqueue({
+          id: randomUUID(),
+          message: command.message as string,
+          images: followImages?.length ? followImages : undefined,
+          createdAt: Date.now(),
+        });
+        this.emitFollowUpQueue(snapshot);
+
+        // The renderer can still think a run is active while its final SSE
+        // events are in transit. If the wrapper is already fully idle, there
+        // will be no future agent_settled event to drain this item, so dispatch
+        // it immediately. pendingAgentEnd means agent_settled is still due and
+        // remains the single ordering boundary for that run.
+        if (!this.inner.isStreaming && !this.pendingAgentEnd) {
+          return this.dispatchNextFollowUp(null);
         }
-        return null;
+        return snapshot;
+      }
+
+      case "reorder_follow_ups": {
+        const snapshot = this.followUpQueue.reorder(
+          command.orderedIds as string[],
+          command.expectedRevision as number,
+        );
+        return this.emitFollowUpQueue(snapshot);
       }
 
       case "get_tools": {

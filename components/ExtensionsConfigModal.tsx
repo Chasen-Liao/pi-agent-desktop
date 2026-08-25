@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { McpConfigContent } from "./McpConfigModal";
-import type { ExtensionInfo, SkillInfo, ExtensionDiagnostic, ExtensionScope } from "@/lib/extensions-config";
+import { getExtensionRenderKey } from "@/lib/extension-render-key";
+import type { ExtensionInfo, SkillInfo, ExtensionDiagnostic } from "@/lib/extensions-config";
 
 export type ExtensionsTab = "mcp" | "extensions" | "skills" | "diagnostics";
 
@@ -188,9 +189,9 @@ export function ExtensionsConfigModal({
       role="dialog"
       aria-modal="true"
       aria-label="Extensions & Integrations"
-      className="fixed inset-0 z-[1000] bg-black/50 flex items-center justify-center p-4"
+      className="ui-dialog-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
     >
-      <div className="w-full max-w-4xl h-[82vh] max-h-[750px] bg-bg border border-border rounded-panel shadow-2xl flex flex-col overflow-hidden">
+      <div className="t-modal is-open ui-dialog-surface w-full max-w-4xl h-[82vh] max-h-[750px] rounded-[14px] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-divider bg-bg-elevated shrink-0">
           <h3 className="font-semibold text-text text-[14px]">Extensions & MCP Management</h3>
@@ -209,7 +210,7 @@ export function ExtensionsConfigModal({
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`px-3 py-2 text-[12px] font-medium border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-2 text-[12px] font-medium border-b-2 transition-[background-color,border-color,color] duration-150 cursor-pointer flex items-center gap-1.5 ${
                 activeTab === t.id
                   ? "border-accent text-accent bg-bg"
                   : "border-transparent text-text-muted hover:text-text hover:bg-bg-hover"
@@ -314,7 +315,7 @@ export function ExtensionsConfigModal({
                 <div className="flex flex-col gap-2">
                   {extensions.map((ext) => (
                     <div
-                      key={`${ext.scope}-${ext.id}`}
+                      key={getExtensionRenderKey(ext)}
                       className="flex items-center justify-between p-3 rounded-panel bg-bg-panel border border-border"
                     >
                       <div className="flex flex-col gap-0.5">

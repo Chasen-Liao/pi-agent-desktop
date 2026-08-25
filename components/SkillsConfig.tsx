@@ -583,11 +583,15 @@ export function SkillsConfig({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Skills"
+      className="ui-dialog-backdrop"
       style={{
         position: "fixed",
         inset: 0,
         zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
+        background: "rgba(0,0,0,0.42)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -597,13 +601,14 @@ export function SkillsConfig({
       }}
     >
       <div
+        className="t-modal is-open ui-dialog-surface"
         style={{
           width: "100%",
           maxWidth: 860,
           height: "78vh",
-          background: "var(--bg)",
+          background: "var(--material-popover)",
           border: "1px solid var(--border)",
-          borderRadius: 10,
+          borderRadius: 14,
           display: "flex",
           flexDirection: "column",
           boxShadow: "0 8px 32px rgba(0,0,0,0.18)",

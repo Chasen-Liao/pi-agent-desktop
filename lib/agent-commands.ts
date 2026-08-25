@@ -17,6 +17,7 @@ const AGENT_COMMAND_TYPE_LIST = [
   "set_auto_compaction",
   "steer",
   "follow_up",
+  "reorder_follow_ups",
   "get_tools",
   "set_tools",
   "abort_compaction",

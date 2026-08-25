@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import type { AgentMessage, SessionInfo, CustomMessage, Skill } from "@/lib/types";
+import type { AgentMessage, SessionInfo, CustomMessage, Skill, UserMessage } from "@/lib/types";
 import { sendAgentCommand } from "@/lib/agent-client";
+import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
 import type { StreamAction } from "./stream-state";
 import type { AgentPhase } from "./agent-phase";
 import type { ThinkingLevelOption } from "./session-lifecycle-reset";
@@ -46,6 +47,9 @@ export type UseSessionCommandsOptions = {
   connectEvents: (sid: string) => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string) => void;
+  onFollowUpQueueSnapshot: (snapshot: FollowUpQueueSnapshot) => void;
+  onPendingSteerQueued: (item: { id: string; message: string }) => void;
+  onPendingSteerFailed: (id: string) => void;
 };
 
 export function useSessionCommands(opts: UseSessionCommandsOptions) {
@@ -78,6 +82,9 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
     connectEvents,
     onSessionCreated,
     onSessionForked,
+    onFollowUpQueueSnapshot,
+    onPendingSteerQueued,
+    onPendingSteerFailed,
   } = opts;
 
   const handleCompact = useCallback(async () => {
@@ -413,9 +420,23 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
     async (message: string, images?: AttachedImage[]) => {
       const sid = sessionIdRef.current;
       if (!sid) return;
+      const clientMessageId = globalThis.crypto.randomUUID();
+      const imageBlocks = images?.map((img) => ({
+        type: "image" as const,
+        source: { type: "base64" as const, media_type: img.mimeType, data: img.data },
+      }));
+      onPendingSteerQueued({ id: clientMessageId, message });
       setMessages((prev) => [
         ...prev,
-        { role: "user", content: `[steer] ${message}`, timestamp: Date.now() } as AgentMessage,
+        {
+          role: "user",
+          content: imageBlocks?.length
+            ? [...(message.trim() ? [{ type: "text" as const, text: message }] : []), ...imageBlocks]
+            : message,
+          timestamp: Date.now(),
+          clientMessageId,
+          deliveryState: "pending",
+        } satisfies UserMessage,
       ]);
       const piImages = images?.map((img) => ({
         type: "image" as const,
@@ -430,35 +451,35 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
         });
       } catch (e) {
         console.error("Failed to steer:", e);
+        onPendingSteerFailed(clientMessageId);
+        throw e;
       }
     },
-    [setMessages, sessionIdRef]
+    [onPendingSteerFailed, onPendingSteerQueued, setMessages, sessionIdRef]
   );
 
   const handleFollowUp = useCallback(
     async (message: string, images?: AttachedImage[]) => {
       const sid = sessionIdRef.current;
       if (!sid) return;
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", content: message, timestamp: Date.now() } as AgentMessage,
-      ]);
       const piImages = images?.map((img) => ({
         type: "image" as const,
         data: img.data,
         mimeType: img.mimeType,
       }));
       try {
-        await sendAgentCommand(sid, {
+        const snapshot = await sendAgentCommand<FollowUpQueueSnapshot>(sid, {
           type: "follow_up",
           message,
           ...(piImages?.length ? { images: piImages } : {}),
         });
+        onFollowUpQueueSnapshot(snapshot);
       } catch (e) {
         console.error("Failed to follow up:", e);
+        throw e;
       }
     },
-    [setMessages, sessionIdRef]
+    [onFollowUpQueueSnapshot, sessionIdRef]
   );
 
   const handleAbortCompaction = useCallback(async () => {

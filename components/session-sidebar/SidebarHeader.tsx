@@ -112,7 +112,7 @@ export function SidebarHeader({
             onClick={handleNewSession}
             disabled={!selectedCwd}
             aria-label="New session"
-            className={`flex items-center justify-center gap-1.25 h-control-height pl-2.5 pr-3 rounded-control text-[12px] font-medium tracking-normal shrink-0 transition-all duration-120 border ${
+            className={`flex items-center justify-center gap-1.25 h-control-height pl-2.5 pr-3 rounded-control text-[12px] font-medium tracking-normal shrink-0 transition-[background-color,border-color,color,opacity,transform] duration-150 border ${
               selectedCwd
                 ? "bg-chrome-button-bg border-border text-text-muted cursor-pointer hover:bg-chrome-button-hover hover:text-accent hover:border-focus-ring"
                 : "bg-chrome-button-bg border-border text-text-dim cursor-not-allowed"
@@ -128,7 +128,7 @@ export function SidebarHeader({
           <button
             onClick={() => loadSessions(false)}
             aria-label="Refresh sessions"
-            className={`flex items-center justify-center w-8 h-control-height p-0 shrink-0 rounded-control cursor-pointer transition-all duration-300 border ${
+            className={`flex items-center justify-center w-8 h-control-height p-0 shrink-0 rounded-control cursor-pointer transition-[background-color,border-color,color,transform] duration-250 border ${
               sessionRefreshDone
                 ? "bg-success-bg border-success-border text-success"
                 : "bg-chrome-button-bg border-border text-text-muted hover:bg-chrome-button-hover hover:text-accent hover:border-focus-ring"
@@ -153,7 +153,7 @@ export function SidebarHeader({
       <div ref={dropdownRef} className="relative">
         <button
           onClick={() => setDropdownOpen((v) => !v)}
-          className={`w-full flex items-center px-2.5 py-1.5 rounded-control cursor-pointer text-[12px] text-text text-left transition-all duration-150 border ${
+          className={`w-full flex items-center px-2.5 py-1.5 rounded-control cursor-pointer text-[12px] text-text text-left transition-[background-color,border-color,color] duration-150 border ${
             selectedCwd ? "bg-bg-hover border-border" : "bg-warning-bg border-warning-border"
           }`}
         >
@@ -172,7 +172,7 @@ export function SidebarHeader({
         </button>
 
         {dropdownOpen && (
-          <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-[100] bg-bg border border-border rounded-panel shadow-popover overflow-hidden">
+          <div className="t-dropdown is-open material-popover absolute top-[calc(100%+4px)] left-0 right-0 z-[100] border border-border rounded-panel shadow-popover overflow-hidden" data-origin="top-left">
             {recentCwds.map((cwd) => (
               <button
                 key={cwd}

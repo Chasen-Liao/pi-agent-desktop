@@ -25,6 +25,12 @@ function isEditableTarget(target: EventTarget | null) {
   return target.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
+function getPathName(path: string | null): string {
+  if (!path) return "Pi";
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] ?? "Pi";
+}
+
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,6 +45,9 @@ export function AppShell() {
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [extensionsModalOpen, setExtensionsModalOpen] = useState(false);
+  const [shellMenuOpen, setShellMenuOpen] = useState(false);
+  const shellMenuRef = useRef<HTMLDivElement>(null);
+  const shellMenuButtonRef = useRef<HTMLButtonElement>(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportSessionId, setExportSessionId] = useState<string | null>(null);
   const [branchCloneModal, setBranchCloneModal] = useState<{
@@ -55,6 +64,7 @@ export function AppShell() {
     rightPanelOpen,
     setRightPanelOpen,
     panelWidths,
+    resizingSide,
     beginPanelResize,
   } = usePanelLayout();
 
@@ -88,7 +98,6 @@ export function AppShell() {
   }, []);
 
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
-  const systemBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleSystemPromptChange = useCallback((prompt: string | null) => {
     setSystemPrompt(prompt);
@@ -125,6 +134,26 @@ export function AppShell() {
   const toggleTopPanel = useCallback((panel: "branches" | "system") => {
     setActiveTopPanel((cur) => (cur === panel ? null : panel));
   }, []);
+
+  useEffect(() => {
+    const closeShellMenu = (event: PointerEvent) => {
+      if (shellMenuRef.current && !shellMenuRef.current.contains(event.target as Node)) {
+        setShellMenuOpen(false);
+      }
+    };
+    const closeShellMenuWithKeyboard = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !shellMenuOpen) return;
+      event.preventDefault();
+      setShellMenuOpen(false);
+      shellMenuButtonRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeShellMenu);
+    document.addEventListener("keydown", closeShellMenuWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeShellMenu);
+      document.removeEventListener("keydown", closeShellMenuWithKeyboard);
+    };
+  }, [shellMenuOpen]);
 
   useEffect(() => {
     if (!activeTopPanel || !topBarRef.current) return;
@@ -414,7 +443,7 @@ export function AppShell() {
             disabled={disabled}
             title={label}
             aria-label={label}
-            className={`flex-1 flex items-center justify-center gap-1.5 h-control-height p-0 bg-transparent border-none rounded-control text-[12px] transition-all duration-120 ${
+            className={`flex-1 flex items-center justify-center gap-1.5 h-control-height p-0 bg-transparent border-none rounded-control text-[12px] transition-[background-color,color,opacity,transform] duration-150 ${
               disabled
                 ? "cursor-default opacity-35 text-text-muted"
                 : "cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text active:scale-95"
@@ -443,7 +472,7 @@ export function AppShell() {
 
         {/* Left sidebar */}
         <div
-          className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"} bg-bg-panel border-r border-divider flex flex-col shrink-0 z-[200]`}
+          className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${resizingSide === "left" ? " is-resizing" : ""} material-sidebar border-r border-divider flex flex-col shrink-0 z-[200]`}
           style={{
             width: sidebarOpen ? panelWidths.left : 0,
             minWidth: sidebarOpen ? panelWidths.left : 0,
@@ -464,12 +493,12 @@ export function AppShell() {
         {/* Center: chat */}
         <div className="relative flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Top bar with sidebar toggle */}
-          <div ref={topBarRef} className="flex items-center shrink-0 border-b border-divider h-toolbar-height bg-bg-elevated [-webkit-app-region:drag]">
+          <div ref={topBarRef} className="material-toolbar flex items-center shrink-0 border-b border-divider h-toolbar-height [-webkit-app-region:drag]">
             <button
               onClick={() => setSidebarOpen((v) => !v)}
               title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
               aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-r border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-120 [-webkit-app-region:no-drag]"
+              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-r border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-150 [-webkit-app-region:no-drag]"
             >
               {sidebarOpen ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -484,34 +513,17 @@ export function AppShell() {
                 </svg>
               )}
             </button>
-            <button
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-              }}
-              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-              aria-pressed={isDark}
-              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-r border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-120 [-webkit-app-region:no-drag]"
-            >
-              {isDark ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="5" />
-                  <line x1="12" y1="1" x2="12" y2="3" />
-                  <line x1="12" y1="21" x2="12" y2="23" />
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                  <line x1="1" y1="12" x2="3" y2="12" />
-                  <line x1="21" y1="12" x2="23" y2="12" />
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                </svg>
+            <div className="hidden min-w-0 items-center gap-1.5 px-3 text-[11px] select-none md:flex">
+              <span className="max-w-36 truncate font-medium text-text">{getPathName(activeCwd)}</span>
+              {showChat && (
+                <>
+                  <span className="text-text-dim">/</span>
+                  <span className="max-w-52 truncate text-text-muted">
+                    {selectedSession?.name || selectedSession?.firstMessage || "New session"}
+                  </span>
+                </>
               )}
-            </button>
+            </div>
             {showChat && (
               <div className="flex items-stretch h-full [-webkit-app-region:no-drag]">
                 <BranchNavigator
@@ -543,68 +555,87 @@ export function AppShell() {
                   onToggle={() => toggleTopPanel("branches")}
                   hasSession={!!selectedSession}
                 />
-                <button
-                  ref={systemBtnRef}
-                  onClick={() => toggleTopPanel("system")}
-                  className={`flex items-center gap-1.5 h-full px-3 border-none border-r border-divider cursor-pointer text-[11px] whitespace-nowrap transition-all duration-100 ${
-                    activeTopPanel === "system"
-                      ? "bg-bg-selected border-t-2 border-t-accent text-text"
-                      : "bg-transparent border-t-2 border-t-transparent text-text-muted hover:text-text"
-                  }`}
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`shrink-0 ${systemPrompt ? "text-accent" : "text-text-dim"}`}
-                  >
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="8" y1="13" x2="16" y2="13" />
-                    <line x1="8" y1="17" x2="13" y2="17" />
-                  </svg>
-                  <span>System</span>
-                </button>
+
               </div>
             )}
             <div className="flex-1" />
-            {/* Export Toolbar Action */}
-            <div className="flex items-center h-full border-r border-divider [-webkit-app-region:no-drag]">
-              <button
-                onClick={() => {
-                  setExportSessionId(selectedSession?.id ?? null);
-                  setExportModalOpen(true);
-                }}
-                disabled={!selectedSession}
-                title={selectedSession ? "Export Session (HTML/MD)" : "Select a session to export"}
-                aria-label="Export Session"
-                className={`flex items-center gap-1.5 h-full px-2.5 bg-transparent border-none text-[11px] font-medium transition-colors duration-120 ${
-                  selectedSession
-                    ? "text-text-muted hover:text-text cursor-pointer"
-                    : "text-text-dim cursor-not-allowed opacity-40"
-                }`}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                <span>Export</span>
-              </button>
-            </div>
             <StatsBar showChat={showChat} sessionStats={sessionStats} contextUsage={contextUsage} />
+            <div ref={shellMenuRef} className="relative h-full [-webkit-app-region:no-drag]">
+              <button
+                ref={shellMenuButtonRef}
+                type="button"
+                onClick={() => setShellMenuOpen((open) => !open)}
+                aria-label="Workbench menu"
+                aria-haspopup="menu"
+                aria-controls="workbench-menu"
+                aria-expanded={shellMenuOpen}
+                className="flex h-full w-9 items-center justify-center border-none border-l border-divider bg-transparent text-text-muted transition-colors duration-150 hover:text-text"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
+                </svg>
+              </button>
+              {shellMenuOpen && (
+              <div
+                id="workbench-menu"
+                role="menu"
+                className="t-dropdown is-open material-popover absolute right-1 top-[calc(100%+6px)] z-[700] w-52 rounded-panel border border-border p-1.5 shadow-popover"
+                data-origin="top-right"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setShellMenuOpen(false);
+                    toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+                  }}
+                  className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
+                >
+                  <span className="w-4 text-center">{isDark ? "☀" : "◐"}</span>
+                  {isDark ? "Light appearance" : "Dark appearance"}
+                </button>
+                {showChat && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setShellMenuOpen(false); toggleTopPanel("system"); }}
+                    className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
+                  >
+                    <span className={`w-4 text-center ${systemPrompt ? "text-accent" : "text-text-dim"}`}>⌘</span> System prompt
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setShellMenuOpen(false); setExtensionsModalOpen(true); }}
+                  className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
+                >
+                  <span className="w-4 text-center">⌘</span> Extensions & MCP
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!selectedSession}
+                  onClick={() => {
+                    setShellMenuOpen(false);
+                    setExportSessionId(selectedSession?.id ?? null);
+                    setExportModalOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <span className="w-4 text-center">⇩</span> Export session
+                </button>
+              </div>
+              )}
+            </div>
             {!rightPanelOpen && (
               <>
                 <button
                   onClick={() => setRightPanelOpen(true)}
                   title="Show file panel"
                   aria-label="Show file panel"
-                  className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-l border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-120 [-webkit-app-region:no-drag]"
+                  className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-l border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-150 [-webkit-app-region:no-drag]"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -625,7 +656,7 @@ export function AppShell() {
                 }}
               >
                 {activeTopPanel === "system" && (
-                  <div className="bg-bg-elevated border-b border-divider shadow-popover">
+                  <div className="t-dropdown is-open material-popover border-b border-divider shadow-popover" data-origin="top-center">
                     {systemPrompt ? (
                       <div className="max-h-[min(600px,75vh)] overflow-y-auto px-4 py-3 text-text-muted text-[12px] leading-[1.6] whitespace-pre-wrap font-mono">
                         {systemPrompt}
@@ -668,54 +699,24 @@ export function AppShell() {
                   Select a session from the sidebar
                 </div>
               ) : (
-                <div className="absolute top-3 left-3 flex items-start gap-2 select-none pointer-events-none">
-                  <svg
-                    width="44"
-                    height="44"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="var(--accent)"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="opacity-70 shrink-0"
-                  >
-                    <line x1="20" y1="12" x2="4" y2="12" />
-                    <polyline points="10 6 4 12 10 18" />
-                  </svg>
-                  <div>
-                    <div className="text-[18px] font-semibold text-text mb-2">Get Started</div>
-                    <div className="text-[12px] text-text-muted leading-[1.8]">
-                      <span className="text-text-dim mr-1.5">1.</span>Select a project directory from the sidebar
-                      <br />
-                      <span className="text-text-dim mr-1.5">2.</span>Add models via the{" "}
-                      <strong className="text-text">Models</strong> button at the bottom
-                    </div>
+                <div className="flex h-full flex-col items-center justify-center px-6 text-center select-none">
+                  <div className="mb-3 grid h-10 w-10 place-items-center rounded-[13px] border border-border bg-bg-elevated font-mono text-[21px] font-semibold text-text-strong shadow-input">
+                    π
+                  </div>
+                  <div className="text-[15px] font-medium text-text">Open a project</div>
+                  <div className="mt-1 max-w-64 text-[12px] leading-[1.6] text-text-muted">
+                    Choose a directory from the sidebar to start a session with Pi.
                   </div>
                 </div>
               )
             ) : null}
           </div>
 
-          {/* Extensions & MCP — floating bottom-right to free top bar space */}
-          <button
-            onClick={() => setExtensionsModalOpen(true)}
-            title="Extensions & MCP Servers"
-            aria-label="Extensions & MCP Servers"
-            className="absolute bottom-4 right-4 z-[80] flex items-center gap-1.5 rounded-full border border-border bg-bg-panel/95 px-3 py-2 text-[12px] font-medium text-text-muted shadow-popover backdrop-blur-sm transition-all duration-150 hover:border-accent/40 hover:bg-bg-elevated hover:text-text active:scale-95"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-accent">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-            <span>MCP</span>
-          </button>
         </div>
 
         {/* Right panel: file viewer — always mounted, width animated via CSS */}
         <div
-          className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"} flex flex-col border-l border-divider bg-bg relative`}
+          className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${resizingSide === "right" ? " is-resizing" : ""} flex flex-col border-l border-divider bg-bg relative`}
           style={{
             width: rightPanelOpen ? panelWidths.right : 0,
             minWidth: rightPanelOpen ? panelWidths.right : 0,
@@ -731,7 +732,7 @@ export function AppShell() {
             />
           )}
           {/* Right panel tab bar */}
-          <div className="flex items-center shrink-0 bg-bg-elevated border-b border-divider h-toolbar-height [-webkit-app-region:drag]">
+          <div className="material-toolbar flex items-center shrink-0 border-b border-divider h-toolbar-height [-webkit-app-region:drag]">
             <div className="flex-1 overflow-hidden [-webkit-app-region:no-drag]">
               <TabBar
                 tabs={fileTabs}
@@ -744,7 +745,7 @@ export function AppShell() {
               onClick={() => setRightPanelOpen(false)}
               title="Hide file panel"
               aria-label="Hide file panel"
-              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-l border-divider text-text hover:text-text cursor-pointer shrink-0 transition-colors duration-120 [-webkit-app-region:no-drag]"
+              className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-l border-divider text-text hover:text-text cursor-pointer shrink-0 transition-colors duration-150 [-webkit-app-region:no-drag]"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" />

@@ -487,7 +487,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
               return (
                 <div
                   key={`${server.scope}-${server.id}`}
-                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-panel border transition-all ${
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-panel border transition-[background-color,border-color,color] duration-150 ${
                     isDisabled
                       ? "bg-bg-panel/40 border-border/50 opacity-65"
                       : "bg-bg-panel border-border"
@@ -621,9 +621,9 @@ export function McpConfigModal({ isOpen, onClose, cwd }: McpConfigModalProps) {
       role="dialog"
       aria-modal="true"
       aria-label="MCP Server Configuration"
-      className="fixed inset-0 z-[1000] bg-black/50 flex items-center justify-center p-4"
+      className="ui-dialog-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
     >
-      <div className="w-full max-w-3xl h-[80vh] max-h-[700px] bg-bg border border-border rounded-panel shadow-2xl flex flex-col overflow-hidden">
+      <div className="t-modal is-open ui-dialog-surface w-full max-w-3xl h-[80vh] max-h-[700px] rounded-[14px] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-divider bg-bg-elevated shrink-0">
           <span className="font-semibold text-text text-[14px]">MCP Server Settings</span>
           <button

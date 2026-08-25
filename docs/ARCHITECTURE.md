@@ -3,9 +3,9 @@
 > 本文档是项目的**权威架构参考**，由 CodeGraph 静态分析 + 源码核对生成。
 > 若与 `AGENTS.md` / `CLAUDE.md` 中的简要描述冲突，以本文档为准。
 >
-- **项目**：`@chasen-liao/pi-agent-desktop` v0.7.18
-- **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.82.1 / `@earendil-works/pi-ai` ^0.82.1
-- **更新日期**：2026-07-28
+- **项目**：`@chasen-liao/pi-agent-desktop` v0.8.0
+- **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.84.3 / `@earendil-works/pi-ai` ^0.84.3
+- **更新日期**：2026-08-25
 
 ---
 
@@ -13,7 +13,7 @@
 
 1. [设计目标](#1-设计目标)
 2. [双模式运行架构](#2-双模式运行架构)
-3. [三层分离架构](#3-三层分离架构)
+3. [四层分离架构](#3-四层分离架构)
 4. [目录与文件地图](#4-目录与文件地图)
 5. [核心数据流：一次对话的完整旅程](#5-核心数据流一次对话的完整旅程)
 6. [两种会话访问模式](#6-两种会话访问模式)
@@ -82,7 +82,7 @@ Pi-Agent.exe (Electron Main)
 
 ---
 
-## 3. 三层分离架构
+## 3. 四层分离架构
 
 ```mermaid
 flowchart TD
@@ -101,7 +101,7 @@ flowchart TD
         S1[rpc-manager.ts<br/>AgentSessionWrapper]
         S2[session-reader.ts<br/>.jsonl 解析]
         S3[normalize.ts<br/>ToolCall 归一化]
-        S4["33 条 API 路由"]
+        S4["38 条 API 路由"]
         S5[session-cascade / session-lock]
     end
 
@@ -142,7 +142,7 @@ flowchart TD
 
 ```text
 pi-agent-desktop/
-├── package.json                  @chasen-liao/pi-agent-desktop v0.7.18
+├── package.json                  @chasen-liao/pi-agent-desktop v0.8.0
 ├── next.config.ts                output:"standalone" + server external packages
 ├── tailwind.config.ts            Tailwind 4 配置
 ├── tsconfig.json                 strict + bundler resolution
@@ -156,12 +156,14 @@ pi-agent-desktop/
 │   ├── layout.tsx                主题初始化 + 字体 + 防 FOUC 脚本
 │   ├── page.tsx                  挂载 <AppShell/>
 │   ├── globals.css               CSS 变量主题 + View Transitions
-│   └── api/                      33 条 API 路由（见 §12）
+│   └── api/                      38 条 API 路由（见 §12）
 │
 ├── components/                   React 组件（见 §10）
 │   ├── AppShell.tsx              顶层布局
 │   ├── ChatWindow.tsx            对话外壳（核心）
 │   ├── ChatInput.tsx             输入栏
+│   ├── AgentThinkingOrb.tsx      活跃思考状态与液态球容器
+│   ├── LiquidOrbCanvas.tsx       WebGPU / Canvas 液态球渲染
 │   ├── MessageList.tsx           消息列表（虚拟化）
 │   ├── MessageView.tsx           单条消息渲染
 │   ├── SessionSidebar.tsx        会话树侧边栏
@@ -187,6 +189,8 @@ pi-agent-desktop/
 │   │   ├── AttachmentPreview.tsx
 │   │   ├── ModelSelector.tsx
 │   │   ├── PresetSelector.tsx
+│   │   ├── QueuedMessageList.tsx  Follow-up Queue 重排界面
+│   │   ├── submit-action.ts        Enter / Alt+Enter 动作判定
 │   │   └── types.ts
 │   ├── session-sidebar/          侧边栏子组件
 │   │   ├── helpers.ts
@@ -210,12 +214,17 @@ pi-agent-desktop/
 │       ├── use-chat-scroll.ts
 │       ├── session-loader-api.ts
 │       ├── agent-events-manager.ts
+│       ├── agent-event-apply.ts
 │       ├── agent-phase.ts
+│       ├── session-lifecycle-reset.ts
 │       ├── session-stats.ts
-│       └── stream-state.ts
+│       ├── stream-state.ts
+│       ├── use-session-commands.ts
+│       └── use-session-model-tools.ts
 │
 ├── lib/                          服务端 / 共享库
 │   ├── rpc-manager.ts            ★ AgentSessionWrapper + 注册表 + startRpcSession
+│   ├── follow-up-queue.ts        可重排 Follow-up Queue 与 revision 并发控制
 │   ├── session-reader.ts         ★ .jsonl 解析 + 路径缓存 + 会话树
 │   ├── approval-policy.ts        Ask 拦截规则与 AgentMode 校验
 │   ├── extension-ui-bridge.ts    Extension UI Bridge 弹窗响应与通知分派
@@ -310,6 +319,7 @@ sequenceDiagram
 - `AgentSession.prompt()` 是**异步**的，调用立即返回；真正的内容由 `subscribe` 回调推送。
 - SSE 是**单向推送**（服务端 → 浏览器），适合 agent 事件流；30 秒心跳防止代理超时。
 - 浏览器侧 `streamReducer` 维护流式状态机（`idle → streaming → done`），仅增量更新当前流式消息，避免重渲染整列表。
+- Agent 运行中，Enter 发送 steer，Alt+Enter 将消息加入 `AgentSessionWrapper` 自己维护的 `FollowUpQueue`。队列以 revision 防止陈旧重排覆盖新消息；`agent_settled` 时每次取出一条并启动下一轮，SSE `follow_up_queue_update` 保持各客户端顺序一致。Abort 会抑制本次 settled 自动派发，避免用户停止后队列意外继续。
 
 ---
 
@@ -343,7 +353,7 @@ stateDiagram-v2
     Destroyed --> [*]
 ```
 
-**五个必须存 `globalThis` 的原因**（Next.js HMR 会丢弃模块级变量）：
+**六个必须存 `globalThis` 的原因**（Next.js HMR 会丢弃模块级变量）：
 
 | 全局变量 | 用途 | 定义位置 | 回收策略 |
 |---|---|---|---|
@@ -352,6 +362,7 @@ stateDiagram-v2
 | `globalThis.__piStartLocks` | `Map<sessionId, Promise>` 并发启动共享锁 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | startRpcSession finally 块自动清 |
 | `globalThis.__piWriteLocks` | `Map<filePath, Promise>` per-file 写入锁 | [lib/session-lock.ts](../lib/session-lock.ts) | withFileLock finally 块自动清 |
 | `globalThis.__piAllowedRootsCache` | `{ roots: Set<string>; expiresAt: number }` 文件访问白名单缓存（见 §14.11） | [lib/allowed-roots.ts](../lib/allowed-roots.ts) | 5s TTL 自动过期；POST /api/agent/new 时主动 add |
+| `globalThis.__piLtmService` | 长期记忆 `MemoryService` 单例 | [lib/ltm/service.ts](../lib/ltm/service.ts) | 配置 key 变化时重建；测试可显式 reset |
 
 **Fork 注册顺序陷阱**（详见 §14.2）：fork 在**文件层**通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）完成，**不修改旧 wrapper 内部状态**。但 `send("fork")` 仍需先 `startRpcSession(newSessionId, ...)` 预注册新 wrapper，再 `this.destroy()` 旧 wrapper，以满足"返回时 newSessionId 已在注册表"的契约。
 
@@ -409,13 +420,15 @@ Pi 有两种独立的分支机制，**不要混淆**：
 
 > 完整清单基于 CodeGraph 索引。所有组件**手写，零 UI 库依赖**，通过 CSS 变量实现暗色/亮色主题。
 
-### 顶层组件（24 个）
+### 顶层组件（26 个）
 
 | 组件 | 职责 |
 |---|---|
 | `AppShell.tsx` | 顶层布局：侧边栏 + 聊天区 + 标签页；URL `?session=` 状态；模型/技能弹窗 |
 | `ChatWindow.tsx` | 对话区域外壳；委托 `useAgentSession` 处理所有 agent 交互 |
-| `ChatInput.tsx` | 输入栏：模型选择、工具预设、AgentMode 选择器、Thinking Level、图片拖拽 |
+| `ChatInput.tsx` | 输入栏：模型选择、工具预设、AgentMode、Thinking Level、Steer 与 Follow-up Queue |
+| `AgentThinkingOrb.tsx` | 活跃思考状态、阶段文案与液态球容器 |
+| `LiquidOrbCanvas.tsx` | WebGPU 优先、Canvas 降级的液态球渲染 |
 | `MessageList.tsx` | 消息列表（虚拟化滚动） |
 | `MessageView.tsx` | 单条消息渲染：Markdown + Prism 高亮 + Thinking 折叠 + 工具调用配对 |
 | `SessionSidebar.tsx` | 按 cwd 分组的会话树 + 内嵌 `FileExplorer` |
@@ -437,7 +450,6 @@ Pi 有两种独立的分支机制，**不要混淆**：
 | `SessionExportModal.tsx` | 会话导出弹窗（支持格式与主题选择、预览与下载） |
 | `ExtensionsConfigModal.tsx` | 扩展、Skill 与 MCP 服务器的多 Tab 统一管理弹窗 |
 | `BranchCloneModal.tsx` | 会话节点分叉 (Branch) 与目录克隆 (Clone) 确认弹窗 |
-| `file-viewer-virtualization.ts` | FileViewer 的虚拟化算法 |
 
 ### 子组件目录
 
@@ -446,6 +458,8 @@ components/chat-input/
 ├── AttachmentPreview.tsx     图片附件预览
 ├── ModelSelector.tsx         模型下拉选择
 ├── PresetSelector.tsx        工具预设下拉
+├── QueuedMessageList.tsx     Follow-up Queue 拖拽 / 键盘重排
+├── submit-action.ts          Enter / Alt+Enter 动作判定
 └── types.ts                  子组件共享类型
 
 components/session-sidebar/
@@ -472,7 +486,7 @@ components/models-config/     模型配置弹窗的子组件
 | `useFileTabs.ts` | 文件标签页状态管理 |
 | `usePanelLayout.ts` | 侧边栏 / 右侧面板宽度持久化 |
 
-### `hooks/agent-session/` 子 Hooks（8 个）
+### `hooks/agent-session/` 子 Hooks / 模块（12 个）
 
 `useAgentSession` 已按职责拆分，主 hook 组合这些子 hook：
 
@@ -483,9 +497,13 @@ components/models-config/     模型配置弹窗的子组件
 | `use-chat-scroll.ts` | 滚动容器行为（粘底、跳转到用户消息） |
 | `session-loader-api.ts` | 调用 `/api/sessions/[id]` 与 `/context?leafId=` |
 | `agent-events-manager.ts` | agent 事件分发到状态更新 |
+| `agent-event-apply.ts` | 将单个 agent 事件归约为 UI 状态操作 |
 | `agent-phase.ts` | `AgentPhase` 状态机（waiting_model / running_tool 等） |
+| `session-lifecycle-reset.ts` | 会话切换时的状态重置与加载补丁 |
 | `session-stats.ts` | `calculateSessionStats()` 消息统计 |
 | `stream-state.ts` | `streamReducer` 流式消息状态机 |
+| `use-session-commands.ts` | prompt / steer / follow-up / abort / fork 等命令 |
+| `use-session-model-tools.ts` | 模型、Thinking Level 与工具预设命令 |
 
 ---
 
@@ -498,8 +516,8 @@ components/models-config/     模型配置弹窗的子组件
 | 路由 | 方法 | 用途 |
 |---|---|---|
 | `app/api/agent/new/route.ts` | POST | 创建新会话并发送首条消息 |
-| `app/api/agent/[id]/route.ts` | GET / POST | GET 状态；POST 任意命令（prompt / abort / fork / navigate_tree / set_model / compact / get_tools / set_agent_mode / extension_ui_response） |
-| `app/api/agent/[id]/events/route.ts` | GET | SSE 事件流（30s 心跳，支持 extension_ui_request / extension_ui_notify） |
+| `app/api/agent/[id]/route.ts` | GET / POST | GET 状态；POST 命令（prompt / steer / follow_up / reorder_follow_ups / abort / fork / navigate_tree / compact / model / tools / agent mode 等） |
+| `app/api/agent/[id]/events/route.ts` | GET | SSE 事件流（30s 心跳，含 Follow-up Queue、Extension UI 与运行状态事件） |
 
 ### 长期记忆 LTM（5 条）
 
@@ -795,19 +813,19 @@ serverExternalPackages: [
 
 | 类别 | 技术 | 版本 |
 |---|---|---|
-| 框架 | Next.js（App Router） | 16.2.1 |
+| 框架 | Next.js（App Router） | 16.3.2 |
 | UI 库 | React | ^19.2.4 |
 | 样式 | Tailwind CSS + CSS 变量 | ^4.2.2 |
 | 类型 | TypeScript（strict） | ^5 |
 | Markdown | react-markdown | ^10.1.0 |
 | Markdown | remark-gfm | ^4.0.1 |
 | 代码高亮 | react-syntax-highlighter（Prism） | ^16.1.1 |
-| AI SDK | @earendil-works/pi-coding-agent | ^0.82.1 |
-| AI SDK | @earendil-works/pi-ai | ^0.82.1 |
+| AI SDK | @earendil-works/pi-coding-agent | ^0.84.3 |
+| AI SDK | @earendil-works/pi-ai | ^0.84.3 |
 | 品牌图标 | @lobehub/icons | ^5.6.0 |
 | 桌面壳 | Electron | ^36.9.5 |
-| 打包 | electron-builder（NSIS） | ^26.8.1 |
-| 自动更新 | electron-updater | ^6.8.3 |
+| 打包 | electron-builder（NSIS） | ^26.15.3 |
+| 自动更新 | electron-updater | ^6.8.9 |
 | Lint | ESLint（flat config） | ^9 |
 | 测试 | node:test | 内置 |
 

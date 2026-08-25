@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useId, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -224,7 +224,10 @@ const UserMessageView = React.memo(function UserMessageView({
       onMouseLeave={() => setHovered(false)}
     >
       <div className="flex items-end gap-1.5 max-w-[85%]">
-        <div className="flex-1 min-w-0 bg-user-bg border border-user-border rounded-panel px-3 py-2 text-[14px] leading-[1.6] text-text whitespace-pre-wrap break-words">
+        <div
+          className="user-message-bubble flex-1 min-w-0 bg-user-bg border border-user-border rounded-panel px-3 py-2 text-[14px] leading-[1.6] text-text whitespace-pre-wrap break-words"
+          data-delivery={message.deliveryState ?? "sent"}
+        >
           {imageBlocks.length > 0 && (
             <div className={`flex gap-1.5 flex-wrap ${content ? "mb-2" : "mb-0"}`}>
               {imageBlocks.map((img, i) => {
@@ -662,23 +665,33 @@ function TextBlock({ block }: { block: TextContent }) {
 
 function ThinkingBlock({ block, duration }: { block: ThinkingContent; duration?: number }) {
   const [expanded, setExpanded] = useState(false);
+  const panelId = useId();
   return (
-    <div className="border border-border rounded-panel overflow-hidden text-[13px]">
+    <div className="t-acc overflow-hidden rounded-panel border border-border text-[13px]" data-open={expanded ? "true" : "false"}>
       <button
         onClick={() => setExpanded((v) => !v)}
         aria-label={expanded ? "Collapse thinking" : "Expand thinking"}
-        className="flex items-center gap-1.5 w-full px-2.5 py-1.5 bg-code-header-bg border-none text-text-muted cursor-pointer text-[12px] text-left"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        className="flex w-full cursor-pointer items-center gap-1.5 border-none bg-code-header-bg px-2.5 py-1.5 text-left text-[12px] text-text-muted"
       >
         <span>Thinking</span>
         {duration !== undefined && (
           <span className="ml-auto text-[11px] text-text-dim tabular-nums">{duration}s</span>
         )}
+        <span className="t-acc-chevron text-text-dim" aria-hidden="true">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 6.5L8 10.5L12 6.5" />
+          </svg>
+        </span>
       </button>
-      {expanded && (
-        <div className="px-2.5 py-2 text-text-muted text-[12px] leading-[1.6] whitespace-pre-wrap bg-bg-panel border-t border-border">
-          {block.thinking}
+      <div id={panelId} className="t-acc-panel" aria-hidden={!expanded}>
+        <div className="t-acc-panel-inner">
+          <div className="border-t border-border bg-bg-panel px-2.5 py-2 text-[12px] leading-[1.6] whitespace-pre-wrap text-text-muted">
+            {block.thinking}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

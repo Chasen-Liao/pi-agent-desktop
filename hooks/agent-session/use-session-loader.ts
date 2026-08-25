@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { AgentMessage, SessionTreeNode } from "../../lib/types";
+import type { FollowUpQueueSnapshot } from "../../lib/follow-up-queue";
 import { fetchSession, fetchContext } from "./session-loader-api";
 
 /** Latest-request-wins guard: stale() goes true once a newer call bumps the ref. */
@@ -31,6 +32,7 @@ export interface LoadedAgentState {
     contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
     systemPrompt?: string;
     thinkingLevel?: string;
+    followUpQueue?: FollowUpQueueSnapshot;
   };
 }
 

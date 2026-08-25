@@ -35,6 +35,7 @@ export function ExtensionUiDialog({ request, onRespond }: Props) {
       role="dialog"
       aria-modal="true"
       aria-label={request.title}
+      className="ui-dialog-backdrop"
       style={{
         position: "fixed",
         inset: 0,
@@ -48,9 +49,10 @@ export function ExtensionUiDialog({ request, onRespond }: Props) {
       onClick={() => close({ id: request.id, cancelled: true })}
     >
       <div
+        className="t-modal is-open ui-dialog-surface"
         style={{
           width: "min(440px, 100%)",
-          background: "var(--bg)",
+          background: "var(--material-popover)",
           border: "1px solid var(--border)",
           borderRadius: 12,
           padding: 18,

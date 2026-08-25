@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent, useMemo } from "react";
+import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent, useLayoutEffect, useMemo } from "react";
 import { buildSlashCommandItems, getSlashTriggerQuery, type SlashCommandItem, type SlashSkill } from "@/lib/slash-commands";
 import type { AttachedImage, ChatInputHandle } from "./chat-input/types";
 export type { ChatInputHandle };
@@ -10,13 +10,16 @@ import { AttachmentPreview } from "./chat-input/AttachmentPreview";
 import { ModelSelector } from "./chat-input/ModelSelector";
 import { PresetSelector } from "./chat-input/PresetSelector";
 import { AgentModeSelector } from "./AgentModeSelector";
+import { resolveComposerSubmitAction } from "./chat-input/submit-action";
+import { QueuedMessageList } from "./chat-input/QueuedMessageList";
 import type { AgentMode } from "@/lib/approval-policy";
+import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
 
 interface Props {
   onSend: (message: string, images?: AttachedImage[]) => void;
   onAbort: () => void;
-  onSteer?: (message: string, images?: AttachedImage[]) => void;
-  onFollowUp?: (message: string, images?: AttachedImage[]) => void;
+  onSteer?: (message: string, images?: AttachedImage[]) => Promise<void>;
+  onFollowUp?: (message: string, images?: AttachedImage[]) => Promise<void>;
   isStreaming: boolean;
   currentCwd?: string | null;
   model?: { provider: string; modelId: string } | null;
@@ -38,6 +41,9 @@ interface Props {
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
+  followUpQueue?: FollowUpQueueSnapshot;
+  followUpQueueBusy?: boolean;
+  onReorderFollowUps?: (orderedIds: string[]) => void;
 }
 
 const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
@@ -59,9 +65,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   soundEnabled, onSoundToggle,
+  followUpQueue, followUpQueueBusy, onReorderFollowUps,
 }: Props, ref) {
   const [value, setValue] = useState("");
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
+  const [secondaryControlsOpen, setSecondaryControlsOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   // 跟踪最新 attachedImages 供 unmount cleanup 读取（避免捕获 mount 时空数组快照）
   const attachedImagesRef = useRef<AttachedImage[]>([]);
@@ -83,8 +91,35 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [slashDismissedValue, setSlashDismissedValue] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaResizeFrameRef = useRef(0);
   const thinkingDropdownRef = useRef<HTMLDivElement>(null);
+  const secondaryControlsRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const resizeTextarea = useCallback((textarea: HTMLTextAreaElement) => {
+    cancelAnimationFrame(textareaResizeFrameRef.current);
+    const currentHeight = textarea.getBoundingClientRect().height;
+    textarea.style.height = "auto";
+    const targetHeight = Math.min(textarea.scrollHeight, 200);
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      textarea.style.height = `${targetHeight}px`;
+      return;
+    }
+
+    textarea.style.height = `${currentHeight}px`;
+    if (Math.abs(currentHeight - targetHeight) < 0.5) return;
+    void textarea.offsetHeight;
+    textareaResizeFrameRef.current = requestAnimationFrame(() => {
+      textarea.style.height = `${targetHeight}px`;
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) resizeTextarea(textarea);
+    return () => cancelAnimationFrame(textareaResizeFrameRef.current);
+  }, [resizeTextarea, value]);
 
   useImperativeHandle(ref, () => ({
     insertIfEmpty(text: string) {
@@ -95,8 +130,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       requestAnimationFrame(() => {
         if (!ta) return;
         ta.focus();
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
       });
     },
     insertText(text: string) {
@@ -117,8 +150,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         const pos = start + sep.length + text.length;
         ta.setSelectionRange(pos, pos);
         ta.focus();
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
       });
     },
     addImages(files: File[]) {
@@ -220,8 +251,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (!ta) return;
       ta.focus();
       ta.setSelectionRange(nextCaret, nextCaret);
-      ta.style.height = "auto";
-      ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     });
   }, [caretIndex, value]);
 
@@ -232,26 +261,62 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     onSend(msg, attachedImages.length ? attachedImages : undefined);
     setValue("");
     clearImages();
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
   }, [value, attachedImages, isStreaming, onSend, clearImages]);
 
-  const sendQueued = useCallback((mode: "steer" | "followup") => {
+  const sendQueued = useCallback(async (mode: "steer" | "followup") => {
     const msg = value.trim();
-    if (!msg && !attachedImages.length) return;
-    if (mode === "steer" && onSteer) {
-      onSteer(msg, attachedImages.length ? attachedImages : undefined);
-    } else if (mode === "followup" && onFollowUp) {
-      onFollowUp(msg, attachedImages.length ? attachedImages : undefined);
+    const submittedImages = attachedImages.length ? attachedImages : undefined;
+    if (!msg && !submittedImages?.length) return;
+
+    const submit = mode === "steer" ? onSteer : onFollowUp;
+    if (!submit) return;
+
+    try {
+      await submit(msg, submittedImages);
+      setValue((current) => current === value ? "" : current);
+      if (submittedImages?.length) {
+        const submittedUrls = new Set(submittedImages.map((image) => image.previewUrl));
+        setAttachedImages((current) => {
+          const delivered = current.filter((image) => submittedUrls.has(image.previewUrl));
+          delivered.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+          return current.filter((image) => !submittedUrls.has(image.previewUrl));
+        });
+      }
+    } catch {
+      // Keep the draft and previews intact so the user can retry.
+      requestAnimationFrame(() => textareaRef.current?.focus());
     }
-    setValue("");
-    clearImages();
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
-  }, [value, attachedImages, onSteer, onFollowUp, clearImages]);
+  }, [value, attachedImages, onSteer, onFollowUp]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter") {
+        const action = resolveComposerSubmitAction({
+          altKey: e.altKey,
+          shiftKey: e.shiftKey,
+          isComposing: e.nativeEvent.isComposing,
+          isStreaming,
+          slashMenuOpen,
+          canSteer: Boolean(onSteer),
+          canFollowUp: Boolean(onFollowUp),
+        });
+
+        if (action === "none") return;
+        e.preventDefault();
+
+        if (action === "slash") {
+          const item = slashItems[Math.min(slashActiveIndex, slashItems.length - 1)];
+          if (item) selectSlashItem(item);
+          return;
+        }
+        if (action === "steer" || action === "followup") {
+          void sendQueued(action);
+          return;
+        }
+        handleSend();
+        return;
+      }
+
       if (slashMenuOpen) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
@@ -263,7 +328,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           setSlashActiveIndex((index) => (index - 1 + slashItems.length) % slashItems.length);
           return;
         }
-        if ((e.key === "Enter" && !e.shiftKey) || e.key === "Tab") {
+        if (e.key === "Tab") {
           e.preventDefault();
           const item = slashItems[Math.min(slashActiveIndex, slashItems.length - 1)];
           if (item) selectSlashItem(item);
@@ -276,24 +341,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
 
-      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-        e.preventDefault();
-        if (isStreaming && (onSteer || onFollowUp)) {
-          sendQueued(onSteer ? "steer" : "followup");
-        } else {
-          handleSend();
-        }
-      }
     },
     [slashMenuOpen, slashItems, slashActiveIndex, selectSlashItem, value, isStreaming, onSteer, onFollowUp, sendQueued, handleSend]
   );
-
-  const handleInput = useCallback(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
-  }, []);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData?.items ?? []);
@@ -304,15 +354,33 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     processImageFiles(files);
   }, [processImageFiles]);
 
-  // Close thinking dropdown on outside click
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    if (!isStreaming) return;
+    setThinkingDropdownOpen(false);
+    setSecondaryControlsOpen(false);
+  }, [isStreaming]);
+
+  // Close composer popovers on outside click or Escape.
+  useEffect(() => {
+    const handlePointerDown = (e: MouseEvent) => {
       if (thinkingDropdownRef.current && !thinkingDropdownRef.current.contains(e.target as Node)) {
         setThinkingDropdownOpen(false);
       }
+      if (secondaryControlsRef.current && !secondaryControlsRef.current.contains(e.target as Node)) {
+        setSecondaryControlsOpen(false);
+      }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setThinkingDropdownOpen(false);
+      setSecondaryControlsOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   return (
@@ -357,17 +425,27 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         {/* Image previews */}
         <AttachmentPreview attachedImages={attachedImages} onRemoveImage={removeImage} />
 
+        {followUpQueue && onReorderFollowUps && (
+          <QueuedMessageList
+            items={followUpQueue.items}
+            disabled={followUpQueueBusy}
+            onReorder={onReorderFollowUps}
+          />
+        )}
+
         {/* Main input */}
         <div style={{ position: "relative" }}>
         {slashMenuOpen && (
           <div
+            className="t-dropdown is-open material-popover"
+            data-origin="bottom-center"
             style={{
               position: "absolute",
               left: 0,
               right: 0,
               bottom: "calc(100% + 8px)",
               zIndex: 160,
-              background: "var(--bg)",
+              background: "var(--material-popover)",
               border: "1px solid var(--border)",
               borderRadius: "var(--radius-panel)",
               boxShadow: "var(--shadow-popover)",
@@ -496,20 +574,20 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
         )}
         <div
+          className="material-input composer-shell"
+          data-focused={inputFocused ? "true" : "false"}
           style={{
             display: "flex",
             gap: 8,
             alignItems: "center",
-            background: "var(--bg-elevated)",
+            background: "var(--material-input)",
             border: `1px solid ${inputFocused
               ? "var(--focus-ring)"
               : isStreaming && (onSteer || onFollowUp)
                 ? "var(--warning-border)"
                 : "color-mix(in srgb, var(--border) 70%, transparent)"}`,
-            borderRadius: 16,
-            padding: "10px 10px 10px 14px",
-            boxShadow: inputFocused ? "0 0 0 3px var(--focus-ring), var(--shadow-input)" : "var(--shadow-input)",
-            transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
+            borderRadius: 18,
+            padding: "7px 7px 7px 15px",
           } as React.CSSProperties}
         >
           <textarea
@@ -521,7 +599,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               setSlashDismissedValue(null);
             }}
             onKeyDown={handleKeyDown}
-            onInput={handleInput}
             onPaste={handlePaste}
             onSelect={(e) => setCaretIndex(e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
             onFocus={(e) => {
@@ -529,13 +606,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               setCaretIndex(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
             }}
             onBlur={() => setInputFocused(false)}
-            placeholder={
-              isStreaming && (onSteer || onFollowUp)
-                ? "Steer 立即注入 / Follow-up 排队…"
-                : isStreaming ? "Agent is running…"
-                : "Message…"
-            }
+            aria-label="Message"
+            aria-keyshortcuts={isStreaming && onFollowUp ? "Alt+Enter" : undefined}
             rows={1}
+            className="t-resize"
             style={{
               flex: 1,
               background: "none",
@@ -553,54 +627,28 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           />
 
           {isStreaming ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
-              {onSteer && (
+            <div style={{ display: "flex", alignItems: "center", flexShrink: 0, alignSelf: "flex-end" }}>
+              {(onSteer || onFollowUp) && (
                 <button
-                  onClick={() => sendQueued("steer")}
+                  onClick={() => void sendQueued(onSteer ? "steer" : "followup")}
                   disabled={!value.trim() && !attachedImages.length}
-                  title="打断 Agent 当前运行，立即注入消息"
-                  aria-label="Steer running agent"
+                  title={onSteer ? "Send now" : "Queue message"}
+                  aria-label={onSteer ? "Send message to running agent" : "Queue follow-up message"}
                   style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "7px 12px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 38, height: 38, padding: 0,
                     background: (value.trim() || attachedImages.length) ? "var(--warning-bg)" : "none",
-                    border: "1px solid var(--warning-border)",
-                    borderRadius: "var(--radius-control)",
+                    border: "none",
+                    borderRadius: 12,
                     color: (value.trim() || attachedImages.length) ? "var(--warning)" : "var(--text-dim)",
                     cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
-                    fontSize: 13, fontWeight: 600, letterSpacing: 0,
-                    transition: "background 0.12s",
                   }}
+                  className="composer-icon-button"
                 >
-                  <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 1 L9 5 L5 9" /><line x1="1" y1="5" x2="9" y2="5" />
+                  <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="2" y1="7" x2="11" y2="7" />
+                    <polyline points="7.5 3 12 7 7.5 11" />
                   </svg>
-                  Steer
-                </button>
-              )}
-              {onFollowUp && (
-                <button
-                  onClick={() => sendQueued("followup")}
-                  disabled={!value.trim() && !attachedImages.length}
-                  title="在 Agent 完成后排队发送"
-                  aria-label="Queue follow-up message"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "7px 12px",
-                    background: (value.trim() || attachedImages.length) ? "var(--info-bg)" : "none",
-                    border: "1px solid var(--info-border)",
-                    borderRadius: "var(--radius-control)",
-                    color: (value.trim() || attachedImages.length) ? "var(--info)" : "var(--text-dim)",
-                    cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
-                    fontSize: 13, fontWeight: 600, letterSpacing: 0,
-                    transition: "background 0.12s",
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="5" y1="1" x2="5" y2="6" /><polyline points="2.5 3.5 5 1 7.5 3.5" />
-                    <line x1="2" y1="9" x2="8" y2="9" />
-                  </svg>
-                  Follow-up
                 </button>
               )}
             </div>
@@ -609,28 +657,25 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               onClick={handleSend}
               disabled={!value.trim() && !attachedImages.length}
               aria-label="Send message"
+              title="Send message"
               style={{
                 flexShrink: 0,
                 alignSelf: "flex-end",
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "7px 14px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 38, height: 38, padding: 0,
                 background: (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
                 border: "none",
-                borderRadius: "var(--radius-control)",
+                borderRadius: 12,
                 color: (value.trim() || attachedImages.length) ? "var(--accent-contrast)" : "var(--text-dim)",
                 cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: 0,
                 boxShadow: (value.trim() || attachedImages.length) ? "0 1px 8px var(--focus-ring)" : "none",
               }}
-              className="transition-all duration-150 active:scale-95"
+              className="composer-icon-button"
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="2" y1="7" x2="11" y2="7" />
                 <polyline points="7.5 3 12 7 7.5 11" />
               </svg>
-              Send
             </button>
           )}
         </div>
@@ -655,7 +700,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 cursor: isStreaming ? "not-allowed" : "pointer",
                 opacity: isStreaming ? 0.5 : 1,
               }}
-              className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-all duration-150"}
+              className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-[background-color,color,transform] duration-150"}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -677,8 +722,33 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {/* spacer */}
           <div style={{ flex: 1 }} />
 
-          {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
+          {/* RIGHT: primary mode + secondary controls (idle) | Stop + sound (streaming) */}
           <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 2, marginLeft: "auto" }}>
+            {!isStreaming && onAgentModeChange && agentMode && (
+              <AgentModeSelector
+                mode={agentMode}
+                disabled={isStreaming}
+                onChange={onAgentModeChange}
+              />
+            )}
+
+            {!isStreaming && (
+              <div ref={secondaryControlsRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setSecondaryControlsOpen((open) => !open)}
+                  title="More agent controls"
+                  aria-label="More agent controls"
+                  aria-expanded={secondaryControlsOpen}
+                  className="flex h-control-height w-8 cursor-pointer items-center justify-center rounded-control border-none bg-transparent text-text-muted transition-[background-color,color,transform] duration-150 hover:bg-bg-hover hover:text-text active:scale-95"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" y1="6" x2="20" y2="6" /><circle cx="9" cy="6" r="2" />
+                    <line x1="4" y1="12" x2="20" y2="12" /><circle cx="15" cy="12" r="2" />
+                    <line x1="4" y1="18" x2="20" y2="18" /><circle cx="11" cy="18" r="2" />
+                  </svg>
+                </button>
+                <div className={`composer-secondary-menu t-dropdown material-popover absolute bottom-[calc(100%+6px)] right-0 z-[550] flex min-w-48 flex-col gap-1 rounded-panel border border-border p-1.5 shadow-popover${secondaryControlsOpen ? " is-open" : ""}`} data-origin="bottom-right">
             {!isStreaming && onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
                 <button
@@ -697,7 +767,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     fontSize: 12,
                     opacity: isStreaming ? 0.5 : 1,
                   }}
-                  className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-all duration-150"}
+                  className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-[background-color,color,transform] duration-150"}
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
@@ -712,9 +782,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   })()}</span>
                 </button>
                 {thinkingDropdownOpen && (
-                  <div style={{
+                  <div
+                    className="t-dropdown is-open material-popover"
+                    data-origin="bottom-right"
+                    style={{
                     position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
+                    zIndex: 100, background: "var(--material-popover)", border: "1px solid var(--border)",
                     borderRadius: "var(--radius-panel)", boxShadow: "var(--shadow-popover)",
                     overflow: "hidden", minWidth: 180,
                   }}>
@@ -760,14 +833,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             )}
 
-            {/* Agent mode + tool preset */}
-            {!isStreaming && onAgentModeChange && agentMode && (
-              <AgentModeSelector
-                mode={agentMode}
-                disabled={isStreaming}
-                onChange={onAgentModeChange}
-              />
-            )}
+            {/* Tool preset */}
             {!isStreaming && onToolPresetChange && (
               <PresetSelector
                 isStreaming={isStreaming}
@@ -827,6 +893,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </button>
               </div>
             )}
+                </div>
+              </div>
+            )}
 
             {isStreaming && (
               <button
@@ -834,25 +903,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 title="停止 Agent"
                 aria-label="Stop agent"
                 style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 14px",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 32, padding: 0,
                   height: "var(--control-height)",
                   background: "var(--danger-bg)",
                   border: "1px solid var(--danger-border)",
                   borderRadius: "var(--radius-control)",
                   color: "var(--danger)",
                   cursor: "pointer",
-                  fontSize: 12, fontWeight: 600,
-                  whiteSpace: "nowrap", letterSpacing: 0,
-                  transition: "background 0.12s",
+                  whiteSpace: "nowrap",
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = "var(--danger-bg)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "var(--danger-bg)"; }}
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
                   <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
                 </svg>
-                Stop
               </button>
             )}
 

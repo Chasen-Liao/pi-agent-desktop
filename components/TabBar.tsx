@@ -24,7 +24,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
       style={{
         display: "flex",
         alignItems: "flex-end",
-        background: "var(--bg-elevated)",
+        background: "transparent",
         overflowX: "auto",
         flexShrink: 0,
         height: "var(--toolbar-height)",
@@ -44,8 +44,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               paddingLeft: 12,
               paddingRight: 6,
               borderRight: "1px solid var(--divider)",
-              borderTop: isActive ? "2px solid var(--accent)" : "2px solid transparent",
-              background: isActive ? "var(--bg)" : "var(--bg-elevated)",
+              borderTop: "2px solid transparent",
+              background: isActive ? "color-mix(in srgb, var(--bg-selected) 58%, transparent)" : "transparent",
               cursor: "pointer",
               fontSize: 12,
               color: isActive ? "var(--text)" : "var(--text-muted)",
@@ -54,7 +54,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               minWidth: 80,
               flexShrink: 0,
               userSelect: "none",
-              transition: "background 0.1s, color 0.1s",
+              boxShadow: isActive ? "inset 0 -2px 0 var(--accent)" : "none",
+              transition: "background var(--duration-quick), color var(--duration-quick), box-shadow var(--duration-quick)",
             }}
           >
             <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7, display: "flex", alignItems: "center" }}>

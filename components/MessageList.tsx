@@ -20,13 +20,14 @@ interface MessageListProps {
   messageRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
   lastUserMsgRef: React.MutableRefObject<HTMLDivElement | null>;
   modelNames: Record<string, string>;
+  activeAgentIndicator?: React.ReactNode;
 }
 
 export const MessageList = React.memo(function MessageList({
   messages, entryIds, toolResultsMap, nextUserIdx, nextAssistantIdx,
   isStreaming, streamingMessage, isNew, agentRunning, forkingEntryId,
   onFork, onNavigate, onBranchMessage, onEditContent, messageRefs, lastUserMsgRef,
-  modelNames,
+  modelNames, activeAgentIndicator,
 }: MessageListProps) {
   const lastUserIdx = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -87,6 +88,7 @@ export const MessageList = React.memo(function MessageList({
           </div>
         );
       })}
+      {activeAgentIndicator}
       {isStreaming && streamingMessage && (
         <MessageView message={streamingMessage as AgentMessage} isStreaming modelNames={modelNames} />
       )}

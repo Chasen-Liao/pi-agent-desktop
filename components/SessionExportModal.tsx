@@ -42,9 +42,9 @@ export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExport
       role="dialog"
       aria-modal="true"
       aria-label="Export Session"
-      className="fixed inset-0 z-[1000] bg-black/50 flex items-center justify-center p-4"
+      className="ui-dialog-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
     >
-      <div className="w-full max-w-md bg-bg border border-border rounded-panel shadow-2xl flex flex-col overflow-hidden">
+      <div className="t-modal is-open ui-dialog-surface w-full max-w-md rounded-[14px] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-divider bg-bg-elevated">
           <h3 className="font-semibold text-text text-[14px]">Export Session</h3>
@@ -73,7 +73,7 @@ export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExport
           <div className="flex flex-col gap-2.5">
             <label
               onClick={() => setFormat("html")}
-              className={`flex items-start gap-3 p-3 rounded-panel border cursor-pointer transition-all ${
+              className={`flex items-start gap-3 p-3 rounded-panel border cursor-pointer transition-[background-color,border-color,color] duration-150 ${
                 format === "html"
                   ? "bg-accent/10 border-accent text-text"
                   : "bg-bg-panel border-border text-text-muted hover:border-border-subtle"
@@ -99,7 +99,7 @@ export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExport
 
             <label
               onClick={() => setFormat("markdown")}
-              className={`flex items-start gap-3 p-3 rounded-panel border cursor-pointer transition-all ${
+              className={`flex items-start gap-3 p-3 rounded-panel border cursor-pointer transition-[background-color,border-color,color] duration-150 ${
                 format === "markdown"
                   ? "bg-accent/10 border-accent text-text"
                   : "bg-bg-panel border-border text-text-muted hover:border-border-subtle"

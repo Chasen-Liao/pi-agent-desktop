@@ -50,6 +50,9 @@ export interface UserMessage {
   role: "user";
   content: string | (TextContent | ImageContent)[];
   timestamp?: number;
+  /** Client-only delivery metadata; never persisted to the session JSONL. */
+  clientMessageId?: string;
+  deliveryState?: "pending";
 }
 
 export interface AssistantMessage {
