@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { join, resolve } from "node:path";
@@ -35,7 +35,7 @@ async function waitForHealth(url, child, stderr) {
     }
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-      if (response.ok) return;
+      if (response.status === 200) return;
     } catch {
       // The server may still be starting.
     }
@@ -45,13 +45,32 @@ async function waitForHealth(url, child, stderr) {
 }
 
 async function stopChild(child) {
-  if (child.exitCode !== null) return;
-  child.kill();
+  if (child.exitCode !== null || child.signalCode !== null) return;
+
+  const exited = new Promise((resolveExit) => child.once("exit", resolveExit));
+  if (process.platform === "win32" && child.pid) {
+    spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+  } else {
+    child.kill("SIGTERM");
+  }
+
   await Promise.race([
-    new Promise((resolveExit) => child.once("exit", resolveExit)),
+    exited,
     new Promise((resolveTimeout) => setTimeout(resolveTimeout, 2_000)),
   ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
+  if (child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+    await Promise.race([
+      exited,
+      new Promise((resolveTimeout) => setTimeout(resolveTimeout, 2_000)),
+    ]);
+  }
+  if (child.exitCode === null && child.signalCode === null) {
+    throw new Error(`standalone server process ${child.pid ?? "unknown"} did not exit`);
+  }
 }
 
 async function getJsonArray(baseUrl, endpoint, key, stderr) {
@@ -59,7 +78,7 @@ async function getJsonArray(baseUrl, endpoint, key, stderr) {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   const body = await response.text();
-  if (!response.ok) {
+  if (response.status !== 200) {
     throw new Error(`GET ${endpoint} returned HTTP ${response.status}${stderr()}`);
   }
   const payload = JSON.parse(body);
