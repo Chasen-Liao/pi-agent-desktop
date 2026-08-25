@@ -1,6 +1,6 @@
 {
   "name": "@chasen-liao/pi-agent-desktop",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Pi Agent Desktop — desktop client for the pi coding agent",
   "license": "MIT",
   "author": "Chasen",
@@ -21,7 +21,7 @@
   "scripts": {
     "dev": "next dev -p 30141",
     "build": "npm run build:standalone",
-    "build:standalone": "next build && node scripts/ensure-standalone-next-runtimes.mjs",
+    "build:standalone": "next build && node scripts/ensure-standalone-next-runtimes.mjs && node scripts/ensure-standalone-pi-runtime.mjs && node scripts/smoke-standalone-server.mjs",
     "start": "next start -p 30141",
     "lint": "eslint .",
     "check:electron-deps": "node lib/electron-updater-runtime-deps.mjs --check",
@@ -29,8 +29,8 @@
     "release": "npm version patch --no-git-tag-version && npm run build:standalone && npm publish --access public",
     "build:electron": "tsc -p electron/tsconfig.json && node -e \"const fs=require('fs'); fs.copyFileSync('electron/startup.html', 'electron/dist/startup.html'); fs.copyFileSync('electron/startup.js', 'electron/dist/startup.js')\"",
     "dev:electron": "npm run build:electron && npx electron .",
-    "pack": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --dir",
-    "dist": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --publish never"
+    "pack": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --dir && node scripts/smoke-packaged-standalone.mjs",
+    "dist": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --publish never && node scripts/smoke-packaged-standalone.mjs"
   },
   "build": {
     "extends": "electron-builder.yml"

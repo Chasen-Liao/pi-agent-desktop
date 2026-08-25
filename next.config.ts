@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
   turbopack: {},
   serverExternalPackages: ["@earendil-works/pi-coding-agent", "@earendil-works/pi-ai"],
   allowedDevOrigins: ["127.0.0.1", "localhost", "192.168.*.*"],
+  outputFileTracingIncludes: {
+    "/*": ["./node_modules/@earendil-works/pi-ai/**/*"],
+  },
   outputFileTracingExcludes: {
     '*': [
       'release/**/*',
