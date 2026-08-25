@@ -16,6 +16,10 @@ test("build scripts name the standalone Next.js build explicitly", () => {
     pkg.scripts["build:standalone"],
     /smoke-standalone-server\.mjs/
   );
+  assert.match(
+    pkg.scripts["build:standalone"],
+    /ensure-standalone-pi-runtime\.mjs/
+  );
   assert.equal(pkg.scripts.build, "npm run build:standalone");
 });
 

@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const STARTUP_TIMEOUT_MS = 30_000;
@@ -89,10 +90,10 @@ async function getJsonArray(baseUrl, endpoint, key, stderr) {
   return payload[key];
 }
 
-const standaloneDir = resolve(process.argv[2] ?? join(process.cwd(), ".next", "standalone"));
-const serverScript = join(standaloneDir, "server.js");
+const sourceStandaloneDir = resolve(process.argv[2] ?? join(process.cwd(), ".next", "standalone"));
+const sourceServerScript = join(sourceStandaloneDir, "server.js");
 const piAiEntry = join(
-  standaloneDir,
+  sourceStandaloneDir,
   "node_modules",
   "@earendil-works",
   "pi-ai",
@@ -100,8 +101,8 @@ const piAiEntry = join(
   "index.js"
 );
 
-if (!existsSync(serverScript)) {
-  console.error(`smoke-standalone-server: server.js not found at ${serverScript}`);
+if (!existsSync(sourceServerScript)) {
+  console.error(`smoke-standalone-server: server.js not found at ${sourceServerScript}`);
   process.exit(1);
 }
 if (!existsSync(piAiEntry)) {
@@ -109,27 +110,32 @@ if (!existsSync(piAiEntry)) {
   process.exit(1);
 }
 
-const port = await getFreePort();
-let stderrText = "";
-const child = spawn(process.execPath, [serverScript], {
-  cwd: standaloneDir,
-  env: {
-    ...process.env,
-    NODE_ENV: "production",
-    HOSTNAME: "127.0.0.1",
-    PORT: String(port),
-  },
-  stdio: ["ignore", "ignore", "pipe"],
-  detached: process.platform !== "win32",
-  windowsHide: true,
-});
-
-child.stderr?.on("data", (chunk) => {
-  stderrText = `${stderrText}${chunk.toString()}`.slice(-8_000);
-});
-const stderr = () => (stderrText.trim() ? `\n${stderrText.trim()}` : "");
+const isolatedRoot = mkdtempSync(join(tmpdir(), "pi-agent-standalone-smoke-"));
+let child = null;
 
 try {
+  const standaloneDir = join(isolatedRoot, "standalone");
+  cpSync(sourceStandaloneDir, standaloneDir, { recursive: true });
+  const serverScript = join(standaloneDir, "server.js");
+  const port = await getFreePort();
+  let stderrText = "";
+  child = spawn(process.execPath, [serverScript], {
+    cwd: standaloneDir,
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      HOSTNAME: "127.0.0.1",
+      PORT: String(port),
+    },
+    stdio: ["ignore", "ignore", "pipe"],
+    detached: process.platform !== "win32",
+    windowsHide: true,
+  });
+  child.stderr?.on("data", (chunk) => {
+    stderrText = `${stderrText}${chunk.toString()}`.slice(-8_000);
+  });
+  const stderr = () => (stderrText.trim() ? `\n${stderrText.trim()}` : "");
+
   const baseUrl = `http://127.0.0.1:${port}`;
   await waitForHealth(`${baseUrl}/api/health`, child, stderr);
 
@@ -143,5 +149,6 @@ try {
   console.error(`smoke-standalone-server: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 } finally {
-  await stopChild(child);
+  if (child) await stopChild(child);
+  rmSync(isolatedRoot, { recursive: true, force: true });
 }
