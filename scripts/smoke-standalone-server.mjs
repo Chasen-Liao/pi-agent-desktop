@@ -26,9 +26,13 @@ function getFreePort() {
   });
 }
 
-async function waitForHealth(url, child, stderr) {
+async function waitForHealth(url, child, stderr, spawnError) {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
+    const startupError = spawnError();
+    if (startupError) {
+      throw new Error(`standalone server failed to start: ${startupError.message}${stderr()}`);
+    }
     if (child.exitCode !== null) {
       throw new Error(
         `standalone server exited before health check (code ${child.exitCode})${stderr()}`
@@ -47,6 +51,7 @@ async function waitForHealth(url, child, stderr) {
 
 async function stopChild(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
+  if (!child.pid) return;
 
   const exited = new Promise((resolveExit) => child.once("exit", resolveExit));
   if (process.platform === "win32" && child.pid) {
@@ -125,6 +130,7 @@ try {
   const serverScript = join(standaloneDir, "server.js");
   const port = await getFreePort();
   let stderrText = "";
+  let childSpawnError = null;
   child = spawn(runtimeExecutable, [serverScript], {
     cwd: standaloneDir,
     env: {
@@ -141,10 +147,13 @@ try {
   child.stderr?.on("data", (chunk) => {
     stderrText = `${stderrText}${chunk.toString()}`.slice(-8_000);
   });
+  child.once("error", (error) => {
+    childSpawnError = error;
+  });
   const stderr = () => (stderrText.trim() ? `\n${stderrText.trim()}` : "");
 
   const baseUrl = `http://127.0.0.1:${port}`;
-  await waitForHealth(`${baseUrl}/api/health`, child, stderr);
+  await waitForHealth(`${baseUrl}/api/health`, child, stderr, () => childSpawnError);
 
   const sessions = await getJsonArray(baseUrl, "/api/sessions", "sessions", stderr);
   const providers = await getJsonArray(baseUrl, "/api/auth/providers", "providers", stderr);

@@ -55,4 +55,11 @@ test("packaged smoke test targets the current Windows output", () => {
     ),
     /ELECTRON_RUN_AS_NODE/
   );
+  assert.match(
+    readFileSync(
+      new URL("./scripts/smoke-standalone-server.mjs", import.meta.url),
+      "utf8"
+    ),
+    /child\.once\("error"/
+  );
 });
