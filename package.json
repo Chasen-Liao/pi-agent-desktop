@@ -51,6 +51,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@webgpu/types": "^0.1.72",
     "electron": "^36.9.5",
     "electron-builder": "^26.8.1",
     "eslint": "^9",

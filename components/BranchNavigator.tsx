@@ -292,7 +292,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
             color: open ? "var(--text)" : "var(--text-muted)",
             fontSize: 11,
             whiteSpace: "nowrap",
-            transition: "color 0.1s, background 0.1s",
+            transition: "color var(--duration-quick), background var(--duration-quick)",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.color = open ? "var(--text)" : "var(--text-muted)"; }}
@@ -301,12 +301,12 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
           <span>Branches</span>
         </button>
         {open && dropdownPos && (
-          <div style={{
+          <div className="t-dropdown is-open material-popover" data-origin="top-left" style={{
             position: "fixed",
             top: dropdownPos.top,
             left: dropdownPos.left,
             width: dropdownPos.width,
-            background: "var(--bg-elevated)",
+            background: "var(--material-popover)",
             borderBottom: "1px solid var(--divider)",
             boxShadow: "var(--shadow-popover)",
             zIndex: 500,
@@ -400,12 +400,12 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
 
       {/* Tree panel - overlay */}
       {open && (
-        <div style={{
+        <div className="t-dropdown is-open material-popover" data-origin="top-left" style={{
           position: "absolute",
           top: "100%",
           left: 0,
           right: 0,
-          background: "var(--bg)",
+          background: "var(--material-popover)",
           borderBottom: "1px solid var(--border)",
           boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
           zIndex: 100,

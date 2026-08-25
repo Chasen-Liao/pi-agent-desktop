@@ -6,21 +6,32 @@ import { clampPanelWidth, getDefaultPanelWidths } from "@/lib/panel-layout";
 export function usePanelLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [resizingSide, setResizingSide] = useState<"left" | "right" | null>(null);
   const [panelWidths, setPanelWidths] = useState(() =>
     getDefaultPanelWidths(typeof window === "undefined" ? 1200 : window.innerWidth)
   );
 
-  const panelResizeRef = useRef<{ side: "left" | "right"; startX: number; startWidth: number } | null>(null);
+  const panelResizeRef = useRef<{
+    side: "left" | "right";
+    startX: number;
+    startWidth: number;
+    pointerId: number;
+    target: HTMLDivElement;
+  } | null>(null);
 
   const beginPanelResize = useCallback(
     (side: "left" | "right", e: React.PointerEvent<HTMLDivElement>) => {
       if (window.innerWidth <= 640) return;
       e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
       panelResizeRef.current = {
         side,
         startX: e.clientX,
         startWidth: side === "left" ? panelWidths.left : panelWidths.right,
+        pointerId: e.pointerId,
+        target: e.currentTarget,
       };
+      setResizingSide(side);
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     },
@@ -40,8 +51,13 @@ export function usePanelLayout() {
     };
 
     const handlePointerUp = () => {
-      if (!panelResizeRef.current) return;
+      const active = panelResizeRef.current;
+      if (!active) return;
+      if (active.target.hasPointerCapture(active.pointerId)) {
+        active.target.releasePointerCapture(active.pointerId);
+      }
       panelResizeRef.current = null;
+      setResizingSide(null);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
@@ -74,6 +90,7 @@ export function usePanelLayout() {
     rightPanelOpen,
     setRightPanelOpen,
     panelWidths,
+    resizingSide,
     beginPanelResize,
   };
 }

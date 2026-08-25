@@ -55,7 +55,7 @@ export function PresetSelector({
           fontSize: 12,
           opacity: isStreaming ? 0.5 : 1,
         }}
-        className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-all duration-150"}
+        className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-[background-color,color,transform] duration-150"}
       >
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
@@ -63,9 +63,12 @@ export function PresetSelector({
         <span>{Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ?? "default"}</span>
       </button>
       {toolDropdownOpen && (
-        <div style={{
+        <div
+          className="t-dropdown is-open material-popover"
+          data-origin="bottom-right"
+          style={{
           position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-          zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
+          zIndex: 100, background: "var(--material-popover)", border: "1px solid var(--border)",
           borderRadius: "var(--radius-panel)", boxShadow: "var(--shadow-popover)",
           overflow: "hidden", minWidth: 120,
         }}>

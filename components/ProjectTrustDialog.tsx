@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { NeedsTrustPayload, TrustOptionDto } from "@/lib/trust-types";
+import type { NeedsTrustPayload } from "@/lib/trust-types";
 
 export type { NeedsTrustPayload };
 
@@ -19,6 +19,7 @@ export function ProjectTrustDialog({ payload, onChoose, onCancel }: Props) {
       role="dialog"
       aria-modal="true"
       aria-label="Project trust"
+      className="ui-dialog-backdrop"
       style={{
         position: "fixed",
         inset: 0,
@@ -31,9 +32,10 @@ export function ProjectTrustDialog({ payload, onChoose, onCancel }: Props) {
       }}
     >
       <div
+        className="t-modal is-open ui-dialog-surface"
         style={{
           width: "min(460px, 100%)",
-          background: "var(--bg)",
+          background: "var(--material-popover)",
           border: "1px solid var(--border)",
           borderRadius: 12,
           padding: 18,

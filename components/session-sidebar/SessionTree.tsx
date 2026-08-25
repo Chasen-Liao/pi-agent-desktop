@@ -59,7 +59,7 @@ export function SessionTreeItem({
       </div>
       {hasChildren && (
         <div
-          className={`grid transition-all duration-200 ease-in-out ${
+          className={`grid transition-[grid-template-rows,opacity] duration-250 ease-[var(--ease-smooth-out)] ${
             collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
           }`}
         >
@@ -233,7 +233,7 @@ function SessionItem({
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={`relative h-[52px] flex items-center pr-2 transition-all duration-120 gap-1.5 overflow-hidden ${bgClass} ${borderClass} ${
+      className={`relative h-[52px] flex items-center pr-2 transition-[background-color,border-color,opacity] duration-150 gap-1.5 overflow-hidden ${bgClass} ${borderClass} ${
         confirmDelete || renaming ? "cursor-default" : "cursor-pointer"
       } ${deleting ? "opacity-50" : "opacity-100"}`}
       style={{
@@ -249,7 +249,7 @@ function SessionItem({
           <div className="flex gap-1.25 shrink-0">
             <button
               onClick={handleDeleteConfirm}
-              className="flex items-center justify-center gap-1 h-[30px] px-[11px] bg-danger border-none rounded-control text-accent-contrast cursor-pointer text-[12px] font-semibold whitespace-nowrap active:scale-95 transition-all duration-150"
+              className="flex items-center justify-center gap-1 h-[30px] px-[11px] bg-danger border-none rounded-control text-accent-contrast cursor-pointer text-[12px] font-semibold whitespace-nowrap active:scale-95 transition-[background-color,color,transform] duration-150"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
@@ -261,7 +261,7 @@ function SessionItem({
             </button>
             <button
               onClick={handleDeleteCancel}
-              className="flex items-center justify-center h-[30px] px-[11px] bg-bg hover:bg-bg-hover border border-border rounded-control text-text-muted cursor-pointer text-[12px] font-medium whitespace-nowrap active:scale-95 transition-all duration-150"
+              className="flex items-center justify-center h-[30px] px-[11px] bg-bg hover:bg-bg-hover border border-border rounded-control text-text-muted cursor-pointer text-[12px] font-medium whitespace-nowrap active:scale-95 transition-[background-color,border-color,color,transform] duration-150"
             >
               Cancel
             </button>
@@ -329,7 +329,7 @@ function SessionItem({
 
           {/* Action buttons keep their width reserved so hover does not shift text. */}
           <div
-            className={`flex gap-1 shrink-0 transition-opacity duration-120 ${
+            className={`flex gap-1 shrink-0 transition-opacity duration-150 ${
               actionsVisible || menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
             }`}
           >
@@ -343,7 +343,7 @@ function SessionItem({
               title="More actions"
               aria-label="More actions"
               tabIndex={actionsVisible ? 0 : -1}
-              className="flex items-center justify-center w-7 h-7 p-0 bg-chrome-button-bg hover:bg-chrome-button-hover border border-border hover:border-focus-ring rounded-control text-text-muted hover:text-text cursor-pointer shrink-0 transition-all duration-120 active:scale-95"
+              className="flex items-center justify-center w-7 h-7 p-0 bg-transparent hover:bg-chrome-button-hover border border-transparent hover:border-border rounded-control text-text-dim hover:text-text cursor-pointer shrink-0 transition-[background-color,border-color,color,transform] duration-150 active:scale-95"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="1" />
@@ -351,31 +351,7 @@ function SessionItem({
                 <circle cx="12" cy="19" r="1" />
               </svg>
             </button>
-            <button
-              onClick={startRename}
-              title="Rename"
-              aria-label="Rename session"
-              tabIndex={actionsVisible ? 0 : -1}
-              className="flex items-center justify-center w-7 h-7 p-0 bg-chrome-button-bg hover:bg-chrome-button-hover border border-border hover:border-focus-ring rounded-control text-text-muted hover:text-accent cursor-pointer shrink-0 transition-all duration-120 active:scale-95"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-              </svg>
-            </button>
-            <button
-              onClick={handleDeleteClick}
-              title="Delete"
-              aria-label="Delete session"
-              tabIndex={actionsVisible ? 0 : -1}
-              className="flex items-center justify-center w-7 h-7 p-0 bg-chrome-button-bg hover:bg-danger-bg border border-border hover:border-danger-border rounded-control text-text-muted hover:text-danger cursor-pointer shrink-0 transition-all duration-120 active:scale-95"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                <path d="M10 11v6M14 11v6" />
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-              </svg>
-            </button>
+
           </div>
 
           {/* Context Menu Dropdown */}
@@ -388,7 +364,8 @@ function SessionItem({
                 left: menuPos.x,
                 zIndex: 1000,
               }}
-              className="w-44 bg-bg-elevated border border-divider rounded-panel shadow-popover py-1 text-[12px] text-text"
+              className="t-dropdown is-open material-popover w-44 border border-divider rounded-panel shadow-popover py-1 text-[12px] text-text"
+              data-origin="top-left"
             >
               {onBranchSession && (
                 <button

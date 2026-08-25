@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent, useMemo } from "react";
+import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent, useLayoutEffect, useMemo } from "react";
 import { buildSlashCommandItems, getSlashTriggerQuery, type SlashCommandItem, type SlashSkill } from "@/lib/slash-commands";
 import type { AttachedImage, ChatInputHandle } from "./chat-input/types";
 export type { ChatInputHandle };
@@ -62,6 +62,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 }: Props, ref) {
   const [value, setValue] = useState("");
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
+  const [secondaryControlsOpen, setSecondaryControlsOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   // 跟踪最新 attachedImages 供 unmount cleanup 读取（避免捕获 mount 时空数组快照）
   const attachedImagesRef = useRef<AttachedImage[]>([]);
@@ -83,8 +84,35 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [slashDismissedValue, setSlashDismissedValue] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaResizeFrameRef = useRef(0);
   const thinkingDropdownRef = useRef<HTMLDivElement>(null);
+  const secondaryControlsRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const resizeTextarea = useCallback((textarea: HTMLTextAreaElement) => {
+    cancelAnimationFrame(textareaResizeFrameRef.current);
+    const currentHeight = textarea.getBoundingClientRect().height;
+    textarea.style.height = "auto";
+    const targetHeight = Math.min(textarea.scrollHeight, 200);
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      textarea.style.height = `${targetHeight}px`;
+      return;
+    }
+
+    textarea.style.height = `${currentHeight}px`;
+    if (Math.abs(currentHeight - targetHeight) < 0.5) return;
+    void textarea.offsetHeight;
+    textareaResizeFrameRef.current = requestAnimationFrame(() => {
+      textarea.style.height = `${targetHeight}px`;
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) resizeTextarea(textarea);
+    return () => cancelAnimationFrame(textareaResizeFrameRef.current);
+  }, [resizeTextarea, value]);
 
   useImperativeHandle(ref, () => ({
     insertIfEmpty(text: string) {
@@ -95,8 +123,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       requestAnimationFrame(() => {
         if (!ta) return;
         ta.focus();
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
       });
     },
     insertText(text: string) {
@@ -117,8 +143,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         const pos = start + sep.length + text.length;
         ta.setSelectionRange(pos, pos);
         ta.focus();
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
       });
     },
     addImages(files: File[]) {
@@ -220,8 +244,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (!ta) return;
       ta.focus();
       ta.setSelectionRange(nextCaret, nextCaret);
-      ta.style.height = "auto";
-      ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     });
   }, [caretIndex, value]);
 
@@ -232,9 +254,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     onSend(msg, attachedImages.length ? attachedImages : undefined);
     setValue("");
     clearImages();
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
   }, [value, attachedImages, isStreaming, onSend, clearImages]);
 
   const sendQueued = useCallback((mode: "steer" | "followup") => {
@@ -247,7 +266,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     }
     setValue("");
     clearImages();
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
   }, [value, attachedImages, onSteer, onFollowUp, clearImages]);
 
   const handleKeyDown = useCallback(
@@ -288,13 +306,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     [slashMenuOpen, slashItems, slashActiveIndex, selectSlashItem, value, isStreaming, onSteer, onFollowUp, sendQueued, handleSend]
   );
 
-  const handleInput = useCallback(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
-  }, []);
-
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData?.items ?? []);
     const imageItems = items.filter((item) => item.type.startsWith("image/"));
@@ -304,15 +315,33 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     processImageFiles(files);
   }, [processImageFiles]);
 
-  // Close thinking dropdown on outside click
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    if (!isStreaming) return;
+    setThinkingDropdownOpen(false);
+    setSecondaryControlsOpen(false);
+  }, [isStreaming]);
+
+  // Close composer popovers on outside click or Escape.
+  useEffect(() => {
+    const handlePointerDown = (e: MouseEvent) => {
       if (thinkingDropdownRef.current && !thinkingDropdownRef.current.contains(e.target as Node)) {
         setThinkingDropdownOpen(false);
       }
+      if (secondaryControlsRef.current && !secondaryControlsRef.current.contains(e.target as Node)) {
+        setSecondaryControlsOpen(false);
+      }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setThinkingDropdownOpen(false);
+      setSecondaryControlsOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   return (
@@ -361,13 +390,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         <div style={{ position: "relative" }}>
         {slashMenuOpen && (
           <div
+            className="t-dropdown is-open material-popover"
+            data-origin="bottom-center"
             style={{
               position: "absolute",
               left: 0,
               right: 0,
               bottom: "calc(100% + 8px)",
               zIndex: 160,
-              background: "var(--bg)",
+              background: "var(--material-popover)",
               border: "1px solid var(--border)",
               borderRadius: "var(--radius-panel)",
               boxShadow: "var(--shadow-popover)",
@@ -496,11 +527,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
         )}
         <div
+          className="material-input composer-shell"
+          data-focused={inputFocused ? "true" : "false"}
           style={{
             display: "flex",
             gap: 8,
             alignItems: "center",
-            background: "var(--bg-elevated)",
+            background: "var(--material-input)",
             border: `1px solid ${inputFocused
               ? "var(--focus-ring)"
               : isStreaming && (onSteer || onFollowUp)
@@ -508,8 +541,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 : "color-mix(in srgb, var(--border) 70%, transparent)"}`,
             borderRadius: 16,
             padding: "10px 10px 10px 14px",
-            boxShadow: inputFocused ? "0 0 0 3px var(--focus-ring), var(--shadow-input)" : "var(--shadow-input)",
-            transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
           } as React.CSSProperties}
         >
           <textarea
@@ -521,7 +552,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               setSlashDismissedValue(null);
             }}
             onKeyDown={handleKeyDown}
-            onInput={handleInput}
             onPaste={handlePaste}
             onSelect={(e) => setCaretIndex(e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
             onFocus={(e) => {
@@ -536,6 +566,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 : "Message…"
             }
             rows={1}
+            className="t-resize"
             style={{
               flex: 1,
               background: "none",
@@ -624,7 +655,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 letterSpacing: 0,
                 boxShadow: (value.trim() || attachedImages.length) ? "0 1px 8px var(--focus-ring)" : "none",
               }}
-              className="transition-all duration-150 active:scale-95"
+              className="transition-[background-color,color,box-shadow,transform] duration-150 active:scale-95"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="2" y1="7" x2="11" y2="7" />
@@ -655,7 +686,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 cursor: isStreaming ? "not-allowed" : "pointer",
                 opacity: isStreaming ? 0.5 : 1,
               }}
-              className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-all duration-150"}
+              className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-[background-color,color,transform] duration-150"}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -677,8 +708,33 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {/* spacer */}
           <div style={{ flex: 1 }} />
 
-          {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
+          {/* RIGHT: primary mode + secondary controls (idle) | Stop + sound (streaming) */}
           <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 2, marginLeft: "auto" }}>
+            {!isStreaming && onAgentModeChange && agentMode && (
+              <AgentModeSelector
+                mode={agentMode}
+                disabled={isStreaming}
+                onChange={onAgentModeChange}
+              />
+            )}
+
+            {!isStreaming && (
+              <div ref={secondaryControlsRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setSecondaryControlsOpen((open) => !open)}
+                  title="More agent controls"
+                  aria-label="More agent controls"
+                  aria-expanded={secondaryControlsOpen}
+                  className="flex h-control-height w-8 cursor-pointer items-center justify-center rounded-control border-none bg-transparent text-text-muted transition-[background-color,color,transform] duration-150 hover:bg-bg-hover hover:text-text active:scale-95"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" y1="6" x2="20" y2="6" /><circle cx="9" cy="6" r="2" />
+                    <line x1="4" y1="12" x2="20" y2="12" /><circle cx="15" cy="12" r="2" />
+                    <line x1="4" y1="18" x2="20" y2="18" /><circle cx="11" cy="18" r="2" />
+                  </svg>
+                </button>
+                <div className={`composer-secondary-menu t-dropdown material-popover absolute bottom-[calc(100%+6px)] right-0 z-[550] flex min-w-48 flex-col gap-1 rounded-panel border border-border p-1.5 shadow-popover${secondaryControlsOpen ? " is-open" : ""}`} data-origin="bottom-right">
             {!isStreaming && onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
                 <button
@@ -697,7 +753,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     fontSize: 12,
                     opacity: isStreaming ? 0.5 : 1,
                   }}
-                  className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-all duration-150"}
+                  className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-[background-color,color,transform] duration-150"}
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
@@ -712,9 +768,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   })()}</span>
                 </button>
                 {thinkingDropdownOpen && (
-                  <div style={{
+                  <div
+                    className="t-dropdown is-open material-popover"
+                    data-origin="bottom-right"
+                    style={{
                     position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
+                    zIndex: 100, background: "var(--material-popover)", border: "1px solid var(--border)",
                     borderRadius: "var(--radius-panel)", boxShadow: "var(--shadow-popover)",
                     overflow: "hidden", minWidth: 180,
                   }}>
@@ -760,14 +819,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             )}
 
-            {/* Agent mode + tool preset */}
-            {!isStreaming && onAgentModeChange && agentMode && (
-              <AgentModeSelector
-                mode={agentMode}
-                disabled={isStreaming}
-                onChange={onAgentModeChange}
-              />
-            )}
+            {/* Tool preset */}
             {!isStreaming && onToolPresetChange && (
               <PresetSelector
                 isStreaming={isStreaming}
@@ -825,6 +877,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     </svg>Compact</>
                   )}
                 </button>
+              </div>
+            )}
+                </div>
               </div>
             )}
 

@@ -47,9 +47,25 @@
 }
 
 @layer utilities {
-  .bg-bg-panel, .bg-bg-elevated {
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+  .material-sidebar {
+    background: var(--material-sidebar);
+    backdrop-filter: blur(28px) saturate(145%);
+    -webkit-backdrop-filter: blur(28px) saturate(145%);
+  }
+  .material-toolbar {
+    background: var(--material-toolbar);
+    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+  }
+  .material-popover {
+    background: var(--material-popover);
+    backdrop-filter: blur(30px) saturate(160%);
+    -webkit-backdrop-filter: blur(30px) saturate(160%);
+  }
+  .material-input {
+    background: var(--material-input);
+    backdrop-filter: blur(24px) saturate(155%);
+    -webkit-backdrop-filter: blur(24px) saturate(155%);
   }
 }
 
@@ -98,6 +114,60 @@
   --chrome-button-bg: color-mix(in srgb, var(--bg-hover) 66%, transparent);
   --chrome-button-hover: var(--bg-selected);
   --divider: var(--border-subtle);
+  --material-sidebar: rgba(241, 243, 247, 0.88);
+  --material-toolbar: rgba(250, 251, 253, 0.78);
+  --material-popover: rgba(255, 255, 255, 0.86);
+  --material-input: rgba(255, 255, 255, 0.82);
+
+  /* Shared motion scale — transitions.dev semantics. */
+  --duration-stagger: 40ms;
+  --duration-micro: 80ms;
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-medium: 350ms;
+  --duration-slow: 400ms;
+  --duration-very-slow: 500ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: ease-in-out;
+  --ease-out: ease-out;
+  --ease-linear: linear;
+  --blur-small: 2px;
+
+  --dropdown-open-dur: var(--duration-fast);
+  --dropdown-close-dur: var(--duration-quick);
+  --dropdown-pre-scale: 0.97;
+  --dropdown-closing-scale: 0.99;
+  --dropdown-ease: var(--ease-smooth-out);
+
+  --think-swap: var(--duration-quick);
+  --think-gap: 50ms;
+  --think-distance: 8px;
+  --think-blur: var(--blur-small);
+  --think-shimmer: 2000ms;
+  --think-base: var(--text-muted);
+  --think-highlight: var(--text-strong);
+  --think-ease: var(--ease-in-out);
+
+  --resize-dur: 300ms;
+  --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --acc-expand: 250ms;
+  --acc-collapse: 250ms;
+  --acc-chevron: 250ms;
+  --acc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --modal-open-dur: var(--duration-fast);
+  --modal-close-dur: var(--duration-quick);
+  --modal-scale: 0.96;
+  --modal-scale-close: 0.96;
+  --modal-ease: var(--ease-smooth-out);
+
+  --toast-open: var(--duration-medium);
+  --toast-close: var(--duration-fast);
+  --toast-distance: 16px;
+  --toast-blur: var(--blur-small);
+  --toast-scale: 0.97;
+  --toast-ease: var(--ease-smooth-out);
 }
 
 html.dark {
@@ -140,6 +210,10 @@ html.dark {
   --chrome-button-bg: color-mix(in srgb, var(--bg-hover) 58%, transparent);
   --chrome-button-hover: var(--bg-selected);
   --divider: var(--border-subtle);
+  --material-sidebar: rgba(18, 22, 29, 0.9);
+  --material-toolbar: rgba(12, 15, 20, 0.8);
+  --material-popover: rgba(22, 27, 35, 0.9);
+  --material-input: rgba(17, 21, 28, 0.84);
 }
 
 /* Theme toggle: circular wipe via View Transitions API.
@@ -308,41 +382,6 @@ span.linenumber {
   font-style: normal !important;
 }
 
-@keyframes drop-zone-in {
-  from { opacity: 0; transform: scale(0.97); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
-@keyframes drop-icon-float {
-  0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-6px); }
-}
-
-@keyframes drop-ring-pulse {
-  0%, 100% { opacity: 0.5; transform: scale(1); }
-  50%       { opacity: 1;   transform: scale(1.06); }
-}
-
-@keyframes drop-ripple {
-  0%   { transform: scale(0); opacity: 0.6; }
-  100% { transform: scale(1); opacity: 0; }
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
 @keyframes saved-pop {
   0%   { transform: scale(1); box-shadow: 0 0 0 0 var(--success-border); }
   40%  { transform: scale(1.08); box-shadow: 0 0 0 6px var(--success-bg); }
@@ -354,6 +393,308 @@ span.linenumber {
   to   { stroke-dashoffset: 0;  opacity: 1; }
 }
 
+.composer-shell {
+  box-shadow: var(--shadow-input);
+  transition:
+    border-color var(--duration-quick) var(--ease-smooth-out),
+    background-color var(--duration-quick) var(--ease-smooth-out);
+}
+.composer-shell::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-quick) var(--ease-smooth-out);
+}
+.composer-shell[data-focused="true"]::after {
+  opacity: 1;
+}
+
+.t-resize {
+  transition:
+    width  var(--resize-dur) var(--resize-ease),
+    height var(--resize-dur) var(--resize-ease);
+  will-change: width, height;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-resize { transition: none !important; }
+  .composer-shell::after { transition: none !important; }
+}
+
+.t-toast {
+  opacity: 0;
+  transform: translate(var(--toast-x, 0), var(--toast-distance)) scale(var(--toast-scale));
+  filter: blur(var(--toast-blur));
+  will-change: transform, opacity, filter;
+  transition:
+    opacity var(--toast-close) var(--toast-ease),
+    transform var(--toast-close) var(--toast-ease),
+    filter var(--toast-close) var(--toast-ease);
+}
+.t-toast.is-open {
+  opacity: 1;
+  transform: translate(var(--toast-x, 0), 0) scale(1);
+  filter: blur(0);
+  transition:
+    opacity var(--toast-open) var(--toast-ease),
+    transform var(--toast-open) var(--toast-ease),
+    filter var(--toast-open) var(--toast-ease);
+}
+@starting-style {
+  .t-toast.is-open {
+    opacity: 0;
+    transform: translate(var(--toast-x, 0), var(--toast-distance)) scale(var(--toast-scale));
+    filter: blur(var(--toast-blur));
+  }
+}
+
+.ui-dialog-backdrop {
+  background: color-mix(in srgb, black 42%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.ui-dialog-surface {
+  background: var(--material-popover);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, white 18%);
+  box-shadow: 0 24px 80px -24px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(30px) saturate(150%);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
+}
+
+/* Centered dialogs — transitions.dev modal. */
+.t-modal {
+  transform-origin: center;
+  transform: scale(var(--modal-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--modal-open-dur) var(--modal-ease),
+    opacity var(--modal-open-dur) var(--modal-ease);
+  will-change: transform, opacity;
+}
+.t-modal.is-open {
+  transform: scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.t-modal.is-closing {
+  transform: scale(var(--modal-scale-close));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--modal-close-dur) var(--modal-ease),
+    opacity var(--modal-close-dur) var(--modal-ease);
+}
+@starting-style {
+  .t-modal.is-open {
+    transform: scale(var(--modal-scale));
+    opacity: 0;
+  }
+}
+
+/* Origin-aware popovers — transitions.dev menu-dropdown. */
+.t-dropdown {
+  transform-origin: top left;
+  transform: scale(var(--dropdown-closing-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--dropdown-close-dur) var(--dropdown-ease),
+    opacity var(--dropdown-close-dur) var(--dropdown-ease);
+  will-change: transform, opacity;
+}
+.t-dropdown[data-origin="top-right"] { transform-origin: top right; }
+.t-dropdown[data-origin="top-center"] { transform-origin: top center; }
+.t-dropdown[data-origin="bottom-left"] { transform-origin: bottom left; }
+.t-dropdown[data-origin="bottom-center"] { transform-origin: bottom center; }
+.t-dropdown[data-origin="bottom-right"] { transform-origin: bottom right; }
+.t-dropdown.is-open {
+  transform: scale(1);
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    transform var(--dropdown-open-dur) var(--dropdown-ease),
+    opacity var(--dropdown-open-dur) var(--dropdown-ease);
+}
+.t-dropdown.is-closing {
+  transform: scale(var(--dropdown-closing-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--dropdown-close-dur) var(--dropdown-ease),
+    opacity var(--dropdown-close-dur) var(--dropdown-ease);
+}
+@starting-style {
+  .t-dropdown.is-open {
+    transform: scale(var(--dropdown-pre-scale));
+    opacity: 0;
+  }
+}
+/* Agent status text — transitions.dev thinking-states. */
+.t-think { position: relative; display: inline-block; text-align: left; }
+.t-think-sizer { display: block; visibility: hidden; white-space: nowrap; }
+.t-think-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-block;
+  color: var(--think-base);
+  white-space: nowrap;
+  transform: translateY(0);
+  filter: blur(0);
+  opacity: 1;
+  transition:
+    transform var(--think-swap) var(--think-ease),
+    filter var(--think-swap) var(--think-ease),
+    opacity var(--think-swap) var(--think-ease);
+  will-change: transform, filter, opacity;
+}
+.t-think-text::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(90deg,
+    transparent 0%, transparent 40%,
+    var(--think-highlight) 50%,
+    transparent 60%, transparent 100%);
+  background-size: 400% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t-think-shimmer var(--think-shimmer) linear infinite;
+}
+@keyframes t-think-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
+.t-think-text.is-exit {
+  transform: translateY(calc(var(--think-distance) * -1));
+  filter: blur(var(--think-blur));
+  opacity: 0;
+}
+.t-think-text.is-enter-start {
+  transition: none;
+  transform: translateY(var(--think-distance));
+  filter: blur(var(--think-blur));
+  opacity: 0;
+}
+
+/* WebGPU liquid-glass thinking orb with a CSS fallback. */
+.liquid-thinking-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+}
+.liquid-thinking-canvas {
+  display: block;
+  width: 46px;
+  height: 46px;
+}
+.liquid-thinking-fallback {
+  position: relative;
+  display: block;
+  width: 38px;
+  height: 38px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, white 32%, var(--border));
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.78), transparent 24%),
+    radial-gradient(circle at 68% 72%, rgba(91, 126, 184, 0.68), transparent 46%),
+    #111827;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 8px 20px -12px var(--focus-ring);
+}
+.liquid-thinking-fallback::before {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  background: conic-gradient(
+    from 20deg,
+    transparent,
+    rgba(179, 207, 247, 0.72),
+    rgba(74, 96, 143, 0.62),
+    transparent 58%,
+    rgba(225, 235, 255, 0.6)
+  );
+  filter: blur(5px);
+  mix-blend-mode: screen;
+  animation: liquid-thinking-fallback-shift 3200ms linear infinite;
+}
+.liquid-thinking-fallback::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  box-shadow:
+    inset 5px 7px 10px rgba(255, 255, 255, 0.12),
+    inset -6px -7px 12px rgba(0, 0, 0, 0.34);
+}
+@keyframes liquid-thinking-fallback-shift {
+  to { transform: rotate(1turn); }
+}
+
+/* grid-template-rows 0fr → 1fr gives a clean height animation
+   with no JS measurement; the inner element clips overflow. */
+.t-acc-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--acc-collapse) var(--acc-ease);
+}
+.t-acc[data-open="true"] .t-acc-panel {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--acc-expand) var(--acc-ease);
+}
+.t-acc-panel-inner {
+  overflow: hidden;
+  opacity: 0;
+  filter: blur(2px);
+  transition:
+    opacity var(--acc-collapse) var(--acc-ease),
+    filter var(--acc-collapse) var(--acc-ease);
+}
+.t-acc[data-open="true"] .t-acc-panel-inner {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity var(--acc-expand) var(--acc-ease),
+    filter var(--acc-expand) var(--acc-ease);
+}
+/* Flip the chevron vertically to turn the "v" into a "^".
+   scaleY(-1) about the centre passes through a flat line at
+   the midpoint (same look as a d: path morph) but animates
+   in every browser, unlike CSS d: morphing (Chromium only).
+   The chevron path is symmetric about the 16x16 viewBox
+   centre, so the flip lands exactly on the "^"; non-scaling
+   -stroke keeps the stroke width constant through the flip. */
+.t-acc-chevron {
+  display: inline-flex;
+  transform: scaleY(1);
+  transform-origin: center;
+  transition: transform var(--acc-chevron) var(--acc-ease);
+}
+.t-acc-chevron path { vector-effect: non-scaling-stroke; }
+.t-acc[data-open="true"] .t-acc-chevron {
+  transform: scaleY(-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-acc-panel, .t-acc-panel-inner, .t-acc-chevron {
+    transition: none !important;
+  }
+}
+
 /* Desktop sidebar: animate width */
 @media (min-width: 641px) {
   .sidebar-overlay-backdrop {
@@ -362,10 +703,16 @@ span.linenumber {
   .sidebar-container {
     position: relative;
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition:
+      width var(--duration-fast) var(--ease-smooth-out),
+      min-width var(--duration-fast) var(--ease-smooth-out);
   }
   .sidebar-container.sidebar-open {
     min-width: 220px;
+  }
+  .sidebar-container.is-resizing,
+  .right-panel-container.is-resizing {
+    transition: none !important;
   }
   .sidebar-container.sidebar-closed {
     width: 0;
@@ -421,7 +768,9 @@ span.linenumber {
 @media (min-width: 641px) {
   .right-panel-container {
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition:
+      width var(--duration-fast) var(--ease-smooth-out),
+      min-width var(--duration-fast) var(--ease-smooth-out);
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
@@ -455,7 +804,9 @@ span.linenumber {
     bottom: 0;
     width: 280px;
     max-width: 85vw;
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    transition:
+      transform var(--duration-fast) var(--ease-smooth-out),
+      box-shadow var(--duration-fast) var(--ease-smooth-out);
   }
   .sidebar-container.sidebar-open {
     transform: translateX(0);
@@ -468,7 +819,9 @@ span.linenumber {
 
   .right-panel-container {
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition:
+      width var(--duration-fast) var(--ease-smooth-out),
+      min-width var(--duration-fast) var(--ease-smooth-out);
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
@@ -497,5 +850,56 @@ span.linenumber {
   height: var(--control-height) !important;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .t-dropdown,
+  .t-modal,
+  .t-toast,
+  .t-think-text,
+  .sidebar-container,
+  .right-panel-container {
+    transition: none !important;
+  }
+  .t-think-text {
+    transform: none !important;
+    filter: none !important;
+  }
+  .t-think-text::before,
+  .liquid-thinking-fallback::before {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .material-sidebar,
+  .material-toolbar,
+  .material-popover,
+  .material-input,
+  .ui-dialog-surface,
+  .liquid-thinking-fallback {
+    background: var(--bg-elevated) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .ui-dialog-backdrop {
+    background: rgba(0, 0, 0, 0.55) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .material-sidebar,
+  .material-toolbar,
+  .material-popover,
+  .material-input,
+  .ui-dialog-surface,
+  .liquid-thinking-fallback {
+    background: var(--bg) !important;
+    border-color: currentColor !important;
+  }
+  .ui-dialog-backdrop {
+    background: rgba(0, 0, 0, 0.72) !important;
+  }
+}
 
 

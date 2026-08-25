@@ -87,7 +87,7 @@ export function ModelSelector({
           fontSize: 12,
           opacity: isStreaming ? 0.5 : 1,
         }}
-        className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-all duration-150"}
+        className={isStreaming ? "" : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-95 transition-[background-color,color,transform] duration-150"}
       >
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="4" y="4" width="16" height="16" rx="2" />
@@ -104,10 +104,14 @@ export function ModelSelector({
         const bottom = viewportHeight - modelDropdownRect.top + 6;
         const maxH = Math.max(120, Math.min(modelDropdownRect.top - 8, viewportHeight * 0.6));
         return (
-          <div ref={modelDropdownPanelRef} style={{
+          <div
+            ref={modelDropdownPanelRef}
+            className="t-dropdown is-open material-popover"
+            data-origin="bottom-left"
+            style={{
             position: "fixed",
             bottom, left: modelDropdownRect.left,
-            zIndex: 500, background: "var(--bg)", border: "1px solid var(--border)",
+            zIndex: 500, background: "var(--material-popover)", border: "1px solid var(--border)",
             borderRadius: "var(--radius-panel)", boxShadow: "var(--shadow-popover)",
             overflow: "hidden", width: "max-content", minWidth: modelDropdownRect.width, maxHeight: maxH, overflowY: "auto",
           }}>
