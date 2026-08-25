@@ -1,6 +1,6 @@
 {
   "name": "@chasen-liao/pi-agent-desktop",
-  "version": "0.7.21",
+  "version": "0.8.0",
   "description": "Pi Agent Desktop — desktop client for the pi coding agent",
   "license": "MIT",
   "author": "Chasen",
@@ -36,12 +36,12 @@
     "extends": "electron-builder.yml"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.82.1",
-    "@earendil-works/pi-coding-agent": "^0.82.1",
-    "@electron/packager": "^20.0.0",
+    "@earendil-works/pi-ai": "^0.84.3",
+    "@earendil-works/pi-coding-agent": "^0.84.3",
+    "@electron/packager": "^20.3.0",
     "@electron/rebuild": "^4.0.4",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
@@ -53,10 +53,10 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@webgpu/types": "^0.1.72",
     "electron": "^36.9.5",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
-    "eslint-config-next": "16.2.1",
-    "next": "16.2.1",
+    "eslint-config-next": "16.3.2",
+    "next": "16.3.2",
     "postcss": "^8",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
