@@ -14,17 +14,21 @@ function hasStandaloneServer(path) {
 function findPackagedStandalone() {
   if (!existsSync(releaseDir)) return null;
 
-  const outputDirs = readdirSync(releaseDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join(releaseDir, entry.name));
+  if (process.platform === "win32") {
+    const windows = join(releaseDir, "win-unpacked", "resources", "standalone");
+    return hasStandaloneServer(windows) ? windows : null;
+  }
 
-  for (const outputDir of outputDirs) {
-    const direct = join(outputDir, "resources", "standalone");
-    if (hasStandaloneServer(direct)) return direct;
+  if (process.platform === "linux") {
+    const linux = join(releaseDir, "linux-unpacked", "resources", "standalone");
+    return hasStandaloneServer(linux) ? linux : null;
+  }
 
-    for (const entry of readdirSync(outputDir, { withFileTypes: true })) {
+  const macDir = join(releaseDir, "mac");
+  if (process.platform === "darwin" && existsSync(macDir)) {
+    for (const entry of readdirSync(macDir, { withFileTypes: true })) {
       if (!entry.isDirectory() || !entry.name.endsWith(".app")) continue;
-      const mac = join(outputDir, entry.name, "Contents", "Resources", "standalone");
+      const mac = join(macDir, entry.name, "Contents", "Resources", "standalone");
       if (hasStandaloneServer(mac)) return mac;
     }
   }

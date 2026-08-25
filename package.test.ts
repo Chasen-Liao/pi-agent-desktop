@@ -30,3 +30,14 @@ test("packaging and release scripts call build:standalone", () => {
     );
   }
 });
+
+test("packaged smoke test targets the current Windows output", () => {
+  const script = readFileSync(
+    new URL("./scripts/smoke-packaged-standalone.mjs", import.meta.url),
+    "utf8"
+  );
+  assert.match(
+    script,
+    /releaseDir, "win-unpacked", "resources", "standalone"/
+  );
+});
