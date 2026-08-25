@@ -42,6 +42,17 @@ test("packaged smoke test targets the current Windows output", () => {
   );
   assert.match(
     script,
-    /releaseDir, "win-unpacked", "resources", "standalone"/
+    /join\(outputDir, "resources", "standalone"\)/
+  );
+  assert.match(
+    script,
+    /join\(outputDir, "Pi Agent Desktop\.exe"\)/
+  );
+  assert.match(
+    readFileSync(
+      new URL("./scripts/smoke-standalone-server.mjs", import.meta.url),
+      "utf8"
+    ),
+    /ELECTRON_RUN_AS_NODE/
   );
 });

@@ -91,6 +91,8 @@ async function getJsonArray(baseUrl, endpoint, key, stderr) {
 }
 
 const sourceStandaloneDir = resolve(process.argv[2] ?? join(process.cwd(), ".next", "standalone"));
+const runtimeExecutable = resolve(process.argv[3] ?? process.execPath);
+const usesElectronRuntime = process.argv[3] !== undefined;
 const sourceServerScript = join(sourceStandaloneDir, "server.js");
 const piAiEntry = join(
   sourceStandaloneDir,
@@ -109,6 +111,10 @@ if (!existsSync(piAiEntry)) {
   console.error(`smoke-standalone-server: Pi runtime entry not found at ${piAiEntry}`);
   process.exit(1);
 }
+if (!existsSync(runtimeExecutable)) {
+  console.error(`smoke-standalone-server: runtime executable not found at ${runtimeExecutable}`);
+  process.exit(1);
+}
 
 const isolatedRoot = mkdtempSync(join(tmpdir(), "pi-agent-standalone-smoke-"));
 let child = null;
@@ -119,13 +125,14 @@ try {
   const serverScript = join(standaloneDir, "server.js");
   const port = await getFreePort();
   let stderrText = "";
-  child = spawn(process.execPath, [serverScript], {
+  child = spawn(runtimeExecutable, [serverScript], {
     cwd: standaloneDir,
     env: {
       ...process.env,
       NODE_ENV: "production",
       HOSTNAME: "127.0.0.1",
       PORT: String(port),
+      ...(usesElectronRuntime ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
     },
     stdio: ["ignore", "ignore", "pipe"],
     detached: process.platform !== "win32",
@@ -149,6 +156,14 @@ try {
   console.error(`smoke-standalone-server: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 } finally {
-  if (child) await stopChild(child);
-  rmSync(isolatedRoot, { recursive: true, force: true });
+  try {
+    if (child) await stopChild(child);
+  } finally {
+    rmSync(isolatedRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100,
+    });
+  }
 }
