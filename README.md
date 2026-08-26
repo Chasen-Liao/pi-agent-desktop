@@ -14,7 +14,7 @@
 
   ---
 
-  <video src="public/pi.mp4" controls muted loop playsinline width="100%"></video>
+  ![Pi Agent Desktop Demo](public/pi.gif)
 
   ---
 </div>
