@@ -26,3 +26,26 @@ test("plan-mode setCanExecutePlan runs outside the messages updater", () => {
 test("streaming append keeps entryIds parallel with messages", () => {
   assert.match(source, /setEntryIds\(\(prev\) => \[\.\.\.prev, \.\.\.appended\.map/);
 });
+
+test("canonical prompt events replace pending bubbles and reserve one entry id", () => {
+  const block = source.slice(
+    source.indexOf("if (reconciledPromptId"),
+    source.indexOf("if (result.agentRunning")
+  );
+  assert.match(block, /result\.appendMessages = undefined;/);
+  assert.match(block, /reconcileOrAppendPendingUserMessage\(prev, canonical, clientMessageId\)/);
+  assert.match(block, /setEntryIds\(\(prev\) => \[\.\.\.prev, undefined/);
+});
+
+test("transcript reload invalidates optimistic delivery refs before replacing messages", () => {
+  const block = source.slice(
+    source.indexOf("const loadSession = useCallback"),
+    source.indexOf("const promptTrust")
+  );
+  const loadIdx = block.indexOf("loadSessionFromApi");
+  assert.ok(loadIdx >= 0, "expected transcript load");
+  const promptsIdx = block.indexOf("pendingPromptsRef.current = []");
+  const steersIdx = block.indexOf("pendingSteersRef.current = []");
+  assert.ok(promptsIdx >= 0 && promptsIdx < loadIdx);
+  assert.ok(steersIdx >= 0 && steersIdx < loadIdx);
+});

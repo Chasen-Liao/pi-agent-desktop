@@ -62,12 +62,11 @@ export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
 
   const handleModelChange = useCallback(
     async (provider: string, modelId: string) => {
-      if (isNew) {
+      const sid = sessionIdRef.current;
+      if (!sid) {
         setNewSessionModel({ provider, modelId });
         return;
       }
-      const sid = sessionIdRef.current;
-      if (!sid) return;
       try {
         await sendAgentCommand(sid, { type: "set_model", provider, modelId });
         setCurrentModelOverride({ provider, modelId });
@@ -75,7 +74,7 @@ export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
         console.error("Failed to set model:", e);
       }
     },
-    [isNew, setNewSessionModel, sessionIdRef]
+    [setNewSessionModel, sessionIdRef]
   );
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {

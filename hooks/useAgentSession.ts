@@ -30,6 +30,7 @@ import { DEFAULT_AGENT_MODE } from "@/lib/approval-policy";
 import type { ExtensionUiRequestEvent } from "./agent-session/agent-events-manager";
 import type { NeedsTrustPayload } from "@/lib/trust-types";
 import { sendAgentCommand } from "@/lib/agent-client";
+import { reconcileOrAppendPendingUserMessage } from "./agent-session/user-message-reconciliation";
 
 export type { ThinkingLevelOption };
 export type { AttachedImage };
@@ -132,6 +133,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const followUpQueueRef = useRef(followUpQueue);
   followUpQueueRef.current = followUpQueue;
   const pendingSteersRef = useRef<Array<{ id: string; message: string; glowing: boolean }>>([]);
+  const pendingPromptsRef = useRef<Array<{ id: string; message: string }>>([]);
   const trustResolverRef = useRef<((optionId: string | null) => void) | null>(null);
   const agentModeRef = useRef(agentMode);
   agentModeRef.current = agentMode;
@@ -148,6 +150,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const handlePendingSteerFailed = useCallback((id: string) => {
     pendingSteersRef.current = pendingSteersRef.current.filter((item) => item.id !== id);
+    setMessages((prev) => prev.map((message) => {
+      if (message.role !== "user" || message.clientMessageId !== id) return message;
+      return clearPendingDelivery(message);
+    }));
+  }, [setMessages]);
+
+  const handlePendingPromptQueued = useCallback((item: { id: string; message: string }) => {
+    pendingPromptsRef.current.push(item);
+  }, []);
+
+  const handlePendingPromptFailed = useCallback((id: string) => {
+    pendingPromptsRef.current = pendingPromptsRef.current.filter((item) => item.id !== id);
     setMessages((prev) => prev.map((message) => {
       if (message.role !== "user" || message.clientMessageId !== id) return message;
       return clearPendingDelivery(message);
@@ -233,6 +247,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const loadSession = useCallback(
     async (sid: string, showLoading = false, includeState = false) => {
+      // A canonical transcript replaces any optimistic delivery state. Clear
+      // the matching refs first so a later same-text event cannot consume a
+      // stale client id and suppress a real message.
+      pendingPromptsRef.current = [];
+      pendingSteersRef.current = [];
       const loaded = await loadSessionFromApi(sid, showLoading, includeState);
       if (loaded) setCurrentModelOverride(null);
       return loaded;
@@ -282,12 +301,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
 
       let reconciledSteerId: string | null = null;
+      let reconciledPromptId: string | null = null;
       if (event.type === "message_end" && event.message.role === "user") {
         const canonicalText = userMessageText(event.message);
         const pendingIndex = pendingSteersRef.current.findIndex((item) => item.message === canonicalText);
         if (pendingIndex !== -1) {
           reconciledSteerId = pendingSteersRef.current[pendingIndex].id;
           pendingSteersRef.current.splice(pendingIndex, 1);
+        } else {
+          const promptIndex = pendingPromptsRef.current.findIndex((item) => item.message === canonicalText);
+          if (promptIndex !== -1) {
+            reconciledPromptId = pendingPromptsRef.current[promptIndex].id;
+            pendingPromptsRef.current.splice(promptIndex, 1);
+          }
         }
       }
       const result = applyAgentEvent(event);
@@ -300,6 +326,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (message.role !== "user" || message.clientMessageId !== clientMessageId) return message;
           return { ...canonical, timestamp: message.timestamp };
         }));
+      }
+
+      if (reconciledPromptId && event.type === "message_end" && event.message.role === "user") {
+        const clientMessageId = reconciledPromptId;
+        const canonical = event.message;
+        result.appendMessages = undefined;
+        setMessages((prev) =>
+          reconcileOrAppendPendingUserMessage(prev, canonical, clientMessageId)
+        );
+        setEntryIds((prev) => [...prev, undefined as unknown as string]);
       }
 
       if (result.agentRunning !== undefined) setAgentRunning(result.agentRunning);
@@ -428,6 +464,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onFollowUpQueueSnapshot: acceptFollowUpQueue,
     onPendingSteerQueued: handlePendingSteerQueued,
     onPendingSteerFailed: handlePendingSteerFailed,
+    onPendingPromptQueued: handlePendingPromptQueued,
+    onPendingPromptFailed: handlePendingPromptFailed,
   });
 
   const handleReorderFollowUps = useCallback(async (orderedIds: string[]) => {
@@ -512,6 +550,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setFollowUpQueue(EMPTY_FOLLOW_UP_QUEUE);
     setFollowUpQueueBusy(false);
     pendingSteersRef.current = [];
+    pendingPromptsRef.current = [];
 
     fetch("/api/desktop-settings")
       .then((r) => r.json())

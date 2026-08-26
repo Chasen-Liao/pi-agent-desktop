@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { AgentMessage, SessionInfo, CustomMessage, Skill, UserMessage } from "@/lib/types";
 import { sendAgentCommand } from "@/lib/agent-client";
 import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
@@ -11,6 +11,12 @@ import type { AgentMode } from "@/lib/approval-policy";
 import { EXECUTE_PLAN_PROMPT } from "@/lib/approval-policy";
 import { ensureTrustThenFetch } from "@/lib/trust-fetch";
 import type { NeedsTrustPayload } from "@/lib/trust-types";
+import { resolveSessionCommandTarget } from "./session-command-target";
+import {
+  finishPromptDispatch,
+  tryStartPromptDispatch,
+  type PromptDispatchState,
+} from "./prompt-dispatch-gate";
 
 export type AttachedImage = {
   data: string;
@@ -50,6 +56,8 @@ export type UseSessionCommandsOptions = {
   onFollowUpQueueSnapshot: (snapshot: FollowUpQueueSnapshot) => void;
   onPendingSteerQueued: (item: { id: string; message: string }) => void;
   onPendingSteerFailed: (id: string) => void;
+  onPendingPromptQueued: (item: { id: string; message: string }) => void;
+  onPendingPromptFailed: (id: string) => void;
 };
 
 export function useSessionCommands(opts: UseSessionCommandsOptions) {
@@ -85,7 +93,14 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
     onFollowUpQueueSnapshot,
     onPendingSteerQueued,
     onPendingSteerFailed,
+    onPendingPromptQueued,
+    onPendingPromptFailed,
   } = opts;
+  const promptDispatchStateRef = useRef<PromptDispatchState>({ current: false });
+
+  useEffect(() => {
+    if (!agentRunning) finishPromptDispatch(promptDispatchStateRef.current);
+  }, [agentRunning]);
 
   const handleCompact = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -174,6 +189,17 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
         if (handled) return;
       }
 
+      const commandTarget = resolveSessionCommandTarget({
+        sessionId: sessionIdRef.current,
+        isNew,
+        newSessionCwd,
+      });
+      if (!commandTarget) return;
+      if (!tryStartPromptDispatch(promptDispatchStateRef.current)) return;
+
+      const clientMessageId = globalThis.crypto.randomUUID();
+      onPendingPromptQueued({ id: clientMessageId, message });
+
       const imageBlocks = images?.map((img) => ({
         type: "image" as const,
         source: { type: "base64" as const, media_type: img.mimeType, data: img.data },
@@ -184,6 +210,8 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
           ? [...(message.trim() ? [{ type: "text" as const, text: message }] : []), ...imageBlocks]
           : message,
         timestamp: Date.now(),
+        clientMessageId,
+        deliveryState: "pending",
       };
       setMessages((prev) => [...prev, userMsg]);
       setAgentRunning(true);
@@ -198,7 +226,7 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
       }));
 
       try {
-        if (isNew && newSessionCwd) {
+        if (commandTarget.kind === "new") {
           const selectedModel = newSessionModel;
           if (selectedModel) setPendingModel(selectedModel);
           const { PRESET_NONE, PRESET_DEFAULT, PRESET_FULL } = await import(
@@ -216,7 +244,7 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                cwd: newSessionCwd,
+                cwd: commandTarget.cwd,
                 type: "prompt",
                 message,
                 toolNames,
@@ -246,16 +274,16 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
           onSessionCreated?.({
             id: realId,
             path: "",
-            cwd: newSessionCwd,
+            cwd: commandTarget.cwd,
             name: undefined,
             created: new Date().toISOString(),
             modified: new Date().toISOString(),
             messageCount: 1,
             firstMessage: message,
           });
-        } else if (session) {
-          connectEvents(session.id);
-          await sendAgentCommand(session.id, {
+        } else {
+          connectEvents(commandTarget.sessionId);
+          await sendAgentCommand(commandTarget.sessionId, {
             type: "prompt",
             message,
             ...(piImages?.length ? { images: piImages } : {}),
@@ -263,6 +291,8 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
         }
       } catch (e) {
         console.error("Failed to send message:", e);
+        finishPromptDispatch(promptDispatchStateRef.current);
+        onPendingPromptFailed(clientMessageId);
         setAgentRunning(false);
         setAgentPhase(null);
         dispatch({ type: "end" });
@@ -288,6 +318,8 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
       setPendingModel,
       sessionIdRef,
       promptTrust,
+      onPendingPromptQueued,
+      onPendingPromptFailed,
     ]
   );
 
@@ -299,7 +331,7 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
       setAgentMode(mode);
       setCanExecutePlan(false);
       const sid = sessionIdRef.current;
-      if (!sid || isNew) return;
+      if (!sid) return;
       try {
         await sendAgentCommand(sid, { type: "set_agent_mode", mode });
       } catch (e) {
@@ -307,7 +339,7 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
         setAgentMode(prevMode);
       }
     },
-    [agentMode, isNew, sessionIdRef, setAgentMode, setCanExecutePlan]
+    [agentMode, sessionIdRef, setAgentMode, setCanExecutePlan]
   );
 
   const handleExecutePlan = useCallback(async () => {

@@ -11,9 +11,9 @@ import {
   writeDesktopSettings,
 } from "./desktop-settings.ts";
 
-test("defaultDesktopSettings is ask + default tools", () => {
+test("defaultDesktopSettings is full + default tools", () => {
   const d = defaultDesktopSettings();
-  assert.equal(d.defaultAgentMode, "ask");
+  assert.equal(d.defaultAgentMode, "full");
   assert.equal(d.defaultToolPreset, "default");
 });
 
@@ -22,7 +22,7 @@ test("mergeDesktopSettings ignores invalid fields", () => {
     defaultAgentMode: "nope",
     defaultToolPreset: "full",
   });
-  assert.equal(m.defaultAgentMode, "ask");
+  assert.equal(m.defaultAgentMode, "full");
   assert.equal(m.defaultToolPreset, "full");
 });
 

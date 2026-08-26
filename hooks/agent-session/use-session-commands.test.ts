@@ -4,6 +4,27 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("./use-session-commands.ts", import.meta.url), "utf8");
 
+test("handleSend reuses an assigned session id even while the render is still new", () => {
+  const block = source.slice(
+    source.indexOf("const handleSend"),
+    source.indexOf("const handleAgentModeChange")
+  );
+  assert.match(block, /resolveSessionCommandTarget\(\{\s*sessionId: sessionIdRef\.current,/);
+  assert.match(block, /sendAgentCommand\(commandTarget\.sessionId,/);
+});
+
+test("handleSend acquires a synchronous dispatch gate before starting a request", () => {
+  const block = source.slice(
+    source.indexOf("const handleSend"),
+    source.indexOf("const handleAgentModeChange")
+  );
+  const gateIdx = block.indexOf("tryStartPromptDispatch(promptDispatchStateRef.current)");
+  const requestIdx = block.indexOf('ensureTrustThenFetch(');
+  assert.ok(gateIdx >= 0, "expected prompt dispatch gate");
+  assert.ok(requestIdx > gateIdx, "gate must be acquired before the new-session request");
+  assert.match(block, /finishPromptDispatch\(promptDispatchStateRef\.current\)/);
+});
+
 // P2: handleAgentModeChange optimistically flips agentMode; a failed server
 // call must roll the UI mode back so it never diverges from the server.
 test("handleAgentModeChange rolls the optimistic mode back on failure", () => {
@@ -16,6 +37,15 @@ test("handleAgentModeChange rolls the optimistic mode back on failure", () => {
   assert.ok(catchIdx >= 0, "expected a catch handler");
   const rollbackIdx = block.indexOf("setAgentMode(prevMode)");
   assert.ok(rollbackIdx > catchIdx, "mode rollback must run inside the catch handler");
+});
+
+test("handleAgentModeChange updates an assigned session despite stale new-session state", () => {
+  const block = source.slice(
+    source.indexOf("const handleAgentModeChange"),
+    source.indexOf("const handleExecutePlan")
+  );
+  assert.match(block, /const sid = sessionIdRef\.current;\s*if \(!sid\) return;/);
+  assert.doesNotMatch(block, /if \([^)]*isNew/);
 });
 
 // P2: handleAbort optimistically stops the agent so agentRunning isn't stuck

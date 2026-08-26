@@ -21,7 +21,7 @@ export const PRESET_NONE: readonly string[] = [];
 export const PRESET_DEFAULT: readonly string[] = ["read", "bash", "edit", "write"];
 export const PRESET_FULL: readonly string[] = ["bash", "read", "edit", "write", "grep", "find", "ls"];
 
-export const DEFAULT_AGENT_MODE: AgentMode = "ask";
+export const DEFAULT_AGENT_MODE: AgentMode = "full";
 export const DEFAULT_TOOL_PRESET: ToolPreset = "default";
 
 export const EXECUTE_PLAN_PROMPT =
