@@ -823,7 +823,7 @@ serverExternalPackages: [
 | AI SDK | @earendil-works/pi-coding-agent | ^0.84.3 |
 | AI SDK | @earendil-works/pi-ai | ^0.84.3 |
 | 品牌图标 | @lobehub/icons | ^5.6.0 |
-| 桌面壳 | Electron | ^36.9.5 |
+| 桌面壳 | Electron | ^43.4.1 |
 | 打包 | electron-builder（NSIS） | ^26.15.3 |
 | 自动更新 | electron-updater | ^6.8.9 |
 | Lint | ESLint（flat config） | ^9 |
