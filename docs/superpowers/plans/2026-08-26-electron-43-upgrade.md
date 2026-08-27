@@ -77,3 +77,4 @@
 
 > 引用核验（2026-08-26，研究子代理 6/6）：全部链接有效；#50040 修复首发于 v39.8.1（PR #50054，Also in 40/41）；Electron 43 官方博客宣告 32 位预编译终止。
 > 执行核验（2026-08-27）：allowScripts 范围写法经 npm 源码实证否决（`@npmcli/arborist/lib/script-allowed.js` 仅收精确版本），实现采精确 pin；fs-extra 根级钉住为计划外必要补充（见变更清单）。
+> 父会话终审（reviewer 子代理因模型注册失效不可用，由父代理代行）：全部窗口/托盘 API 在 Electron 43 文档中稳定无弃用；#45958（Windows overlay 深色模式不生效）为已知外观级 issue，恰好命中 `set-theme`→`setTitleBarOverlay` 路径，手测时重点确认；GUI 手测风险排序：① frameless 关闭到托盘 > ② autoUpdater quitAndInstall（无第二签名版本可实装，只能验到“检查+下载”） > ③ setTheme 视觉 > ④ tray 双击还原 > ⑤ second-instance > ⑥ 完整对话链路（后两者与桌面壳升级无关）。
