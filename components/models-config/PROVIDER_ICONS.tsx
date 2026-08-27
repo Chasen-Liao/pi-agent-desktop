@@ -24,6 +24,10 @@ import AzureColorIcon from "@lobehub/icons/es/Azure/components/Color";
 import KimiColorIcon from "@lobehub/icons/es/Kimi/components/Color";
 import QwenColorIcon from "@lobehub/icons/es/Qwen/components/Color";
 import ZhipuColorIcon from "@lobehub/icons/es/Zhipu/components/Color";
+import BasetenIcon from "@lobehub/icons/es/Baseten/components/Mono";
+import NvidiaColorIcon from "@lobehub/icons/es/Nvidia/components/Color";
+import AntGroupIcon from "@lobehub/icons/es/AntGroup/components/Mono";
+import ZaiIcon from "@lobehub/icons/es/ZAI/components/Mono";
 import CohereColorIcon from "@lobehub/icons/es/Cohere/components/Color";
 import PerplexityColorIcon from "@lobehub/icons/es/Perplexity/components/Color";
 import TogetherColorIcon from "@lobehub/icons/es/Together/components/Color";
@@ -62,11 +66,20 @@ export const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boo
   "azure-openai-responses": { Icon: AzureColorIcon,       hasColor: true },
   "kimi-coding":            { Icon: KimiColorIcon,        hasColor: true },
   "qwen":                   { Icon: QwenColorIcon,        hasColor: true },
+  "qwen-token-plan":        { Icon: QwenColorIcon,        hasColor: true },
+  "qwen-token-plan-cn":     { Icon: QwenColorIcon,        hasColor: true },
+  "qwen-token-plan-individual": { Icon: QwenColorIcon,    hasColor: true },
   "zai":                    { Icon: ZhipuColorIcon,       hasColor: true },
+  "zai-coding-cn":          { Icon: ZaiIcon,              hasColor: false },
   "cohere":                 { Icon: CohereColorIcon,      hasColor: true },
   "perplexity":             { Icon: PerplexityColorIcon,  hasColor: true },
   "together":               { Icon: TogetherColorIcon,    hasColor: true },
   "grok":                   { Icon: GrokIcon,             hasColor: false },
+  "ant-ling":               { Icon: AntGroupIcon,         hasColor: false },
+  "baseten":                { Icon: BasetenIcon,          hasColor: false },
+  "nvidia":                 { Icon: NvidiaColorIcon,      hasColor: true },
+  "opencode":               { Icon: OpenCodeIcon,         hasColor: false },
+  "xiaomi":                 { Icon: XiaomiMiMoIcon,       hasColor: false },
 };
 
 export function ProviderIcon({ id, size }: { id: string; size: number }) {

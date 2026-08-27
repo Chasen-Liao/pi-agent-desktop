@@ -8,9 +8,10 @@ const OAUTH_PROVIDER_IDS = new Set(["anthropic", "github-copilot", "openai-codex
 export async function GET() {
   const { runtime, registry } = await createPiRuntime();
   const all = registry.getAll();
+  // Use runtime.getProviders() as source of truth so providers without a
+  // registry entry (e.g. image-only or zero-model edge) are not invisible.
+  const providers = runtime.getProviders();
 
-  // Deduplicate by provider, skip OAuth-only providers and custom providers (source=models_json_key)
-  const seen = new Set<string>();
   const result: {
     id: string;
     displayName: string;
@@ -19,17 +20,15 @@ export async function GET() {
     modelCount: number;
   }[] = [];
 
-  for (const m of all) {
-    if (seen.has(m.provider)) continue;
-    seen.add(m.provider);
-    if (OAUTH_PROVIDER_IDS.has(m.provider)) continue;
-    const status = runtime.getProviderAuthStatus(m.provider);
-    // Skip providers whose key comes from models.json (those are custom providers)
+  for (const p of providers) {
+    if (OAUTH_PROVIDER_IDS.has(p.id)) continue;
+    const status = runtime.getProviderAuthStatus(p.id);
+    // Skip custom providers whose key is injected via models.json
     if (status.source === "models_json_key") continue;
-    const displayName = registry.getProviderDisplayName(m.provider);
-    const modelCount = all.filter((x) => x.provider === m.provider).length;
+    const displayName = registry.getProviderDisplayName(p.id);
+    const modelCount = all.filter((x) => x.provider === p.id).length;
     result.push({
-      id: m.provider,
+      id: p.id,
       displayName,
       configured: status.configured,
       source: status.source,

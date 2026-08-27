@@ -58,11 +58,12 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     return () => clearTimeout(t);
   }, [savedOk]);
 
-  const addCustomProvider = useCallback(() => {
+  const addCustomProvider = useCallback((api: string = "openai-completions", baseUrl?: string) => {
     let finalName = "new-provider";
     let n = 1;
     while (config.providers?.[finalName]) finalName = `new-provider-${n++}`;
-    setConfig((prev) => ({ ...prev, providers: { ...(prev.providers ?? {}), [finalName]: { api: "openai-completions" } } }));
+    const entry: ProviderEntry = baseUrl ? { api: api as ProviderEntry["api"], baseUrl } : { api: api as ProviderEntry["api"] };
+    setConfig((prev) => ({ ...prev, providers: { ...(prev.providers ?? {}), [finalName]: entry } }));
     setSelection({ type: "provider", name: finalName });
   }, [config.providers]);
 
