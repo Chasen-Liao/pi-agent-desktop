@@ -24,7 +24,8 @@
 | 文件 | 变更 |
 |---|---|
 | `package.json:55` | `"electron": "^36.9.5"` → `"^43.4.x"`（用 `npm view electron version` 解析最新补丁号） |
-| `package.json:69-70` | `allowScripts` 的 `"electron@36.9.5": true` → 优先范围写法 `"electron@^43": true`（避免 caret range 后续升到 43.4.2+ 时 postinstall 被挡）；若 harness 不支持 semver range 则用精确版本，且每次 patch 升级必须同步 bump 此项 |
+| `package.json:69-70` | `allowScripts` 的 `"electron@36.9.5": true` → `"electron@43.4.1": true`（实测 npm 仅接受精确版本，^/~ 范围被设计禁止；后续 bump 用 `npm approve-scripts electron` 自动改写 pin） |
+| `package.json:69-70+` | devDependencies 显式新增 `"fs-extra": "^8.1.0"`：Electron 43 构建链升级后不再把 fs-extra@8 提升到根，而 builder extraResources 与依赖检查依赖根级布局，显式钉住恢复原状 |
 | `package-lock.json` | 刷新（锁点 :31 / :10192-10193） |
 | `docs/ARCHITECTURE.md:826` | 版本引用同步 |
 | `docs/architecture.html:1269` | 版本引用同步 |
@@ -75,3 +76,4 @@
 - CVE：[CVE-2026-34766](https://nvd.nist.gov/vuln/detail/CVE-2026-34766)（WebUSB 校验缺陷，Medium ~5.4，≤40.7.0 均受影响，本项目旧版在列）、CVE-2026-54257（Node Buffer 越界，Critical，仅影响 42.3.1–42.3.2，43.x 天然包含）
 
 > 引用核验（2026-08-26，研究子代理 6/6）：全部链接有效；#50040 修复首发于 v39.8.1（PR #50054，Also in 40/41）；Electron 43 官方博客宣告 32 位预编译终止。
+> 执行核验（2026-08-27）：allowScripts 范围写法经 npm 源码实证否决（`@npmcli/arborist/lib/script-allowed.js` 仅收精确版本），实现采精确 pin；fs-extra 根级钉住为计划外必要补充（见变更清单）。
