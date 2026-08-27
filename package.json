@@ -52,10 +52,11 @@
     "@types/react-dom": "^19",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@webgpu/types": "^0.1.72",
-    "electron": "^36.9.5",
+    "electron": "^43.4.1",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
+    "fs-extra": "^8.1.0",
     "next": "16.3.2",
     "postcss": "^8",
     "react": "^19.2.4",
@@ -67,6 +68,6 @@
     "typescript": "^5"
   },
   "allowScripts": {
-    "electron@36.9.5": true
+    "electron@43.4.1": true
   }
 }
