@@ -74,17 +74,34 @@ export async function logoutProvider(runtime: ModelRuntime, providerId: string):
   await runtime.logout(providerId);
 }
 
+/**
+ * Persistently store an API key for a provider via the SDK login flow
+ * (writes auth.json). `runtime.setRuntimeApiKey` is intentionally NOT used:
+ * it only writes an in-memory override that is lost when the per-request
+ * runtime instance is discarded.
+ */
 export async function setProviderApiKey(
   runtime: ModelRuntime,
   providerId: string,
   apiKey: string
 ): Promise<void> {
-  await runtime.setRuntimeApiKey(providerId, apiKey.trim());
+  await runtime.login(providerId, "api_key", {
+    notify: () => {},
+    prompt: async (prompt) => {
+      // Providers with interactive multi-step logins (e.g. select-prompt
+      // flows) can't be answered headlessly with a single key.
+      if (prompt.type === "select") {
+        throw new Error(`Provider "${providerId}" requires an interactive login and cannot be configured with an API key here.`);
+      }
+      return apiKey.trim();
+    },
+  });
 }
 
 export async function removeProviderApiKey(
   runtime: ModelRuntime,
   providerId: string
 ): Promise<void> {
-  await runtime.removeRuntimeApiKey(providerId);
+  // logout() deletes the stored credential from auth.json.
+  await runtime.logout(providerId);
 }
