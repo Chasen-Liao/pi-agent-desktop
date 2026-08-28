@@ -52,6 +52,8 @@
 
 Windows 用户下载 `Pi-Agent-Desktop-Setup-x.x.x.exe`，运行即可安装。
 
+macOS 版本尚未上线（目前没有 Mac 测试机）。希望有 Mac 的朋友提交 PR，带上构建版本，一起发布 macOS 版。
+
 ## 开发
 
 ```bash
