@@ -11,6 +11,7 @@ import { killProcessTree } from "./process-tree";
 import { pickApiKeys } from "./env-filter";
 import { choosePort } from "./port-selection";
 import { getNextRestartState, type ServerState } from "./restart-policy";
+import { getNextCrashReloadState } from "./crash-recovery";
 import { loadPageWithRetry } from "./navigation";
 import { formatElectronLogLine, deriveScope, type ElectronLogLevel } from "./log-format";
 import {
@@ -302,6 +303,7 @@ function createWindow() {
   });
 
   installNavigationGuards(mainWindow);
+  installCrashRecovery(mainWindow);
 
   // Inject a Content-Security-Policy header into every response loaded in the
   // main window's session. Next.js does not emit CSP on its own, so without
@@ -435,6 +437,32 @@ function isAllowedAppUrl(rawUrl: string): boolean {
   } catch {
     return false;
   }
+}
+
+// Recover from renderer process crashes: without a handler here the window
+// stays blank forever after the renderer dies (OOM, GPU crash, ...).
+// Auto-reload is bounded by crash-recovery.ts to avoid crash loops.
+function installCrashRecovery(window: BrowserWindow) {
+  let reloadAttempts: number[] = [];
+  window.webContents.on("render-process-gone", (_event, details) => {
+    logError("Renderer process gone", details);
+    const next = getNextCrashReloadState({
+      now: Date.now(),
+      reason: details.reason,
+      attempts: reloadAttempts,
+      isQuitting,
+    });
+    reloadAttempts = next.attempts;
+    if (!next.shouldReload) {
+      logError("Renderer crash auto-reload skipped", { reason: details.reason });
+      return;
+    }
+    if (window.isDestroyed()) {
+      return;
+    }
+    logInfo("Reloading renderer after crash");
+    window.webContents.reload();
+  });
 }
 
 function installNavigationGuards(window: BrowserWindow) {
