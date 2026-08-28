@@ -67,7 +67,7 @@ CodeGraph provides MCP (Model Context Protocol) tools for efficient symbol searc
 | `lib/` | 服务端库：`rpc-manager` / `session-reader` / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` / **`ltm`** 等 |
 | `components/` | 26 个顶层组件（含 `McpConfigModal` / `SessionExportModal` / `ExtensionsConfigModal` / `ProjectTrustDialog` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
 | `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 12 个拆分模块 |
-| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 10 个辅助模块 |
+| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 11 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
 ### 必须存 `globalThis` 的原因
 

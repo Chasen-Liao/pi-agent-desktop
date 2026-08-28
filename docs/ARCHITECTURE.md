@@ -623,6 +623,7 @@ components/models-config/     模型配置弹窗的子组件
 | `preload.ts` | `contextBridge`：`selectDirectory` / `getPathForFile` / 更新 / `setTheme` |
 | `process-tree.ts` | 杀掉子进程树（不只是直接子进程） |
 | `restart-policy.ts` | 子进程崩溃后的重启策略 |
+| `crash-recovery.ts` | 渲染进程崩溃（`render-process-gone`）后的有界自动重载策略 |
 | `startup-failure.ts` | 启动失败诊断 UI（`startup.html`） |
 | `navigation.ts` | 主页面导航的单次超时、有限重试与错误封装 |
 | `log-format.ts` | 日志格式化 |
@@ -825,6 +826,15 @@ outputFileTracingExcludes: {
 ### 14.15 AgentMode `.jsonl` 持久化与末位扫描
 
 为了让模式切换跨会话和重启保持一致，`AgentSessionWrapper` 在每次修改 AgentMode (`plan`/`ask`/`full`) 时向 `.jsonl` 追加 Custom Entry (`type: "custom"`, `customType: "desktop_agent_mode"`)。在打开会话时自后向前扫描寻找最后一个 `desktop_agent_mode` 节点，并优先以此还原 Agent 状态与 Ask 拦截规则。
+
+### 14.16 白屏双兑底：全局错误边界与渲染进程崩溃自动重载（2026-08-28，issue #20）
+
+Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20-white-screen-analysis.md](research/issue-20-white-screen-analysis.md)）确认了两个结构性缺口：① 仓库无任何 React 错误边界，渲染期未捕获异常会让 React 19 卸载整棵树成白屏；② 主进程不监听 `render-process-gone`，渲染进程 OOM/GPU 崩溃后窗口永久空白。修复：
+
+- `app/error.tsx`：全局错误边界（Next 16 约定，注意 prop 是 `retry` 不是旧版 `reset`），渲染异常降级为可重试错误卡片；`app/error.test.ts` 用源码断言锁住该约定（仿 `components/MessageView.test.ts`）。
+- `electron/crash-recovery.ts`：崩溃自动重载策略 —— 60s 窗口最多 3 次，`clean-exit`/退出中跳过，镜像 `restart-policy.ts` 的纯逻辑+同名测试模式；`main.ts` 仅装配（`installCrashRecovery`）。
+
+边界与残余风险：`error.tsx` 不包裹根 layout（Next 约定需 `global-error.tsx`，根 layout 为静态、风险低，暂未加）；上游 pi-ai 0.84.3 的 O(n²) reasoning_details 冻结（上游 issue #8648）症状是“卡住”非白屏，待上游发修复版升级。
 
 ---
 
