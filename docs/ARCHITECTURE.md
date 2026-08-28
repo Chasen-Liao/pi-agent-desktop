@@ -72,7 +72,7 @@ Pi-Agent.exe (Electron Main)
   ├─ Tray icon（最小化到托盘 / 右键退出）
   │
   └─ autoUpdater（检查 GitHub Releases）
-       └─ preload.ts 暴露 electronAPI.onUpdateAvailable / quitAndInstall
+       └─ preload.ts 暴露 electronAPI（selectDirectory / getPathForFile / update / setTheme）
 ```
 
 - 启动：`npm run dev:electron`（开发）/ `npm run dist`（打包）
@@ -205,7 +205,7 @@ pi-agent-desktop/
 │   ├── useAgentSession.ts        Agent 交互主 hook
 │   ├── useTheme.ts               View Transitions 主题切换
 │   ├── useAudio.ts               完成音效
-│   ├── useDragDrop.ts            图片拖拽
+│   ├── useDragDrop.ts            任意文件拖拽（路径 @mention；图片另附）
 │   ├── useFileTabs.ts            文件标签管理
 │   ├── usePanelLayout.ts         侧边栏宽度计算
 │   └── agent-session/            useAgentSession 拆分出的子 hooks
@@ -256,7 +256,7 @@ pi-agent-desktop/
 │
 ├── electron/                     Electron 主进程（见 §13）
 │   ├── main.ts                   ★ 主进程入口
-│   ├── preload.ts                contextBridge 暴露更新 API
+│   ├── preload.ts                contextBridge：目录选择、拖放路径、更新、主题
 │   ├── tray.ts                   系统托盘
 │   ├── port-selection.ts         端口选择算法
 │   ├── server-wait.ts            等待 Next.js 子进程就绪
@@ -482,7 +482,7 @@ components/models-config/     模型配置弹窗的子组件
 | `useAgentSession.ts` | ★ Agent 交互主 hook（加载、SSE、发送、中止、fork、导航、压缩、模型切换、工具预设） |
 | `useTheme.ts` | View Transitions API 圆形擦除主题切换 |
 | `useAudio.ts` | 完成音效 / 压缩音效 |
-| `useDragDrop.ts` | 图片拖拽到输入框 |
+| `useDragDrop.ts` | 任意文件拖到对话区：插入 `@路径`；图片同时作为附件 |
 | `useFileTabs.ts` | 文件标签页状态管理 |
 | `usePanelLayout.ts` | 侧边栏 / 右侧面板宽度持久化 |
 
@@ -620,7 +620,7 @@ components/models-config/     模型配置弹窗的子组件
 
 | 文件 | 职责 |
 |---|---|
-| `preload.ts` | `contextBridge` 暴露 `onUpdateAvailable` / `quitAndInstall` |
+| `preload.ts` | `contextBridge`：`selectDirectory` / `getPathForFile` / 更新 / `setTheme` |
 | `process-tree.ts` | 杀掉子进程树（不只是直接子进程） |
 | `restart-policy.ts` | 子进程崩溃后的重启策略 |
 | `startup-failure.ts` | 启动失败诊断 UI（`startup.html`） |

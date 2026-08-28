@@ -17,6 +17,7 @@ import { useAgentSession } from "@/hooks/useAgentSession";
 import { useAudio } from "@/hooks/useAudio";
 import { AgentThinkingOrb } from "./AgentThinkingOrb";
 import { useDragDrop } from "@/hooks/useDragDrop";
+import { formatDroppedPathMentions, getDroppedFilePath } from "@/lib/file-paths";
 interface Props {
   session: SessionInfo | null;
   newSessionCwd: string | null;
@@ -115,8 +116,19 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   useEffect(() => () => { onContextUsageChange?.(null); }, [onContextUsageChange]);
 
   const onDrop = useCallback((files: File[]) => {
-    chatInputRef?.current?.addImages(files);
-  }, [chatInputRef]);
+    if (!files.length) return;
+
+    const cwd = session?.cwd ?? newSessionCwd;
+    const absolutePaths = files
+      .map((file) => getDroppedFilePath(file))
+      .filter((path): path is string => Boolean(path));
+    const mentions = formatDroppedPathMentions(absolutePaths, cwd);
+    if (mentions) chatInputRef?.current?.insertText(mentions);
+
+    // Keep multimodal image attach for vision models; paths still go in as @mentions above.
+    const images = files.filter((file) => file.type.startsWith("image/"));
+    if (images.length) chatInputRef?.current?.addImages(images);
+  }, [chatInputRef, session?.cwd, newSessionCwd]);
 
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
 
@@ -280,7 +292,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             </div>
             <div>
               <div className="text-[13px] font-medium text-text">Add to conversation</div>
-              <div className="mt-0.5 text-[11px] text-text-muted">Drop files to attach them as context</div>
+              <div className="mt-0.5 text-[11px] text-text-muted">Drop files to insert paths (images also attach)</div>
             </div>
           </div>
         </div>
