@@ -1,6 +1,22 @@
-; Pi Agent Desktop — custom NSIS installer script
+﻿; Pi Agent Desktop — custom NSIS installer script
+; NOTE: this file MUST stay UTF-8 **with BOM** — makensis reads non-ASCII
+; includes without a BOM in the system ANSI codepage (mojibake or
+; "Bad text encoding" on zh-CN/GBK machines).
 ; Forcefully kills running app process before install/uninstall.
 ; This ensures files are not locked when the installer tries to overwrite them.
+
+; Issue #19: on the directory page, switching to another drive (e.g. C: -> D:)
+; shows only the drive root because the app subfolder does not exist there yet.
+; electron-builder's stock template appends "${APP_FILENAME}" automatically at
+; install time, but the user cannot see that and ends up typing the folder by
+; hand — which can produce a nested folder (the check is case-sensitive).
+; Hint on the page instead. Must be defined before MUI_PAGE_DIRECTORY is
+; inserted; this file is included before the electron-builder template script.
+!ifndef MUI_DIRECTORYPAGE_TEXT_TOP
+  ; MUI2 wraps this value in quotes itself (DirText "${...}"), so the value
+  ; must not contain double quotes.
+  !define MUI_DIRECTORYPAGE_TEXT_TOP '提示：切换到其它盘符后，安装程序会自动在所选路径下创建 ${APP_FILENAME} 子文件夹，无需手动输入。 Tip: the ${APP_FILENAME} subfolder is created automatically under the chosen path — no need to type it.'
+!endif
 
 !define PI_AGENT_INSTALLER_LOG_DIR "$TEMP\Pi-Agent-Desktop"
 !define PI_AGENT_INSTALLER_LOG_FILE "${PI_AGENT_INSTALLER_LOG_DIR}\installer.log"
