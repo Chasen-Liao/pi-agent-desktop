@@ -55,17 +55,6 @@ jobs:
       - name: Build Next.js standalone
         run: npm run build
 
-      - name: Upload standalone output
-        uses: actions/upload-artifact@v4
-        with:
-          name: next-standalone
-          path: |
-            .next/standalone
-            .next/static
-            public
-          if-no-files-found: error
-          retention-days: 7
-
   test-windows:
     name: test (windows)
     runs-on: windows-latest
@@ -90,4 +79,4 @@ jobs:
       - name: Test (Windows)
         timeout-minutes: 10
         shell: bash
-        run: npm test
+        run: npm run test:windows

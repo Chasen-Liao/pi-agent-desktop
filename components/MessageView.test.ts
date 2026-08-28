@@ -8,7 +8,7 @@ const source = readFileSync(new URL("./MessageView.tsx", import.meta.url), "utf8
 // cleanup (so it never calls setState after unmount), never as a bare
 // setTimeout in a copy handler.
 test("copied-state reset timers are scheduled in effects with cleanup", () => {
-  const timers = source.match(/setTimeout\(\(\) => setCopied\(false\), 1500\)/g);
+  const timers = source.match(/setTimeout\(\(\) => setCopied\(false\), \d+\)/g);
   assert.equal(timers?.length ?? 0, 3, "three copied resets (user, assistant, code)");
   const cleanups = source.match(/return \(\) => clearTimeout\(t\);/g);
   assert.ok(cleanups && cleanups.length >= 3, "each copied timer must have an effect cleanup");

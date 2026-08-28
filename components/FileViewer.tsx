@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import { useTheme } from "@/hooks/useTheme";
 import { encodeFilePathForApi, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { getVirtualLineWindow } from "./file-viewer-virtualization";
+import { shouldUseLargeSourceViewer } from "./file-viewer-large-source";
 
 interface Props {
   filePath: string;
@@ -22,8 +23,6 @@ interface FileData {
 
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif"]);
 const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "weba", "webm"]);
-const LARGE_SOURCE_BYTES = 200_000;
-const LARGE_SOURCE_LINES = 5_000;
 const VIRTUAL_ROW_HEIGHT = 21;
 const VIRTUAL_OVERSCAN_ROWS = 20;
 
@@ -790,12 +789,13 @@ function TextFileViewer({ filePath, cwd }: Props) {
   const isHtml = data?.language === "html";
   const isMarkdown = data?.language === "markdown";
   const isLargeSource = useMemo(
-    () => Boolean(
-      data
-      && viewMode === "source"
-      && !previewMode
-      && (content.length > LARGE_SOURCE_BYTES || lines.length > LARGE_SOURCE_LINES)
-    ),
+    () => shouldUseLargeSourceViewer({
+      hasContent: Boolean(data),
+      viewMode,
+      previewMode,
+      contentLength: content.length,
+      lineCount: lines.length,
+    }),
     [content.length, data, lines.length, previewMode, viewMode]
   );
   const hasDiff = prevContent !== null && prevContent !== content;

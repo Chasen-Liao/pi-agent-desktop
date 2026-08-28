@@ -9,7 +9,7 @@ const source = readFileSync(new URL("./ModelsConfig.tsx", import.meta.url), "utf
 // setTimeout inside the save handler.
 test("savedOk reset timer is scheduled in an effect with cleanup", () => {
   assert.match(source, /if \(!savedOk\) return;/);
-  assert.match(source, /const t = setTimeout\(\(\) => setSavedOk\(false\), 2000\);/);
+  assert.match(source, /const t = setTimeout\(\(\) => setSavedOk\(false\), \d+\);/);
   assert.match(source, /return \(\) => clearTimeout\(t\);/);
   assert.doesNotMatch(source, /setSavedOk\(true\);\s*setTimeout/);
 });

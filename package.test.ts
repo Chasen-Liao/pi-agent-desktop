@@ -35,6 +35,47 @@ test("packaging and release scripts call build:standalone", () => {
   }
 });
 
+test("test scripts cover middleware and scope a Windows-only subset", () => {
+  // node:test does not exit after passing (open sqlite/server handles), so both
+  // scripts keep --test-force-exit. Removing it hangs the suite.
+  assert.match(pkg.scripts.test, /--test-force-exit/);
+  assert.match(
+    pkg.scripts.test,
+    /"middleware\.test\.ts"/,
+    "full suite must run root middleware.test.ts"
+  );
+  const windowsScript = pkg.scripts["test:windows"];
+  assert.ok(windowsScript, "test:windows script must exist");
+  assert.match(windowsScript, /^node --test --test-force-exit /);
+  assert.match(
+    windowsScript,
+    /"electron\/\*\*\/\*\.test\.ts"/,
+    "Windows subset must include electron/**/*.test.ts"
+  );
+  // middleware.test.ts is a Next.js web-server concern, not a Windows-path
+  // concern — it is covered by the full suite and must not run twice.
+  assert.doesNotMatch(windowsScript, /middleware\.test\.ts/);
+});
+
+test("next.config tracing excludes test files from the standalone output", () => {
+  const config = readFileSync(new URL("./next.config.ts", import.meta.url), "utf8");
+  const block = config.slice(
+    config.indexOf("outputFileTracingExcludes"),
+    config.indexOf("env:")
+  );
+  assert.ok(block.includes("outputFileTracingExcludes"), "tracing excludes block expected");
+  for (const pattern of [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.test.mjs",
+    "**/*.test.js",
+    "middleware.test.ts",
+    "package.test.ts",
+  ]) {
+    assert.ok(block.includes(pattern), `outputFileTracingExcludes must contain ${pattern}`);
+  }
+});
+
 test("packaged smoke test targets the current Windows output", () => {
   const script = readFileSync(
     new URL("./scripts/smoke-packaged-standalone.mjs", import.meta.url),

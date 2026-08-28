@@ -3,10 +3,10 @@
 import { useCallback, useRef, useState } from "react";
 import type { AgentMessage, SessionTreeNode } from "../../lib/types";
 import type { FollowUpQueueSnapshot } from "../../lib/follow-up-queue";
-import { fetchSession, fetchContext } from "./session-loader-api";
+import { fetchSession, fetchContext } from "./session-loader-api.ts";
 
 /** Latest-request-wins guard: stale() goes true once a newer call bumps the ref. */
-function latestRequestStale(ref: { current: number }): () => boolean {
+export function latestRequestStale(ref: { current: number }): () => boolean {
   const reqId = ++ref.current;
   return () => reqId !== ref.current;
 }

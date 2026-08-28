@@ -22,6 +22,12 @@ const nextConfig: NextConfig = {
       'release/**/*',
       '.git/**/*',
       'dist/**/*',
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      '**/*.test.mjs',
+      '**/*.test.js',
+      'middleware.test.ts',
+      'package.test.ts',
     ],
   },
   env: {

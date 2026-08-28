@@ -12,6 +12,8 @@
    - `npm test`
    - `npm run check:electron-deps`
    - `npm audit`
+
+   CI（`.github/workflows/ci.yml`）：Linux 跑 `npm test`（含根目录 `middleware.test.ts`）；Windows 跑 `npm run test:windows`（路径/Electron 子集），不再全量重复单测。不上传 standalone artifact。
 3. 创建 PR 到 `main`，等待 CI 全部通过并完成审查后合并。
 4. 从合并后的 `main` 创建干净 worktree，执行 `npm ci` 与 `npm run dist`。
 5. 核对 `release/latest.yml` 的 `version`、安装包文件名和 SHA512，然后创建并推送 `vX.Y.Z` tag。

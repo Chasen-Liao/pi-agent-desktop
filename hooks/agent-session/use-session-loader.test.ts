@@ -1,23 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { latestRequestStale } from "./use-session-loader.ts";
 
 const source = readFileSync(new URL("./use-session-loader.ts", import.meta.url), "utf8");
 
-// M3: loadSession must guard against stale responses overwriting state when
-// sessions switch quickly (A→B). The `cancelled` flag in useAgentSession.ts
-// only guards the outer `.then`; the loader's own setState calls need a
-// latest-request-wins guard. This repo has no React rendering test harness
-// (no jsdom / testing-library), so the guard is asserted structurally.
-test("latestRequestStale helper provides the stale check", () => {
-  assert.match(source, /function latestRequestStale\(ref: \{ current: number \}\)/);
-  assert.match(source, /reqId !== ref\.current/);
+test("latestRequestStale returns false while its request is the latest", () => {
+  const ref = { current: 0 };
+  const stale = latestRequestStale(ref);
+  assert.equal(stale(), false);
 });
 
-test("loadSession applies a latest-request-wins guard against stale responses (M3)", () => {
-  assert.match(source, /latestRequestStale\(loadReqIdRef\)/);
+test("latestRequestStale returns true once a newer request bumps the ref (M3)", () => {
+  const ref = { current: 0 };
+  const stale = latestRequestStale(ref);
+  latestRequestStale(ref); // a newer call wins
+  assert.equal(stale(), true);
+  // and it keeps reporting stale as even newer calls arrive
+  latestRequestStale(ref);
+  assert.equal(stale(), true);
 });
 
-test("loadContext applies a latest-request-wins guard (M3 follow-up)", () => {
-  assert.match(source, /latestRequestStale\(loadContextReqIdRef\)/);
+// Wiring: loadSession and loadContext must each install a stale guard so a
+// slow response cannot overwrite newer state (M3).
+test("loadSession/loadContext wire per-request stale guards", () => {
+  assert.match(source, /const stale = latestRequestStale\(loadReqIdRef\)/);
+  assert.match(source, /const stale = latestRequestStale\(loadContextReqIdRef\)/);
 });

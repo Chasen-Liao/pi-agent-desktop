@@ -15,6 +15,8 @@ npm run dist         # Next.js build + Electron build + NSIS installer
 
 Typecheck: `npx tsc --noEmit`  
 Lint: `npm run lint`  
+Test: `npm test`（含根目录 `middleware.test.ts`；不要去掉 `--test-force-exit`，否则套件不退出）  
+Windows CI subset: `npm run test:windows`  
 **Never run `next build` during dev** — pollutes `.next/` and breaks `npm run dev`.
 
 Release：按 [docs/RELEASING.md](docs/RELEASING.md) 执行；桌面 GitHub Release 不使用会自动 bump patch 的 `npm run release`。
@@ -104,7 +106,7 @@ Pi SDK 存 `{id, name, arguments}`，前端用 `{toolCallId, toolName, input}`�
 
 ### 5. Electron 打包大小 & Next.js NFT 套娃陷阱
 
-Frontend 依赖必须放 `devDependencies`（否则 electron-builder 盲目打包进 app.asar）。`next.config.ts` 必须加上 `outputFileTracingExcludes` 防止 NFT 把旧安装包拉进 build。详见 [ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+Frontend 依赖必须放 `devDependencies`（否则 electron-builder 盲目打包进 app.asar）。`next.config.ts` 的 `outputFileTracingExcludes` 必须排除 `release/`、`.git/`、`dist/` 和 `*.test.*`，否则 NFT 会把旧安装包和测试文件打进 standalone。详见 [ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ### 6. Next 16 Turbopack standalone 必须补齐 turbo runtime
 

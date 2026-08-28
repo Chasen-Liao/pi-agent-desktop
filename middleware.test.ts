@@ -3,15 +3,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 // ---------------------------------------------------------------------------
-// Loader stub for `next/server`
+// Loader stub for `next/server` + tsconfig `@/*` path alias
 // ---------------------------------------------------------------------------
 // node 24's ESM resolver does not auto-append `.js` for packages without an
 // `exports` map (next 16 has none), so `import "next/server"` fails under
 // `node --test`. We register an inline resolve hook that redirects
 // `next/server` to a minimal stub, letting us load the *real* middleware.ts
-// and exercise its actual `isAllowedOrigin` function. The middleware()
-// function itself depends on NextRequest and is intentionally not unit-tested
-// here (per task spec).
+// and exercise its actual `isAllowedOrigin` function. The hook also rewrites
+// the `@/*` path alias (middleware.ts imports `@/lib/csp` and
+// `@/lib/auth-policy`) to real files under the repo root — node's ESM loader
+// does not read tsconfig paths. The middleware() function itself depends on
+// NextRequest and is intentionally not unit-tested here (per task spec).
 const LOADER_SOURCE = `
 export function resolve(specifier, context, nextResolve) {
   if (specifier === "next/server") {
@@ -20,6 +22,13 @@ export function resolve(specifier, context, nextResolve) {
       "export class NextRequest {}";
     return {
       url: "data:text/javascript," + encodeURIComponent(stub),
+      shortCircuit: true,
+    };
+  }
+  if (specifier.startsWith("@/") && context.parentURL) {
+    const parentDir = new URL("./", context.parentURL);
+    return {
+      url: new URL(specifier.slice(2) + ".ts", parentDir).href,
       shortCircuit: true,
     };
   }

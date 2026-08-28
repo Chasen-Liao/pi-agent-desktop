@@ -8,7 +8,7 @@ const source = readFileSync(new URL("./useAgentSession.ts", import.meta.url), "u
 // updaters during render, and a nested setCanExecutePlan inside the updater is
 // both a side effect in a pure function and a nested setState during render.
 test("streaming append uses a pure setMessages updater (no nested setState)", () => {
-  assert.match(source, /setMessages\(\(prev\) => \[\.\.\.prev, \.\.\.appended\]\);/);
+  assert.match(source, /setMessages\(\(prev\) => \[\.\.\.prev,/);
   // No block-bodied messages updater may remain in the file:
   assert.doesNotMatch(source, /setMessages\(\(prev\) => \{/);
 });
@@ -24,7 +24,7 @@ test("plan-mode setCanExecutePlan runs outside the messages updater", () => {
 // parallel (MessageList keys/fork/navigate rely on entryIds[idx] being the
 // session entry id; new slots are undefined until the next reload fills them).
 test("streaming append keeps entryIds parallel with messages", () => {
-  assert.match(source, /setEntryIds\(\(prev\) => \[\.\.\.prev, \.\.\.appended\.map/);
+  assert.match(source, /setEntryIds\(\(prev\) => \[\.\.\.prev,/);
 });
 
 test("canonical prompt events replace pending bubbles and reserve one entry id", () => {

@@ -702,9 +702,15 @@ extraResources:
     filter:
       - "**/*"
       - "!node_modules"
+      - "!**/*.test.ts"
+      - "!**/*.test.tsx"
+      - "!**/*.test.mjs"
+      - "!**/*.test.js"
   - from: .next/standalone/node_modules   # ← 单独条目
     to: standalone/node_modules
 ```
+
+`filter: ["**/*"]` 还会把 NFT 误拆进 standalone 的 `*.test.*` 打进安装包；上面的 `!**/*.test.*` 是第二道门。第一道门是 `next.config.ts` 的 `outputFileTracingExcludes`。
 
 ### 14.7 Windows 兼容层
 
@@ -735,9 +741,22 @@ serverExternalPackages: [
   "@earendil-works/pi-coding-agent",
   "@earendil-works/pi-ai",
 ]
+outputFileTracingExcludes: {
+  "*": [
+    "release/**/*",
+    ".git/**/*",
+    "dist/**/*",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.test.mjs",
+    "**/*.test.js",
+    "middleware.test.ts",
+    "package.test.ts",
+  ],
+}
 ```
 
-把两个 pi 包设为 server external，避免 webpack 打包它们（它们依赖 Node 原生模块）。
+把两个 pi 包设为 server external，避免 webpack 打包它们（它们依赖 Node 原生模块）。`outputFileTracingExcludes` 防止 NFT 把旧安装包和测试文件拆进 `.next/standalone`。
 
 ### 14.10b Next 16 Turbopack standalone 缺 app-route runtime（2026-08-03）
 

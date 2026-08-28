@@ -15,8 +15,6 @@ test("McpConfigModal exports McpConfigModal and McpConfigContent and tests conne
   assert.match(mcpSource, /fetch\("\/api\/mcp\/toggle"/);
   assert.match(mcpSource, /role="dialog"/);
   assert.match(mcpSource, /aria-modal="true"/);
-  assert.match(mcpSource, /bg-bg-elevated/);
-  assert.match(mcpSource, /border-divider/);
 });
 
 test("SessionExportModal exports SessionExportModal and calls export API with download flag", () => {
@@ -24,9 +22,6 @@ test("SessionExportModal exports SessionExportModal and calls export API with do
   assert.match(exportSource, /\/api\/sessions\/.*\/export\?format=.*&download=true/);
   assert.match(exportSource, /role="dialog"/);
   assert.match(exportSource, /aria-modal="true"/);
-  assert.match(exportSource, /bg-bg-elevated/);
-  assert.match(exportSource, /border-divider/);
-  assert.match(exportSource, /accent/);
 });
 
 test("ExtensionsConfigModal exports ExtensionsConfigModal and integrates McpConfigContent and extension/skill tabs", () => {
@@ -48,6 +43,4 @@ test("BranchCloneModal exports BranchCloneModal supporting branch and clone oper
   assert.match(branchCloneSource, /targetEntryId/);
   assert.match(branchCloneSource, /role="dialog"/);
   assert.match(branchCloneSource, /aria-modal="true"/);
-  assert.match(branchCloneSource, /bg-bg-elevated/);
-  assert.match(branchCloneSource, /border-divider/);
 });

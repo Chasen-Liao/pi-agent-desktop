@@ -7,12 +7,32 @@ const source = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
 test("main process quit-and-install is gated on update download state", () => {
   assert.match(source, /decideQuitAndInstall\(updateInstallState\)/);
   assert.match(source, /markUpdateDownloaded\(updateInstallState/);
-  assert.match(source, /if \(!decision\.allowed\)/);
-  // Must not call quitAndInstall unconditionally in the IPC handler
-  assert.doesNotMatch(
-    source,
-    /ipcMain\.handle\("quit-and-install", async \(\) => \{\s*logInfo\("quitAndInstall requested from renderer"\);\s*setQuitting\(true\);\s*const \{ autoUpdater \} = await import\("electron-updater"\);\s*autoUpdater\.quitAndInstall\(\);/
-  );
+  // The IPC handler must refuse before download, and the only
+  // autoUpdater.quitAndInstall() call site must sit after that gate.
+  const handlerIdx = source.indexOf('ipcMain.handle("quit-and-install"');
+  assert.ok(handlerIdx >= 0, "quit-and-install IPC handler expected");
+  const gateIdx = source.indexOf("decideQuitAndInstall(updateInstallState)", handlerIdx);
+  const refusedIdx = source.indexOf("if (!decision.allowed)", gateIdx);
+  const installIdx = source.indexOf("autoUpdater.quitAndInstall()", handlerIdx);
+  assert.ok(gateIdx > handlerIdx, "gate decision must run inside the handler");
+  assert.ok(refusedIdx > gateIdx, "refusal branch must follow the gate");
+  assert.ok(installIdx > refusedIdx, "quitAndInstall must only run after the gate allows");
+  // The only other allowed call site is the update-downloaded restart dialog:
+  // that event fires only after a completed download, and
+  // markUpdateDownloaded runs before the dialog that leads to the install.
+  const secondInstallIdx = source.indexOf("autoUpdater.quitAndInstall()", installIdx + 1);
+  if (secondInstallIdx !== -1) {
+    const downloadedIdx = source.indexOf('autoUpdater.on("update-downloaded"');
+    const markIdx = source.indexOf("markUpdateDownloaded(updateInstallState", downloadedIdx);
+    assert.ok(downloadedIdx !== -1, "update-downloaded handler expected");
+    assert.ok(markIdx > downloadedIdx, "update-downloaded handler must mark install state first");
+    assert.ok(secondInstallIdx > markIdx, "second quitAndInstall must run inside the update-downloaded flow");
+    assert.equal(
+      source.indexOf("autoUpdater.quitAndInstall()", secondInstallIdx + 1),
+      -1,
+      "no further quitAndInstall call sites are allowed"
+    );
+  }
 });
 
 test("packaged readiness requires HTTP health", () => {
@@ -43,10 +63,4 @@ test("main process CSP uses shared electron CSP builder", () => {
   assert.match(source, /import \{ buildElectronCspHeader \} from "\.\/csp"/);
   assert.match(source, /buildElectronCspHeader\(port\)/);
 });
-
-test("electron csp builder pins loopback port", () => {
-  const cspSource = readFileSync(new URL("./csp.ts", import.meta.url), "utf8");
-  assert.match(cspSource, /connect-src 'self' http:\/\/127\.0\.0\.1:\$\{port\}/);
-  assert.match(cspSource, /default-src 'self'/);
-  assert.match(cspSource, /img-src 'self' data: blob:/);
-});
+// The CSP header contents themselves are behaviorally covered in lib/csp.test.ts.

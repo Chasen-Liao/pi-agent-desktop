@@ -70,6 +70,12 @@ npx tsc --noEmit
 # 代码检查
 npm run lint
 
+# 单测（含 middleware.test.ts；不要去掉 --test-force-exit）
+npm test
+
+# Windows CI 子集（路径 / Electron）
+npm run test:windows
+
 # 构建安装包
 npm run dist
 ```
