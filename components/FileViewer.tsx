@@ -120,6 +120,7 @@ function diffLines(oldLines: string[], newLines: string[]): DiffLine[] {
 }
 
 function DiffView({ oldContent, newContent }: { oldContent: string; newContent: string; language: string }) {
+  const { t } = useI18n();
   const oldLines = oldContent.split("\n");
   const newLines = newContent.split("\n");
   const diff = diffLines(oldLines, newLines);
@@ -128,7 +129,7 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
   if (!hasChanges) {
     return (
       <div style={{ padding: "12px 16px", fontSize: 12, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-        No changes
+        {t("file.noChanges")}
       </div>
     );
   }
@@ -192,7 +193,7 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
                 borderBottom: "1px solid var(--border)",
               }}
             >
-              ... {seg.count} unchanged lines ...
+              {t("file.unchangedLines", { count: seg.count })}
             </div>
           );
           diffIdx += seg.count;
@@ -359,7 +360,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
               boxShadow: watching ? "0 0 6px var(--success)" : "none",
             }}
           />
-          {watching ? "live" : "static"}
+          {watching ? t("file.live") : t("file.static")}
         </span>
       </div>
       <div
@@ -388,7 +389,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
               const img = e.currentTarget;
               setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
             }}
-            onError={() => setError("Failed to load image")}
+            onError={() => setError(t("file.loadImageFailed"))}
             style={{
               maxWidth: "100%",
               maxHeight: "100%",
@@ -495,7 +496,7 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
               boxShadow: watching ? "0 0 6px var(--success)" : "none",
             }}
           />
-          {watching ? "live" : "static"}
+          {watching ? t("file.live") : t("file.static")}
         </span>
       </div>
       <div
@@ -520,7 +521,7 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
             preload="metadata"
             src={src}
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-            onError={() => setError("Failed to load audio")}
+            onError={() => setError(t("file.loadAudioFailed"))}
             style={{ width: "100%" }}
           />
         </div>
@@ -538,6 +539,7 @@ function PlainTextViewer({
   wrapLines: boolean;
   showLargeFileNotice?: boolean;
 }) {
+  const { t } = useI18n();
   const lines = useMemo(() => content.split("\n"), [content]);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -597,7 +599,7 @@ function PlainTextViewer({
     >
       {showLargeFileNotice && (
         <div style={{ padding: "8px 12px", color: "var(--text-dim)", borderBottom: "1px solid var(--border)", fontSize: 12, lineHeight: 1.4 }}>
-          Large file: syntax highlighting is disabled to keep the viewer responsive.
+          {t("file.largeFileNotice")}
         </div>
       )}
       <div style={{ minHeight: "100%", padding: "12px 0" }}>
@@ -807,7 +809,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
   if (loading) {
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 13 }}>
-        Loading...
+        {t("common.loading")}
       </div>
     );
   }
@@ -843,7 +845,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
           {getRelativeFilePath(filePath, cwd)}
         </span>
         <span style={{ marginLeft: "auto" }}>{data.language}</span>
-        {viewMode === "source" && <span>{lines.length} lines</span>}
+        {viewMode === "source" && <span>{t("file.lineCount", { count: lines.length })}</span>}
         <span>{formatSize(data.size)}</span>
 
         {/* Live watch indicator */}
@@ -861,7 +863,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
               boxShadow: watching ? "0 0 6px var(--success)" : "none",
             }}
           />
-          {watching ? "live" : "static"}
+          {watching ? t("file.live") : t("file.static")}
         </span>
 
         {/* Diff / Source toggle — shown only when there are changes */}
@@ -877,7 +879,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
                 fontWeight: viewMode === "source" ? 600 : 400,
               }}
             >
-              Source
+              {t("file.source")}
             </button>
             <button
               onClick={() => setViewMode("diff")}
@@ -889,7 +891,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
                 fontWeight: viewMode === "diff" ? 600 : 400,
               }}
             >
-              Diff {changeCount > 0 && <span style={{ color: "var(--success)", marginLeft: 2 }}>+{changeCount}</span>}
+              {t("file.diff")} {changeCount > 0 && <span style={{ color: "var(--success)", marginLeft: 2 }}>+{changeCount}</span>}
             </button>
           </div>
         )}
@@ -908,7 +910,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
               fontWeight: wrapLines ? 600 : 400,
             }}
           >
-            wrap
+            {t("file.wrap")}
           </button>
         )}
 
@@ -925,7 +927,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
               fontWeight: 400,
             }}
           >
-            Edit
+            {t("common.edit")}
           </button>
         )}
 
@@ -942,7 +944,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
                 fontWeight: !previewMode ? 600 : 400,
               }}
             >
-              Code
+              {t("file.code")}
             </button>
             <button
               onClick={() => setPreviewMode(true)}
@@ -954,7 +956,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
                 fontWeight: previewMode ? 600 : 400,
               }}
             >
-              Preview
+              {t("file.preview")}
             </button>
           </div>
         )}
@@ -972,7 +974,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
                 fontWeight: previewMode ? 600 : 400,
               }}
             >
-              Preview
+              {t("file.preview")}
             </button>
             <button
               onClick={() => setPreviewMode(false)}
@@ -984,7 +986,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
                 fontWeight: !previewMode ? 600 : 400,
               }}
             >
-              Raw
+              {t("file.raw")}
             </button>
           </div>
         )}
@@ -1027,7 +1029,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
                 fontWeight: 400,
               }}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
           <textarea

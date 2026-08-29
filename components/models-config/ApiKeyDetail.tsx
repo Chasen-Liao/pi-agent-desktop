@@ -76,8 +76,11 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
 
       <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
         {provider.configured
-          ? `API key is stored. Enter a new key below to replace it, or disconnect to remove it.`
-          : `Enter your ${provider.displayName} API key to enable ${provider.modelCount} model${provider.modelCount !== 1 ? "s" : ""}.`}
+          ? t("provider.apiKeyStored")
+          : t(provider.modelCount === 1 ? "provider.apiKeyEnableModel" : "provider.apiKeyEnableModels", {
+              provider: provider.displayName,
+              count: provider.modelCount,
+            })}
       </p>
 
       <Field label={t("provider.apiKey")}>
@@ -86,7 +89,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
             value={apiKey}
             onChange={setApiKey}
             onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
-            placeholder={provider.configured ? "Enter new key to replace…" : "sk-…"}
+            placeholder={provider.configured ? t("provider.replaceApiKey") : "sk-…"}
             style={{ flex: 1 }}
             autoComplete="off"
             spellCheck={false}

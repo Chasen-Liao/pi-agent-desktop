@@ -306,7 +306,7 @@ const UserMessageView = React.memo(function UserMessageView({
                     <polyline points="15 10 20 15 15 20" />
                     <path d="M4 4v7a4 4 0 0 0 4 4h12" />
                   </svg>
-                  Edit from here
+                  {t("message.editFromHere")}
                 </button>
               )}
               {canFork && (
@@ -343,7 +343,7 @@ const UserMessageView = React.memo(function UserMessageView({
                     <circle cx="6" cy="18" r="3" />
                     <path d="M18 9a9 9 0 0 1-9 9" />
                   </svg>
-                  Branch from message
+                  {t("message.branchHere")}
                 </button>
               )}
             </div>
@@ -596,7 +596,7 @@ const AssistantMessageView = React.memo(function AssistantMessageView({
               <circle cx="6" cy="18" r="3" />
               <path d="M18 9a9 9 0 0 1-9 9" />
             </svg>
-            Branch
+            {t("branch.action")}
           </button>
         )}
         {time && !isStreaming && (

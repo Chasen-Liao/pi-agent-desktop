@@ -51,11 +51,11 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
       const data = await res.json();
       setServers(data.servers || []);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load MCP servers");
+      setError(err instanceof Error ? err.message : t("mcp.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [cwd]);
+  }, [cwd, t]);
 
   useEffect(() => {
     fetchServers();
@@ -76,12 +76,12 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchServers();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to toggle server state");
+      setError(err instanceof Error ? err.message : t("mcp.toggleFailed"));
     }
   };
 
   const handleDelete = async (server: McpServerStatus) => {
-    if (!confirm(`Delete MCP server "${server.name || server.id}"?`)) return;
+    if (!confirm(t("mcp.deleteConfirm", { name: server.name || server.id }))) return;
     try {
       const res = await fetch("/api/mcp", {
         method: "DELETE",
@@ -95,7 +95,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchServers();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to delete server");
+      setError(err instanceof Error ? err.message : t("mcp.deleteFailed"));
     }
   };
 
@@ -116,13 +116,15 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
       const data = await res.json();
       setTestResult({
         success: data.success ?? false,
-        message: data.message || (data.success ? `Connected! (${data.toolsCount ?? 0} tools available)` : "Connection failed"),
+        message: data.message || (data.success
+          ? t("mcp.connectedTools", { count: data.toolsCount ?? 0 })
+          : t("mcp.connectionFailed")),
         toolsCount: data.toolsCount,
       });
     } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: err instanceof Error ? err.message : "Test request failed",
+        message: err instanceof Error ? err.message : t("mcp.testRequestFailed"),
       });
     } finally {
       setTestingId(null);
@@ -159,13 +161,15 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
       const data = await res.json();
       setTestResult({
         success: data.success ?? false,
-        message: data.message || (data.success ? `Connection successful! (${data.toolsCount ?? 0} tools found)` : "Connection failed"),
+        message: data.message || (data.success
+          ? t("mcp.connectionSucceeded", { count: data.toolsCount ?? 0 })
+          : t("mcp.connectionFailed")),
         toolsCount: data.toolsCount,
       });
     } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: err instanceof Error ? err.message : "Connection test failed",
+        message: err instanceof Error ? err.message : t("mcp.connectionTestFailed"),
       });
     } finally {
       setTestingForm(false);
@@ -209,7 +213,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
   const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formId.trim()) {
-      setError("Server ID is required");
+      setError(t("mcp.serverIdRequired"));
       return;
     }
 
@@ -254,7 +258,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
       setEditingServer(null);
       fetchServers();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save server");
+      setError(err instanceof Error ? err.message : t("mcp.saveFailed"));
     }
   };
 
@@ -335,8 +339,8 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                   onChange={(e) => setFormScope(e.target.value as "global" | "project")}
                   className="w-full px-2.5 py-1.5 rounded-control bg-bg border border-border text-text text-[12px] focus:outline-none focus:border-accent"
                 >
-                  <option value="project">Project Scope (.pi/mcp.json)</option>
-                  <option value="global">Global Scope (~/.pi/agent/mcp.json)</option>
+                  <option value="project">{t("scope.project")} (.pi/mcp.json)</option>
+                  <option value="global">{t("scope.global")} (~/.pi/agent/mcp.json)</option>
                 </select>
               </div>
               <div>
@@ -348,8 +352,8 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                   onChange={(e) => setFormTransport(e.target.value as "stdio" | "sse")}
                   className="w-full px-2.5 py-1.5 rounded-control bg-bg border border-border text-text text-[12px] focus:outline-none focus:border-accent"
                 >
-                  <option value="stdio">stdio (Subprocess)</option>
-                  <option value="sse">sse (HTTP / Server-Sent Events)</option>
+                  <option value="stdio">{t("mcp.stdioTransport")}</option>
+                  <option value="sse">{t("mcp.sseTransport")}</option>
                 </select>
               </div>
             </div>
@@ -514,7 +518,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                             : "bg-amber-500/10 text-amber-400 border-amber-500/20"
                         }`}
                       >
-                        {server.scope}
+                        {t(server.scope === "global" ? "scope.global" : "scope.project")}
                       </span>
 
                       {/* Transport Badge */}
@@ -602,7 +606,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                       onClick={() => handleDelete(server)}
                       className="px-2.5 py-1 rounded-control border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors text-[11px] cursor-pointer"
                     >
-                      Delete
+                      {t("common.delete")}
                     </button>
                   </div>
                 </div>

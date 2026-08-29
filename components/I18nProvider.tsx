@@ -21,14 +21,14 @@ import {
   type TranslationValues,
 } from "@/lib/i18n";
 
-type I18nContextValue = {
+interface I18nContextValue {
   locale: Locale;
   preference: LocalePreference;
   setPreference: (preference: LocalePreference) => void;
   t: (key: TranslationKey, values?: TranslationValues) => string;
   formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string;
   formatDate: (value: Date | string | number, options?: Intl.DateTimeFormatOptions) => string;
-};
+}
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 

@@ -153,7 +153,7 @@ export function ModelDetail({
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             )}
-            {testState.phase === "testing" ? t("provider.testing") : testState.phase === "success" ? "OK" : t("common.test")}
+            {testState.phase === "testing" ? t("provider.testing") : testState.phase === "success" ? t("common.success") : t("common.test")}
           </button>
           <button onClick={onDelete}
             style={{ height: 24, padding: "0 8px", background: "none", border: "1px solid var(--danger-border)", borderRadius: 4, color: "var(--danger)", cursor: "pointer", fontSize: 11, boxSizing: "border-box" }}>

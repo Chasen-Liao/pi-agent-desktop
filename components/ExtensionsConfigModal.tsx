@@ -48,11 +48,11 @@ export function ExtensionsConfigModal({
       setSkills(data.skills || []);
       setDiagnostics(data.diagnostics || []);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load extensions config");
+      setError(err instanceof Error ? err.message : t("extension.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [cwd]);
+  }, [cwd, t]);
 
   useEffect(() => {
     if (isOpen) {
@@ -80,12 +80,12 @@ export function ExtensionsConfigModal({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchExtensionsData();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to toggle extension");
+      setError(err instanceof Error ? err.message : t("extension.toggleFailed"));
     }
   };
 
   const handleRemoveExtension = async (ext: ExtensionInfo) => {
-    if (!confirm(`Remove extension "${ext.name || ext.id}"?`)) return;
+    if (!confirm(t("extension.removeConfirm", { name: ext.name || ext.id }))) return;
     try {
       const res = await fetch("/api/extensions", {
         method: "POST",
@@ -101,7 +101,7 @@ export function ExtensionsConfigModal({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchExtensionsData();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to remove extension");
+      setError(err instanceof Error ? err.message : t("extension.removeFailed"));
     }
   };
 
@@ -122,12 +122,12 @@ export function ExtensionsConfigModal({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchExtensionsData();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to toggle skill");
+      setError(err instanceof Error ? err.message : t("extension.skillToggleFailed"));
     }
   };
 
   const handleRemoveSkill = async (skill: SkillInfo) => {
-    if (!confirm(`Remove skill "${skill.name}"?`)) return;
+    if (!confirm(t("extension.skillRemoveConfirm", { name: skill.name }))) return;
     try {
       const res = await fetch("/api/extensions", {
         method: "POST",
@@ -143,7 +143,7 @@ export function ExtensionsConfigModal({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchExtensionsData();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to remove skill");
+      setError(err instanceof Error ? err.message : t("extension.skillRemoveFailed"));
     }
   };
 
@@ -173,7 +173,7 @@ export function ExtensionsConfigModal({
       setShowAddForm(false);
       fetchExtensionsData();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to add item");
+      setError(err instanceof Error ? err.message : t("extension.addFailed"));
     } finally {
       setAdding(false);
     }
@@ -331,7 +331,7 @@ export function ExtensionsConfigModal({
                                 : "bg-amber-500/10 text-amber-400"
                             }`}
                           >
-                            {ext.scope}
+                            {t(ext.scope === "global" ? "scope.global" : "scope.project")}
                           </span>
                         </div>
                         {ext.path && (
@@ -426,11 +426,11 @@ export function ExtensionsConfigModal({
 
               {loading ? (
                 <div className="text-center py-10 text-text-muted text-[12px]">
-                  Loading skills...
+                  {t("extension.skillsLoading")}
                 </div>
               ) : skills.length === 0 ? (
                 <div className="text-center py-12 text-text-muted text-[12px] border border-dashed border-border rounded-panel">
-                  No skills loaded.
+                  {t("extension.skillsNone")}
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
@@ -449,7 +449,7 @@ export function ExtensionsConfigModal({
                                 : "bg-amber-500/10 text-amber-400"
                             }`}
                           >
-                            {skill.scope}
+                            {t(skill.scope === "global" ? "scope.global" : "scope.project")}
                           </span>
                         </div>
                         {skill.description && (
@@ -488,12 +488,12 @@ export function ExtensionsConfigModal({
           {activeTab === "diagnostics" && (
             <div className="p-4 flex flex-col gap-3">
               <span className="text-[12px] text-text-muted">
-                Runtime diagnostics and loader warnings for extensions & skills.
+                {t("extension.diagnosticsHint")}
               </span>
 
               {diagnostics.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-40 border border-dashed border-border rounded-panel text-green-400 text-[12px] gap-1">
-                  <span>✓ All extensions & skills loaded cleanly without errors.</span>
+                  <span>✓ {t("extension.diagnosticsClean")}</span>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
@@ -508,7 +508,7 @@ export function ExtensionsConfigModal({
                     >
                       <div className="flex items-center gap-2 font-semibold">
                         <span className="uppercase text-[10px] px-1.5 py-0.2 rounded bg-black/20">
-                          {diag.type}
+                          {t(diag.type === "error" ? "extension.diagnosticError" : "extension.diagnosticWarning")}
                         </span>
                         {diag.path && <span className="font-mono">{diag.path}</span>}
                       </div>
@@ -527,7 +527,7 @@ export function ExtensionsConfigModal({
             onClick={onClose}
             className="px-4 py-1.5 rounded-control bg-bg-elevated border border-border text-text hover:bg-bg-hover transition-colors text-[12px] cursor-pointer"
           >
-            Close
+            {t("common.close")}
           </button>
         </div>
       </div>
