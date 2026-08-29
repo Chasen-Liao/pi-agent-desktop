@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import type { McpServerStatus, McpServerConfig } from "@/lib/mcp-config";
+import { useI18n } from "./I18nProvider";
 
 export interface McpConfigModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ export interface McpConfigContentProps {
 }
 
 export function McpConfigContent({ cwd }: McpConfigContentProps) {
+  const { t } = useI18n();
   const [servers, setServers] = useState<McpServerStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -261,9 +263,9 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
       {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-divider bg-bg-elevated shrink-0">
         <div>
-          <h3 className="font-semibold text-text text-[14px]">MCP Servers</h3>
+          <h3 className="font-semibold text-text text-[14px]">{t("mcp.servers")}</h3>
           <p className="text-[11px] text-text-muted">
-            Configure Model Context Protocol servers (stdio or SSE)
+            {t("mcp.description")}
           </p>
         </div>
         {!editingServer && (
@@ -271,7 +273,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
             onClick={openAddForm}
             className="px-3 py-1.5 rounded-control bg-accent text-accent-contrast font-medium hover:opacity-90 transition-opacity cursor-pointer text-[12px]"
           >
-            + Add Server
+            {t("mcp.addServer")}
           </button>
         )}
       </div>
@@ -291,13 +293,13 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
           /* Add / Edit Form */
           <form onSubmit={handleSaveForm} className="flex flex-col gap-3 max-w-xl mx-auto bg-bg-panel p-4 rounded-panel border border-border">
             <h4 className="font-semibold text-text text-[13px] border-b border-divider pb-2">
-              {isNew ? "Add MCP Server" : `Edit MCP Server: ${editingServer.id}`}
+              {isNew ? t("mcp.addTitle") : t("mcp.editTitle", { id: editingServer.id ?? "" })}
             </h4>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-medium text-text-muted mb-1">
-                  Server ID *
+                  {t("mcp.serverId")}
                 </label>
                 <input
                   type="text"
@@ -311,7 +313,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-text-muted mb-1">
-                  Display Name
+                  {t("mcp.displayName")}
                 </label>
                 <input
                   type="text"
@@ -326,7 +328,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-medium text-text-muted mb-1">
-                  Config Scope
+                  {t("mcp.scope")}
                 </label>
                 <select
                   value={formScope}
@@ -339,7 +341,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-text-muted mb-1">
-                  Transport
+                  {t("mcp.transport")}
                 </label>
                 <select
                   value={formTransport}
@@ -356,7 +358,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
               <>
                 <div>
                   <label className="block text-[11px] font-medium text-text-muted mb-1">
-                    Command
+                    {t("mcp.command")}
                   </label>
                   <input
                     type="text"
@@ -368,7 +370,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-text-muted mb-1">
-                    Arguments (space-separated)
+                    {t("mcp.arguments")}
                   </label>
                   <input
                     type="text"
@@ -380,7 +382,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-text-muted mb-1">
-                    Environment Variables (KEY=VALUE per line)
+                    {t("mcp.environment")}
                   </label>
                   <textarea
                     value={formEnv}
@@ -394,7 +396,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
             ) : (
               <div>
                 <label className="block text-[11px] font-medium text-text-muted mb-1">
-                  SSE Endpoint URL
+                  {t("mcp.endpoint")}
                 </label>
                 <input
                   type="url"
@@ -426,7 +428,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                 disabled={testingForm}
                 className="px-3 py-1.5 rounded-control border border-border text-text-muted hover:text-text hover:bg-bg-hover transition-colors cursor-pointer text-[12px] disabled:opacity-50"
               >
-                {testingForm ? "Testing..." : "Test Connection"}
+                {testingForm ? t("mcp.testing") : t("mcp.testConnection")}
               </button>
 
               <div className="flex gap-2">
@@ -438,32 +440,32 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                   }}
                   className="px-3 py-1.5 rounded-control border border-border text-text-muted hover:text-text hover:bg-bg-hover transition-colors cursor-pointer text-[12px]"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-1.5 rounded-control bg-accent text-accent-contrast font-medium hover:opacity-90 transition-opacity cursor-pointer text-[12px]"
                 >
-                  Save Server
+                  {t("mcp.saveServer")}
                 </button>
               </div>
             </div>
           </form>
         ) : loading ? (
           <div className="flex items-center justify-center h-40 text-text-muted text-[13px]">
-            Loading MCP servers...
+            {t("mcp.loading")}
           </div>
         ) : servers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-text-muted gap-2 border border-dashed border-border rounded-panel p-6">
-            <span className="text-[14px]">No MCP servers configured</span>
+            <span className="text-[14px]">{t("mcp.none")}</span>
             <p className="text-[12px] text-text-dim text-center max-w-sm">
-              Add global or project-specific MCP servers to provide extra capabilities to your agent.
+              {t("mcp.noneHint")}
             </p>
             <button
               onClick={openAddForm}
               className="mt-2 px-3 py-1.5 rounded-control bg-accent text-accent-contrast text-[12px] font-medium hover:opacity-90"
             >
-              + Add First MCP Server
+              {t("mcp.addFirst")}
             </button>
           </div>
         ) : (
@@ -544,12 +546,12 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                           }`}
                         />
                         {isDisabled
-                          ? "Disabled"
+                          ? t("common.disabled")
                           : server.status === "connected"
-                          ? `Connected ${server.toolsCount ? `(${server.toolsCount} tools)` : ""}`
+                          ? `${t("common.connected")} ${server.toolsCount ? `(${t("common.toolsCount", { count: server.toolsCount })})` : ""}`
                           : server.status === "error"
-                          ? "Error"
-                          : "Disconnected"}
+                          ? t("common.error")
+                          : t("common.disconnected")}
                       </span>
                     </div>
 
@@ -578,7 +580,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                       disabled={isTesting || isDisabled}
                       className="px-2.5 py-1 rounded-control border border-border text-text-muted hover:text-text hover:bg-bg-hover transition-colors text-[11px] disabled:opacity-40 cursor-pointer"
                     >
-                      {isTesting ? "Testing..." : "Test"}
+                      {isTesting ? t("mcp.testing") : t("common.test")}
                     </button>
                     <button
                       onClick={() => handleToggle(server)}
@@ -588,13 +590,13 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                           : "bg-bg-elevated text-text-muted border-border hover:text-text"
                       }`}
                     >
-                      {isDisabled ? "Enable" : "Disable"}
+                      {isDisabled ? t("common.enable") : t("common.disable")}
                     </button>
                     <button
                       onClick={() => openEditForm(server)}
                       className="px-2.5 py-1 rounded-control border border-border text-text-muted hover:text-text hover:bg-bg-hover transition-colors text-[11px] cursor-pointer"
                     >
-                      Edit
+                      {t("common.edit")}
                     </button>
                     <button
                       onClick={() => handleDelete(server)}
@@ -614,21 +616,22 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
 }
 
 export function McpConfigModal({ isOpen, onClose, cwd }: McpConfigModalProps) {
+  const { t } = useI18n();
   if (!isOpen) return null;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="MCP Server Configuration"
+      aria-label={t("mcp.configuration")}
       className="ui-dialog-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
     >
       <div className="t-modal is-open ui-dialog-surface w-full max-w-3xl h-[80vh] max-h-[700px] rounded-[14px] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-divider bg-bg-elevated shrink-0">
-          <span className="font-semibold text-text text-[14px]">MCP Server Settings</span>
+          <span className="font-semibold text-text text-[14px]">{t("mcp.settings")}</span>
           <button
             onClick={onClose}
-            aria-label="Close modal"
+            aria-label={t("common.close")}
             className="text-text-muted hover:text-text text-[18px] leading-none px-2 py-1 cursor-pointer"
           >
             ✕

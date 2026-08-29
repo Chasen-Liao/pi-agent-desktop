@@ -1,13 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, utilityProcess } from "electron";
 import type { UpdateInfo } from "electron-updater";
 import path from "path";
 import { appendFileSync, mkdirSync } from "fs";
-import { spawn, ChildProcess } from "child_process";
+import { spawn } from "child_process";
 import net from "net";
 import { createTray } from "./tray";
 import { getStartupFailureDisposition } from "./startup-failure";
 import { waitForNextServerReady } from "./server-wait";
-import { killProcessTree } from "./process-tree";
+import { killProcessDescendants, killProcessTree } from "./process-tree";
 import { pickApiKeys } from "./env-filter";
 import { choosePort } from "./port-selection";
 import { getNextRestartState, type ServerState } from "./restart-policy";
@@ -21,6 +21,13 @@ import {
   type UpdateInstallState,
 } from "./update-install-gate";
 import { buildElectronCspHeader } from "./csp";
+import { getAppIconPath } from "./app-icon";
+import { applyTitleBarOverlayTheme } from "./title-bar-overlay";
+import {
+  ServerProcess,
+  wrapChildServerProcess,
+  wrapUtilityServerProcess,
+} from "./server-process";
 
 // ---------------------------------------------------------------------------
 // Single Instance Lock
@@ -43,7 +50,7 @@ app.on("second-instance", () => {
 // State
 // ---------------------------------------------------------------------------
 let mainWindow: BrowserWindow | null = null;
-let nextProcess: ChildProcess | null = null;
+let nextProcess: ServerProcess | null = null;
 let isQuitting = false;
 let logFilePath: string | null = null;
 const DEFAULT_PORT = 30141;
@@ -146,7 +153,7 @@ async function findFreePort(startPort: number, maxAttempts = 10): Promise<number
 // ---------------------------------------------------------------------------
 // Next.js server lifecycle
 // ---------------------------------------------------------------------------
-function startNextServer(port: number): ChildProcess {
+function startNextServer(port: number): ServerProcess {
   const isDev = !app.isPackaged;
 
   if (isDev) {
@@ -162,32 +169,60 @@ function startNextServer(port: number): ChildProcess {
       },
       stdio: "pipe",
     });
-    proc.stdout?.on("data", (d: Buffer) => logInfo(`[Next] ${d.toString().trim()}`));
-    proc.stderr?.on("data", (d: Buffer) => logError(`[Next] ${d.toString().trim()}`));
-    proc.on("exit", (code, signal) => handleNextProcessExit("Next.js dev server", code, signal));
-    proc.on("error", (err) => handleNextProcessError("Next.js dev server", err));
-    return proc;
+    return monitorNextServerProcess(
+      wrapChildServerProcess(proc, killProcessTree),
+      "Next.js dev server",
+    );
   }
 
-  // Production: use standalone server with ELECTRON_RUN_AS_NODE
+  // Production: macOS uses a background Electron utility process so the
+  // server does not appear as a second bouncing app in the Dock. Other
+  // platforms retain the ELECTRON_RUN_AS_NODE standalone path.
   const standaloneDir = path.join(process.resourcesPath, "standalone");
   const serverScript = path.join(standaloneDir, "server.js");
-  const proc = spawn(process.execPath, [serverScript], {
-    cwd: standaloneDir,
-    env: {
-      ...pickApiKeys(process.env),
-      NODE_ENV: process.env.NODE_ENV ?? "production",
-      ELECTRON_RUN_AS_NODE: "1",
-      PORT: String(port),
-      HOSTNAME: "127.0.0.1",
-    },
-    stdio: "pipe",
-  });
+  const serverEnv = {
+    ...pickApiKeys(process.env),
+    NODE_ENV: process.env.NODE_ENV ?? "production",
+    PORT: String(port),
+    HOSTNAME: "127.0.0.1",
+  };
+  const proc = process.platform === "darwin"
+    ? (() => {
+        const utility = utilityProcess.fork(serverScript, [], {
+          cwd: standaloneDir,
+          env: serverEnv,
+          stdio: "pipe",
+          serviceName: "Pi Agent Next Server",
+        });
+        return wrapUtilityServerProcess(utility, (process) => {
+          const pid = process.pid;
+          const descendantError = pid
+            ? killProcessDescendants(pid, "SIGKILL")
+            : null;
+          process.kill();
+          return descendantError;
+        });
+      })()
+    : wrapChildServerProcess(
+        spawn(process.execPath, [serverScript], {
+          cwd: standaloneDir,
+          env: {
+            ...serverEnv,
+            ELECTRON_RUN_AS_NODE: "1",
+          },
+          stdio: "pipe",
+        }),
+        killProcessTree,
+      );
   logInfo("Starting packaged Next.js server", { standaloneDir, serverScript, port });
+  return monitorNextServerProcess(proc, "Packaged Next.js server");
+}
+
+function monitorNextServerProcess(proc: ServerProcess, label: string): ServerProcess {
   proc.stdout?.on("data", (d: Buffer) => logInfo(`[Next] ${d.toString().trim()}`));
   proc.stderr?.on("data", (d: Buffer) => logError(`[Next] ${d.toString().trim()}`));
-  proc.on("exit", (code, signal) => handleNextProcessExit("Packaged Next.js server", code, signal));
-  proc.on("error", (err) => handleNextProcessError("Packaged Next.js server", err));
+  proc.on("exit", (code, signal) => handleNextProcessExit(label, code, signal));
+  proc.on("error", (err) => handleNextProcessError(label, err));
   return proc;
 }
 
@@ -266,7 +301,7 @@ function cleanup() {
 
   if (proc && !proc.killed) {
     logInfo("Killing Next.js server process");
-    const error = killProcessTree(proc);
+    const error = proc.terminate();
     if (error) {
       logError("Failed to kill Next.js server process tree", error);
     }
@@ -289,7 +324,7 @@ function createWindow() {
       height: 36,
     },
     title: "Pi Agent Desktop",
-    icon: nativeImage.createFromPath(path.join(app.getAppPath(), "build", "icon.ico")),
+    icon: nativeImage.createFromPath(getAppIconPath(app.getAppPath())),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -513,12 +548,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.on("set-theme", (_event, isDark: boolean) => {
-    if (mainWindow) {
-      mainWindow.setTitleBarOverlay({
-        color: isDark ? "#0c1118" : "#ffffff",
-        symbolColor: isDark ? "#d9deea" : "#364152",
-      });
-    }
+    applyTitleBarOverlayTheme(mainWindow, isDark);
   });
 }
 
@@ -697,5 +727,3 @@ app.whenReady().then(async () => {
     app.quit();
   }
 });
-
-

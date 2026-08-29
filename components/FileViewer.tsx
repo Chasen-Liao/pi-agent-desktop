@@ -9,6 +9,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { encodeFilePathForApi, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { getVirtualLineWindow } from "./file-viewer-virtualization";
 import { shouldUseLargeSourceViewer } from "./file-viewer-large-source";
+import { useI18n } from "./I18nProvider";
 
 interface Props {
   filePath: string;
@@ -274,6 +275,7 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
 }
 
 function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
+  const { t } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -344,7 +346,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
         {naturalSize && <span>{naturalSize.w} × {naturalSize.h}</span>}
         {formatSizeStr && <span>{formatSizeStr}</span>}
         <span
-          title={watching ? "Live sync active" : "Not watching"}
+          title={watching ? t("file.liveSync") : t("file.notWatching")}
           style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "var(--success)" : "var(--text-dim)" }}
         >
           <span
@@ -409,6 +411,7 @@ function formatDuration(seconds: number): string {
 }
 
 function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
+  const { t } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -479,7 +482,7 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
         {duration != null && <span>{formatDuration(duration)}</span>}
         {size != null && <span>{formatSize(size)}</span>}
         <span
-          title={watching ? "Live sync active" : "Not watching"}
+          title={watching ? t("file.liveSync") : t("file.notWatching")}
           style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "var(--success)" : "var(--text-dim)" }}
         >
           <span
@@ -652,6 +655,7 @@ export function FileViewer({ filePath, cwd }: Props) {
 }
 
 function TextFileViewer({ filePath, cwd }: Props) {
+  const { t } = useI18n();
   const { isDark } = useTheme();
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
@@ -844,7 +848,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
 
         {/* Live watch indicator */}
         <span
-          title={watching ? "Live sync active" : "Not watching"}
+          title={watching ? t("file.liveSync") : t("file.notWatching")}
           style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "var(--success)" : "var(--text-dim)" }}
         >
           <span
@@ -865,7 +869,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
           <div style={{ display: "flex", borderRadius: "var(--radius-control)", overflow: "hidden", border: "1px solid var(--border)" }}>
             <button
               onClick={() => setViewMode("source")}
-              aria-label="Show source"
+              aria-label={t("file.showSource")}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
                 background: viewMode === "source" ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -877,7 +881,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
             </button>
             <button
               onClick={() => setViewMode("diff")}
-              aria-label="Show diff"
+              aria-label={t("file.showDiff")}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
                 background: viewMode === "diff" ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -894,8 +898,8 @@ function TextFileViewer({ filePath, cwd }: Props) {
         {viewMode === "source" && !previewMode && (
           <button
             onClick={() => setWrapLines((v) => !v)}
-            title={wrapLines ? "Disable word wrap" : "Enable word wrap"}
-            aria-label={wrapLines ? "Disable word wrap" : "Enable word wrap"}
+            title={wrapLines ? t("file.disableWrap") : t("file.enableWrap")}
+            aria-label={wrapLines ? t("file.disableWrap") : t("file.enableWrap")}
             style={{
               padding: "2px 8px", fontSize: 11, cursor: "pointer",
               background: wrapLines ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -912,8 +916,8 @@ function TextFileViewer({ filePath, cwd }: Props) {
         {viewMode === "source" && !previewMode && !isEditing && (
           <button
             onClick={() => { setEditContent(content); setIsEditing(true); }}
-            title="Edit file"
-            aria-label="Edit file"
+            title={t("file.edit")}
+            aria-label={t("file.edit")}
             style={{
               padding: "2px 8px", fontSize: 11, cursor: "pointer",
               background: "var(--bg-hover)", color: "var(--text-muted)",
@@ -930,7 +934,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
           <div style={{ display: "flex", borderRadius: "var(--radius-control)", overflow: "hidden", border: "1px solid var(--border)" }}>
             <button
               onClick={() => setPreviewMode(false)}
-              aria-label="Show HTML code"
+              aria-label={t("file.showHtmlCode")}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
                 background: !previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -942,7 +946,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
             </button>
             <button
               onClick={() => setPreviewMode(true)}
-              aria-label="Preview HTML"
+              aria-label={t("file.previewHtml")}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
                 background: previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -960,7 +964,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
           <div style={{ display: "flex", borderRadius: "var(--radius-control)", overflow: "hidden", border: "1px solid var(--border)" }}>
             <button
               onClick={() => setPreviewMode(true)}
-              aria-label="Preview markdown"
+              aria-label={t("file.previewMarkdown")}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
                 background: previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -972,7 +976,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
             </button>
             <button
               onClick={() => setPreviewMode(false)}
-              aria-label="Show raw markdown"
+              aria-label={t("file.rawMarkdown")}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
                 background: !previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -1000,7 +1004,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
               flexShrink: 0,
             }}
           >
-            <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>EDITING</span>
+            <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>{t("file.editing")}</span>
             <span style={{ flex: 1 }} />
             <button
               onClick={handleSave}
@@ -1012,7 +1016,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
                 fontWeight: 600, opacity: saving ? 0.6 : 1,
               }}
             >
-              {saving ? "Saving..." : "Save"}
+              {saving ? t("common.saving") : t("common.save")}
             </button>
             <button
               onClick={handleCancelEdit}
@@ -1055,7 +1059,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
             srcDoc={data.content}
             sandbox=""
             style={{ width: "100%", height: "100%", border: "none", background: "var(--bg)" }}
-            title="HTML preview"
+            title={t("file.htmlPreview")}
           />
         ) : isMarkdown && previewMode ? (
           <div

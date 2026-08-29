@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useI18n } from "../I18nProvider";
 
 export const inputStyle = {
   padding: "6px 9px",
@@ -56,6 +57,7 @@ export function SecretTextInput({
   spellCheck?: boolean;
   style?: React.CSSProperties;
 }) {
+  const { t } = useI18n();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -77,8 +79,8 @@ export function SecretTextInput({
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? "Hide API key" : "Show API key"}
-        title={visible ? "Hide API key" : "Show API key"}
+        aria-label={visible ? t("provider.hideApiKey") : t("provider.showApiKey")}
+        title={visible ? t("provider.hideApiKey") : t("provider.showApiKey")}
         style={{
           position: "absolute",
           right: 5,

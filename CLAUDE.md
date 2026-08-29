@@ -33,8 +33,11 @@ npm run build
 # 打包目录版 Electron 应用
 npm run pack
 
-# 构建 NSIS 安装包
+# 构建当前平台安装包（Windows NSIS / macOS DMG + ZIP）
 npm run dist
+
+# 构建 Intel + Apple Silicon Universal macOS 安装包
+npm run dist:mac
 ```
 
 `AGENTS.md` 明确提醒：开发时不要直接运行 `next build`，会污染 `.next/` 并影响 `npm run dev`。如确需验证生产构建，使用项目脚本 `npm run build` 或完整打包脚本。
@@ -83,14 +86,15 @@ npm run dist
 | `app/api/` | **38** 条 API 路由（含 **memory** 5 条；另有 agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings 等） |
 | `lib/` | 服务端库：`rpc-manager` / `session-reader` / **`ltm/`** / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` 等 |
 | `components/` | 26 个顶层组件（含 `AgentThinkingOrb` / `LiquidOrbCanvas` / `McpConfigModal` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
-| `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 12 个拆分模块 |
-| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 10 个辅助模块 |
+| `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 15 个拆分模块 |
+| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 14 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
 
 ### 三条最常踩坑的设计决策
 
 - **活跃 session 注册表必须存 `globalThis`**：Next.js HMR 会丢弃模块级变量；至少：`__piSessions` / `__piSessionPathCache` / `__piStartLocks` / `__piWriteLocks` / `__piAllowedRootsCache`；LTM 另有 `__piLtmService`（见 `lib/ltm/service.ts`）。详见 [AGENTS.md](AGENTS.md#必须存-globalthis-的原因) 与 [docs/ARCHITECTURE.md §14.1](docs/ARCHITECTURE.md)。
-- **Electron 打包 + Next 16 Turbopack**：`next build` 后必须跑 `scripts/ensure-standalone-next-runtimes.mjs`，否则 standalone 缺 `app-route-turbo.runtime.prod.js`，桌面端会卡在启动页。
+- **Electron 打包 + 原生运行时**：`build:standalone` 在 `next build` 后补齐 Next turbo runtime、Pi 运行时依赖和 macOS 双架构 Sharp。不要删除这些 ensure 脚本，也不要删除 `electron-builder.yml` 的 `mac.x64ArchFiles`，否则桌面端会卡在启动页、Universal 合并失败或 Intel 端加载原生模块失败。
+- **macOS 后台服务不能直接执行 App 主程序**：packaged macOS 必须用 `utilityProcess.fork(server.js)`；若改回 `spawn(process.execPath)` + `ELECTRON_RUN_AS_NODE`，Dock 会出现持续弹跳的黑色 `exec` 图标。
 - **两种分支不要混淆**：**Fork / Branch** = 跨文件新 `.jsonl`（`POST /api/sessions/[id]/branch` 或 `POST /api/agent/[id]` with `{type:"fork"}`）；**会话内分支** = 同文件 `navigate_tree` + `GET /api/sessions/[id]/context?leafId=`。
 - **Fork 后必须立即销毁旧 wrapper**：Fork 在文件层通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）创建新 `.jsonl`，再用 `startRpcSession()` 构造全新 AgentSession 实例；旧 wrapper 不再会被请求到，立即 `destroy()` 可及时释放资源（而非等 10 分钟 idle 超时）。详见 [docs/ARCHITECTURE.md §14.2](docs/ARCHITECTURE.md#142-fork-的执行顺序预注册--销毁旧-wrapper)。
 

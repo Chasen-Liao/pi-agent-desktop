@@ -18,6 +18,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { AgentThinkingOrb } from "./AgentThinkingOrb";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { formatDroppedPathMentions, getDroppedFilePath } from "@/lib/file-paths";
+import { useI18n } from "./I18nProvider";
 interface Props {
   session: SessionInfo | null;
   newSessionCwd: string | null;
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange }: Props) {
+  const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
   const playDoneSoundRef = useRef(playDoneSound);
   playDoneSoundRef.current = playDoneSound;
@@ -269,13 +271,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            <span>连接已彻底中断，检测到网络异常</span>
+            <span>{t("chat.connectionLost")}</span>
           </div>
           <button
             onClick={handleReconnect}
             className="px-2.5 py-1 bg-danger text-accent-contrast rounded-control cursor-pointer hover:bg-danger-hover transition-colors font-medium text-[11px]"
           >
-            手动重新连接
+            {t("chat.reconnect")}
           </button>
         </div>
       )}
@@ -291,8 +293,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               </svg>
             </div>
             <div>
-              <div className="text-[13px] font-medium text-text">Add to conversation</div>
-              <div className="mt-0.5 text-[11px] text-text-muted">Drop files to insert paths (images also attach)</div>
+              <div className="text-[13px] font-medium text-text">{t("branch.addConversation")}</div>
+              <div className="mt-0.5 text-[11px] text-text-muted">{t("chat.dropHint")}</div>
             </div>
           </div>
         </div>

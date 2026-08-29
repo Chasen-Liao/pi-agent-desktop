@@ -1006,13 +1006,30 @@ span.linenumber {
   height: var(--control-height) !important;
 }
 
+/* macOS traffic lights occupy the left side of the hidden title bar. */
+html[data-electron-platform="darwin"] .sidebar-title-row .pi-agent-title {
+  display: none;
+}
+
+.macos-titlebar-leading-safe-area {
+  width: 0;
+  height: 100%;
+  flex-shrink: 0;
+  transition: width var(--duration-fast) var(--ease-smooth-out);
+}
+
+html[data-electron-platform="darwin"] .macos-titlebar-leading-safe-area.is-active {
+  width: 80px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .t-dropdown,
   .t-modal,
   .t-toast,
   .t-think-text,
   .sidebar-container,
-  .right-panel-container {
+  .right-panel-container,
+  .macos-titlebar-leading-safe-area {
     transition: none !important;
   }
   .t-think-text {
@@ -1057,5 +1074,3 @@ span.linenumber {
     background: rgba(0, 0, 0, 0.72) !important;
   }
 }
-
-

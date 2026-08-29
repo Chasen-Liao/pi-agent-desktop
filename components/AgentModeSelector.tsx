@@ -2,12 +2,9 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import type { AgentMode } from "@/lib/approval-policy";
+import { useI18n } from "./I18nProvider";
 
-const MODES: { id: AgentMode; label: string; desc: string }[] = [
-  { id: "plan", label: "Plan", desc: "只读探索，先出计划" },
-  { id: "ask", label: "Ask", desc: "写/跑前确认" },
-  { id: "full", label: "Full", desc: "不逐条确认" },
-];
+const MODE_IDS: AgentMode[] = ["plan", "ask", "full"];
 
 interface Props {
   mode: AgentMode;
@@ -16,6 +13,7 @@ interface Props {
 }
 
 export function AgentModeSelector({ mode, disabled, onChange }: Props) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -27,7 +25,12 @@ export function AgentModeSelector({ mode, disabled, onChange }: Props) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const current = MODES.find((m) => m.id === mode) ?? MODES[1];
+  const modes = MODE_IDS.map((id) => ({
+    id,
+    label: t(`agentMode.${id}.label`),
+    desc: t(`agentMode.${id}.desc`),
+  }));
+  const current = modes.find((item) => item.id === mode) ?? modes[1];
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -35,8 +38,8 @@ export function AgentModeSelector({ mode, disabled, onChange }: Props) {
         type="button"
         onClick={() => !disabled && setOpen((v) => !v)}
         disabled={disabled}
-        title={`Agent mode: ${current.label}`}
-        aria-label={`Change agent mode. Current mode: ${current.label}`}
+        title={t("agentMode.title", { mode: current.label })}
+        aria-label={t("agentMode.change", { mode: current.label })}
         style={{
           display: "flex",
           alignItems: "center",
@@ -73,7 +76,7 @@ export function AgentModeSelector({ mode, disabled, onChange }: Props) {
             minWidth: 180,
           }}
         >
-          {MODES.map((m) => {
+          {modes.map((m) => {
             const isActive = m.id === mode;
             return (
               <button

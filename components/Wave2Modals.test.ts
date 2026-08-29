@@ -27,10 +27,10 @@ test("SessionExportModal exports SessionExportModal and calls export API with do
 test("ExtensionsConfigModal exports ExtensionsConfigModal and integrates McpConfigContent and extension/skill tabs", () => {
   assert.match(extSource, /export function ExtensionsConfigModal/);
   assert.match(extSource, /<McpConfigContent/);
-  assert.match(extSource, /"MCP Servers"/);
-  assert.match(extSource, /"Extensions"/);
-  assert.match(extSource, /"Skills"/);
-  assert.match(extSource, /"Diagnostics"/);
+  assert.match(extSource, /t\("mcp\.servers"\)/);
+  assert.match(extSource, /t\("extension\.extensions"\)/);
+  assert.match(extSource, /t\("extension\.skills"\)/);
+  assert.match(extSource, /t\("extension\.diagnostics"\)/);
   assert.match(extSource, /fetch\("\/api\/extensions"/);
   assert.match(extSource, /role="dialog"/);
   assert.match(extSource, /aria-modal="true"/);

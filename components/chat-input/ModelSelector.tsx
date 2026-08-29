@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import type { ModelOption } from "./types";
+import { useI18n } from "../I18nProvider";
 
 interface ModelSelectorProps {
   isStreaming: boolean;
@@ -18,6 +19,7 @@ export function ModelSelector({
   modelList,
   onModelChange,
 }: ModelSelectorProps) {
+  const { t } = useI18n();
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
 
@@ -75,7 +77,7 @@ export function ModelSelector({
         }}
         disabled={isStreaming}
         title={currentName}
-        aria-label={`Change model. Current model: ${currentName}`}
+        aria-label={t("model.change", { model: currentName })}
         style={{
           display: "flex", alignItems: "center", justifyContent: "center",
           width: 32, padding: 0,

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { SessionEntry, SessionTreeNode } from "@/lib/types";
+import { useI18n } from "./I18nProvider";
 
 interface Props {
   tree: SessionTreeNode[];
@@ -216,6 +217,7 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
 }
 
 export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, onClone, inline, containerRef, open: openProp, onToggle, hasSession }: Props) {
+  const { t } = useI18n();
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp !== undefined ? openProp : openInternal;
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -245,9 +247,9 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
   }, [onLeafChange]);
 
   const noBranchReason = !hasSession
-    ? "No active session"
+    ? t("branch.noActiveSession")
     : !hasBranch(tree)
-      ? "This session has no branches"
+      ? t("branch.noSession")
       : null;
 
   // Find first meaningful node (skip pure linear prefix)
@@ -277,7 +279,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
         <button
           ref={btnRef}
           onClick={() => onToggle ? onToggle() : setOpenInternal((v) => !v)}
-          aria-label="Toggle branches"
+          aria-label={t("branch.toggle")}
           style={{
             display: "flex",
             alignItems: "center",
@@ -298,7 +300,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
           onMouseLeave={(e) => { e.currentTarget.style.color = open ? "var(--text)" : "var(--text-muted)"; }}
         >
           {branchIcon}
-          <span>Branches</span>
+          <span>{t("branch.branches")}</span>
         </button>
         {open && dropdownPos && (
           <div className="t-dropdown is-open material-popover" data-origin="top-left" style={{
@@ -319,7 +321,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
                       onBranch();
                       if (!inline) setOpenInternal(false);
                     }}
-                    title="Create a new branch from active entry"
+                    title={t("branch.create")}
                     className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-control border border-border bg-bg-elevated text-text hover:bg-bg-hover hover:border-focus-ring cursor-pointer transition-all"
                   >
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -328,7 +330,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
                       <circle cx="6" cy="18" r="3" />
                       <path d="M18 9a9 9 0 0 1-9 9" />
                     </svg>
-                    Branch
+                    {t("branch.action")}
                   </button>
                 )}
                 {onClone && (
@@ -337,14 +339,14 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
                       onClone();
                       if (!inline) setOpenInternal(false);
                     }}
-                    title="Clone session"
+                    title={t("branch.clone")}
                     className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-control border border-border bg-bg-elevated text-text hover:bg-bg-hover hover:border-focus-ring cursor-pointer transition-all"
                   >
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                     </svg>
-                    Clone
+                    {t("branch.cloneShort")}
                   </button>
                 )}
               </div>
@@ -394,7 +396,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
         }}
       >
         {branchIcon}
-        <span style={{ color: "var(--text-muted)" }}>Branches</span>
+        <span style={{ color: "var(--text-muted)" }}>{t("branch.branches")}</span>
         {chevron}
       </button>
 
@@ -418,7 +420,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
                     onBranch();
                     setOpenInternal(false);
                   }}
-                  title="Create a new branch from active entry"
+                  title={t("branch.create")}
                   className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-control border border-border bg-bg-elevated text-text hover:bg-bg-hover hover:border-focus-ring cursor-pointer transition-all"
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -427,7 +429,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
                     <circle cx="6" cy="18" r="3" />
                     <path d="M18 9a9 9 0 0 1-9 9" />
                   </svg>
-                  Branch
+                  {t("branch.action")}
                 </button>
               )}
               {onClone && (
@@ -436,14 +438,14 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
                     onClone();
                     setOpenInternal(false);
                   }}
-                  title="Clone session"
+                  title={t("branch.clone")}
                   className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-control border border-border bg-bg-elevated text-text hover:bg-bg-hover hover:border-focus-ring cursor-pointer transition-all"
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                   </svg>
-                  Clone
+                  {t("branch.cloneShort")}
                 </button>
               )}
             </div>
@@ -464,7 +466,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, onBranch, on
             </div>
           ) : (
             <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-              {noBranchReason ?? "This session has no branches"}
+              {noBranchReason ?? t("branch.noSession")}
             </div>
           )}
         </div>

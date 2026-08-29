@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { OAuthProvider, ApiKeyProvider } from "./types";
 import { ProviderIcon } from "./PROVIDER_ICONS";
+import { useI18n } from "../I18nProvider";
 
 interface AddProviderPickerProps {
   oauthProviders: OAuthProvider[];
@@ -28,6 +29,7 @@ export function AddProviderPicker({
   onAddCustom,
   onClose,
 }: AddProviderPickerProps) {
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -73,7 +75,7 @@ export function AddProviderPicker({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
-            placeholder="Search providers…"
+            placeholder={t("provider.search")}
             style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
           />
         </div>
@@ -81,11 +83,11 @@ export function AddProviderPicker({
         {/* Card grid */}
         <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
           {totalCount === 0 ? (
-            <div style={{ padding: "20px 0", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>No providers match</div>
+            <div style={{ padding: "20px 0", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>{t("provider.noMatch")}</div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: 8 }}>
               {filteredTemplates.length > 0 && (
-                <div style={{ gridColumn: "1 / -1", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Custom</div>
+                <div style={{ gridColumn: "1 / -1", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("provider.custom")}</div>
               )}
               {filteredTemplates.map((t) => (
                 <button
@@ -108,7 +110,7 @@ export function AddProviderPicker({
               ))}
 
               {availableOAuth.length > 0 && (
-                <div style={{ gridColumn: "1 / -1", paddingTop: filteredTemplates.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Subscriptions</div>
+                <div style={{ gridColumn: "1 / -1", paddingTop: filteredTemplates.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("provider.subscriptions")}</div>
               )}
               {availableOAuth.map((p) => (
                 <button key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
@@ -125,7 +127,7 @@ export function AddProviderPicker({
               ))}
 
               {availableApiKey.length > 0 && (
-                <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>API Key</div>
+                <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("provider.apiKey")}</div>
               )}
               {availableApiKey.map((p) => (
                 <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}

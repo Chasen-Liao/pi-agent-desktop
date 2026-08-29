@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import { encodeFilePathForApi, getRelativeFilePath, joinFilePath } from "@/lib/file-paths";
+import { useI18n } from "./I18nProvider";
 
 interface FileEntry {
   name: string;
@@ -61,6 +62,7 @@ function TreeNode({
   onToggleExpanded: (fullPath: string, open: boolean) => void;
   refreshKey?: number;
 }) {
+  const { t } = useI18n();
   const open = expandedPaths.has(node.fullPath);
   const [children, setChildren] = useState<FileNode[]>(node.children ?? []);
   const [loaded, setLoaded] = useState(node.loaded ?? false);
@@ -162,7 +164,7 @@ function TreeNode({
               e.stopPropagation();
               onAtMention(getRelativeFilePath(node.fullPath, cwd));
             }}
-            title="Insert path into chat"
+            title={t("file.insertPath")}
             style={{
               position: "absolute",
               right: 4,

@@ -40,6 +40,21 @@ function killUnixProcessTree(pid: number, signal: NodeJS.Signals | number = "SIG
   }
 }
 
+export function killProcessDescendants(
+  pid: number,
+  signal: NodeJS.Signals | number = "SIGKILL",
+): Error | null {
+  try {
+    const children = getUnixChildren(pid);
+    for (const childPid of children) {
+      killUnixProcessTree(childPid, signal);
+    }
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err : new Error(String(err));
+  }
+}
+
 export function killProcessTree(proc: ChildProcess): Error | null {
   if (!proc.pid) {
     return null;
@@ -57,4 +72,3 @@ export function killProcessTree(proc: ChildProcess): Error | null {
     return err instanceof Error ? err : new Error(String(err));
   }
 }
-

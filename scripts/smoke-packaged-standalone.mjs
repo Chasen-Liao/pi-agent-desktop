@@ -34,15 +34,19 @@ function findPackagedOutput() {
       : null;
   }
 
-  const macDir = join(releaseDir, "mac");
-  if (process.platform === "darwin" && existsSync(macDir)) {
-    for (const entry of readdirSync(macDir, { withFileTypes: true })) {
-      if (!entry.isDirectory() || !entry.name.endsWith(".app")) continue;
-      const appDir = join(macDir, entry.name, "Contents");
-      const standaloneDir = join(appDir, "Resources", "standalone");
-      const runtimeExecutable = join(appDir, "MacOS", entry.name.slice(0, -4));
-      if (hasStandaloneServer(standaloneDir) && existsSync(runtimeExecutable)) {
-        return { standaloneDir, runtimeExecutable };
+  if (process.platform === "darwin") {
+    const macOutputs = readdirSync(releaseDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && /^mac(?:-(?:arm64|x64|universal))?$/.test(entry.name));
+    for (const output of macOutputs) {
+      const macDir = join(releaseDir, output.name);
+      for (const entry of readdirSync(macDir, { withFileTypes: true })) {
+        if (!entry.isDirectory() || !entry.name.endsWith(".app")) continue;
+        const appDir = join(macDir, entry.name, "Contents");
+        const standaloneDir = join(appDir, "Resources", "standalone");
+        const runtimeExecutable = join(appDir, "MacOS", entry.name.slice(0, -4));
+        if (hasStandaloneServer(standaloneDir) && existsSync(runtimeExecutable)) {
+          return { standaloneDir, runtimeExecutable };
+        }
       }
     }
   }

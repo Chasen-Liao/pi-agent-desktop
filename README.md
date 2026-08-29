@@ -52,7 +52,7 @@
 
 Windows 用户下载 `Pi-Agent-Desktop-Setup-x.x.x.exe`，运行即可安装。
 
-macOS 版本尚未上线（目前没有 Mac 测试机）。希望有 Mac 的朋友提交 PR，带上构建版本，一起发布 macOS 版。
+macOS 打包支持 Intel 与 Apple Silicon 的 Universal 应用。发布页提供 Mac 资产时，下载 `Pi-Agent-Desktop-x.x.x-mac-universal.dmg`；ZIP 是自动更新所需的配套产物。实际可下载版本以 Releases 资产为准。
 
 ## 开发
 
@@ -78,8 +78,14 @@ npm test
 # Windows CI 子集（路径 / Electron）
 npm run test:windows
 
+# macOS CI 子集（路径 / Electron / 打包配置）
+npm run test:macos
+
 # 构建安装包
 npm run dist
+
+# 在 macOS 上构建 Universal DMG + ZIP
+npm run dist:mac
 ```
 
 ## 项目结构
@@ -106,14 +112,16 @@ lib/
   normalize.ts       # 规范化 toolCall 字段名
   types.ts
 scripts/
-  ensure-standalone-next-runtimes.mjs  # 打包后补齐 Turbopack runtime
+  ensure-standalone-next-runtimes.mjs             # 补齐 Turbopack runtime
+  ensure-standalone-pi-runtime.mjs                # 补齐 Pi 运行时依赖闭包
+  ensure-standalone-macos-universal-runtimes.mjs  # 补齐两套 macOS Sharp 运行时
 ```
 
 ## 技术栈
 
 - **前端**：Next.js + React + TypeScript
 - **桌面**：Electron
-- **打包**：electron-builder (NSIS)
+- **打包**：electron-builder（Windows NSIS；macOS Universal DMG + ZIP）
 - **通信**：SSE (Server-Sent Events) 实时流式传输
 
 ## 致谢

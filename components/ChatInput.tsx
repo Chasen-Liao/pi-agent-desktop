@@ -14,6 +14,7 @@ import { resolveComposerSubmitAction } from "./chat-input/submit-action";
 import { QueuedMessageList } from "./chat-input/QueuedMessageList";
 import type { AgentMode } from "@/lib/approval-policy";
 import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
+import { useI18n } from "./I18nProvider";
 
 interface Props {
   onSend: (message: string, images?: AttachedImage[]) => void;
@@ -47,16 +48,6 @@ interface Props {
 }
 
 const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
-const THINKING_LEVEL_DESC: Record<typeof THINKING_LEVELS[number], string> = {
-  auto: "沿用 pi 默认设置",
-  off: "关闭推理",
-  minimal: "最少推理",
-  low: "低强度推理",
-  medium: "中等推理",
-  high: "高强度推理",
-  xhigh: "最高强度推理",
-};
-
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
   currentCwd,
@@ -67,6 +58,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   soundEnabled, onSoundToggle,
   followUpQueue, followUpQueueBusy, onReorderFollowUps,
 }: Props, ref) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [secondaryControlsOpen, setSecondaryControlsOpen] = useState(false);
@@ -418,7 +410,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
               <path d="M3 3v5h5" />
             </svg>
-            Retrying ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
+            {t("chat.retrying", { attempt: retryInfo.attempt, max: retryInfo.maxAttempts })}{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
 
@@ -467,7 +459,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 gap: 10,
               }}
             >
-              <span>Slash commands</span>
+              <span>{t("chat.slashCommands")}</span>
               <span style={{ fontFamily: "var(--font-mono)" }}>↑↓ Enter Tab Esc</span>
             </div>
             <div style={{ overflowY: "auto", padding: "5px" }}>
@@ -486,7 +478,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         letterSpacing: "0.06em",
                       }}
                     >
-                      {kind === "command" ? "Commands" : "Skills"}
+                      {kind === "command" ? t("chat.commands") : t("chat.skills")}
                     </div>
                     {groupItems.map((item) => {
                       const itemIndex = slashItems.indexOf(item);
@@ -562,12 +554,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               })}
               {slashSkillsLoading && (
                 <div style={{ padding: "7px 9px", color: "var(--text-dim)", fontSize: 12 }}>
-                  Loading skills...
+                  {t("chat.loadingSkills")}
                 </div>
               )}
               {slashSkillsError && (
                 <div style={{ padding: "7px 9px", color: "var(--danger)", fontSize: 12 }}>
-                  Skills unavailable
+                  {t("chat.skillsUnavailable")}
                 </div>
               )}
             </div>
@@ -606,7 +598,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               setCaretIndex(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
             }}
             onBlur={() => setInputFocused(false)}
-            aria-label="Message"
+            aria-label={t("chat.message")}
             aria-keyshortcuts={isStreaming && onFollowUp ? "Alt+Enter" : undefined}
             rows={1}
             className="t-resize"
@@ -632,8 +624,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => void sendQueued(onSteer ? "steer" : "followup")}
                   disabled={!value.trim() && !attachedImages.length}
-                  title={onSteer ? "Send now" : "Queue message"}
-                  aria-label={onSteer ? "Send message to running agent" : "Queue follow-up message"}
+                  title={onSteer ? t("chat.sendNow") : t("chat.queueMessage")}
+                  aria-label={onSteer ? t("chat.sendRunningAgent") : t("chat.queueFollowUp")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 38, height: 38, padding: 0,
@@ -656,8 +648,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <button
               onClick={handleSend}
               disabled={!value.trim() && !attachedImages.length}
-              aria-label="Send message"
-              title="Send message"
+              aria-label={t("chat.sendMessage")}
+              title={t("chat.sendMessage")}
               style={{
                 flexShrink: 0,
                 alignSelf: "flex-end",
@@ -689,8 +681,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isStreaming}
-              title="Attach image"
-              aria-label="Attach image"
+              title={t("chat.attachImage")}
+              aria-label={t("chat.attachImage")}
               style={{
                 flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                 width: 32, height: "var(--control-height)", padding: 0,
@@ -737,8 +729,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   type="button"
                   onClick={() => setSecondaryControlsOpen((open) => !open)}
-                  title="More agent controls"
-                  aria-label="More agent controls"
+                  title={t("chat.moreControls")}
+                  aria-label={t("chat.moreControls")}
                   aria-expanded={secondaryControlsOpen}
                   className="flex h-control-height w-8 cursor-pointer items-center justify-center rounded-control border-none bg-transparent text-text-muted transition-[background-color,color,transform] duration-150 hover:bg-bg-hover hover:text-text active:scale-95"
                 >
@@ -754,7 +746,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => !isStreaming && setThinkingDropdownOpen((v) => !v)}
                   disabled={isStreaming}
-                  title="切换推理强度"
+                  title={t("chat.thinkingLevel")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "8px 12px",
@@ -797,7 +789,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       return availableThinkingLevels.includes(lvl);
                     }).map((lvl) => {
                       const isActive = (thinkingLevel ?? "auto") === lvl;
-                      const desc = THINKING_LEVEL_DESC[lvl];
+                      const desc = t(`thinking.${lvl}.desc`);
                       const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
                       const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
                       const showOriginal = mappedVal != null && mappedVal !== lvl;
@@ -858,7 +850,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={isCompacting ? onAbortCompaction : onCompact}
                   disabled={isStreaming && !isCompacting}
-                  aria-label={isCompacting ? "Stop compaction" : "Compact context"}
+                  aria-label={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "8px 12px",
@@ -880,15 +872,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     e.currentTarget.style.background = isCompacting ? "var(--danger-bg)" : "none";
                     e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text-muted)";
                   }}
-                  title={isCompacting ? "停止压缩" : "压缩上下文"}
+                  title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
                 >
                   {isCompacting ? (
-                    <><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>Compacting…</>
+                    <><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>{t("chat.compacting")}</>
                   ) : (
                     <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
                       <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
-                    </svg>Compact</>
+                    </svg>{t("chat.compact")}</>
                   )}
                 </button>
               </div>
@@ -900,8 +892,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {isStreaming && (
               <button
                 onClick={onAbort}
-                title="停止 Agent"
-                aria-label="Stop agent"
+                title={t("chat.stopAgent")}
+                aria-label={t("chat.stopAgent")}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 32, padding: 0,
@@ -925,8 +917,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {onSoundToggle !== undefined && (
               <button
                 onClick={onSoundToggle}
-                title={soundEnabled ? "关闭完成提示音" : "开启完成提示音"}
-                aria-label={soundEnabled ? "Disable done sound" : "Enable done sound"}
+                title={soundEnabled ? t("chat.disableDoneSound") : t("chat.enableDoneSound")}
+                aria-label={soundEnabled ? t("chat.disableDoneSound") : t("chat.enableDoneSound")}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 32, height: "var(--control-height)", padding: 0,

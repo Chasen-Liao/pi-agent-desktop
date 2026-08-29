@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { ProviderEntry } from "./types";
 import { SectionTitle, Field, TextInput, SecretTextInput, Select, API_OPTIONS } from "./FormControls";
+import { useI18n } from "../I18nProvider";
 
 export function ProviderDetail({
   name,
@@ -17,6 +18,7 @@ export function ProviderDetail({
   onRename: (n: string) => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const [editingName, setEditingName] = useState(name);
   useEffect(() => setEditingName(name), [name]);
   const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) => onChange({ ...provider, [k]: v });
@@ -29,37 +31,37 @@ export function ProviderDetail({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>Provider</SectionTitle>
+        <SectionTitle>{t("provider.provider")}</SectionTitle>
         <button onClick={onDelete}
           style={{ padding: "3px 8px", background: "none", border: "1px solid var(--danger-border)", borderRadius: 4, color: "var(--danger)", cursor: "pointer", fontSize: 11 }}>
-          Delete
+          {t("common.delete")}
         </button>
       </div>
 
-      <Field label="Provider name">
+      <Field label={t("provider.providerName")}>
         <TextInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
         {editingName !== name && editingName.trim() && (
           <button onClick={() => onRename(editingName.trim())}
             style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "var(--accent-contrast)", cursor: "pointer", fontSize: 11, alignSelf: "flex-start" }}>
-            Rename
+            {t("common.rename")}
           </button>
         )}
       </Field>
 
-      <Field label="Base URL">
+      <Field label={t("provider.baseUrl")}>
         <TextInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
           placeholder="https://api.example.com/v1" mono />
       </Field>
 
-      <Field label="API Key">
+      <Field label={t("provider.apiKey")}>
         <SecretTextInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
           placeholder="ENV_VAR_NAME, !shell-command, or literal key" mono />
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-          Prefix with <code style={{ fontFamily: "var(--font-mono)" }}>!</code> to run a shell command, or use an env var name
+          {t("provider.apiKeyHint")}
         </span>
       </Field>
 
-      <Field label="API">
+      <Field label={t("provider.api")}>
         <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
       </Field>
     </div>

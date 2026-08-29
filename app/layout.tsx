@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Noto_Sans_Mono, Inter } from "next/font/google";
 import "./globals.css";
+import { I18nProvider } from "@/components/I18nProvider";
 
 const notoSansMono = Noto_Sans_Mono({
   subsets: ["latin", "cyrillic"],
@@ -34,7 +35,7 @@ export default function RootLayout({
         />
       </head>
       <body style={{ height: "100dvh", display: "flex", flexDirection: "column" }}>
-        {children}
+        <I18nProvider>{children}</I18nProvider>
       </body>
     </html>
   );

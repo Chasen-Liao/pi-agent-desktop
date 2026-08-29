@@ -3,9 +3,9 @@
 > 本文档是项目的**权威架构参考**，由 CodeGraph 静态分析 + 源码核对生成。
 > 若与 `AGENTS.md` / `CLAUDE.md` 中的简要描述冲突，以本文档为准。
 >
-- **项目**：`@chasen-liao/pi-agent-desktop` v0.8.1
+- **项目**：`@chasen-liao/pi-agent-desktop` v0.8.4
 - **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.84.3 / `@earendil-works/pi-ai` ^0.84.3
-- **更新日期**：2026-08-25
+- **更新日期**：2026-08-29
 
 ---
 
@@ -59,11 +59,12 @@ Pi Agent Desktop 是 [pi coding agent](https://github.com/earendil-works/pi-codi
 ### Desktop 模式（Electron 生产）
 
 ```text
-Pi-Agent.exe (Electron Main)
+Pi Agent Desktop (Electron Main)
   │
-  ├─ spawn(process.execPath, [server.js], {
+  ├─ macOS: utilityProcess.fork(server.js, { PORT, HOSTNAME })
+  │  Windows/Linux: spawn(process.execPath, [server.js], {
   │     env: { ELECTRON_RUN_AS_NODE=1, PORT, HOSTNAME }
-  │   })
+  │  })
   │     └─ Next.js standalone server on 127.0.0.1:$PORT
   │
   ├─ BrowserWindow → loadURL("http://127.0.0.1:$PORT")
@@ -76,7 +77,7 @@ Pi-Agent.exe (Electron Main)
 ```
 
 - 启动：`npm run dev:electron`（开发）/ `npm run dist`（打包）
-- Electron 主进程以 `ELECTRON_RUN_AS_NODE=1` 把自己当作 Node.js 启动 Next.js standalone `server.js` 作为子进程
+- Electron 主进程托管 Next.js standalone `server.js`：macOS 使用 Electron Helper `utilityProcess`（系统登记为后台 `UIElement`，不占 Dock）；Windows/Linux 继续使用 `ELECTRON_RUN_AS_NODE=1`
 - 主进程开 `BrowserWindow` 指向 `http://127.0.0.1:PORT`，UI 与 Web 模式完全相同
 - 子进程在 `before-quit` 时被 kill
 
@@ -146,7 +147,7 @@ pi-agent-desktop/
 ├── next.config.ts                output:"standalone" + server external packages
 ├── tailwind.config.ts            Tailwind 4 配置
 ├── tsconfig.json                 strict + bundler resolution
-├── electron-builder.yml          NSIS 打包配置
+├── electron-builder.yml          Windows NSIS + macOS DMG/ZIP 打包配置
 ├── eslint.config.mjs             ESLint 9 flat config
 │
 ├── bin/
@@ -256,6 +257,7 @@ pi-agent-desktop/
 │
 ├── electron/                     Electron 主进程（见 §13）
 │   ├── main.ts                   ★ 主进程入口
+│   ├── app-icon.ts               Windows / macOS 原生图标路径选择
 │   ├── preload.ts                contextBridge：目录选择、拖放路径、更新、主题
 │   ├── tray.ts                   系统托盘
 │   ├── port-selection.ts         端口选择算法
@@ -271,7 +273,8 @@ pi-agent-desktop/
 │
 ├── build/
 │   ├── installer.nsh             NSIS 自定义安装脚本
-│   └── tray-icon.ico             托盘图标
+│   ├── icon.ico                  Windows 应用与托盘图标
+│   └── icon.icns                 macOS 应用与托盘图标
 │
 ├── docs/                         本目录
 │   ├── ARCHITECTURE.md           ★ 本文档
@@ -486,7 +489,7 @@ components/models-config/     模型配置弹窗的子组件
 | `useFileTabs.ts` | 文件标签页状态管理 |
 | `usePanelLayout.ts` | 侧边栏 / 右侧面板宽度持久化 |
 
-### `hooks/agent-session/` 子 Hooks / 模块（12 个）
+### `hooks/agent-session/` 子 Hooks / 模块（15 个）
 
 `useAgentSession` 已按职责拆分，主 hook 组合这些子 hook：
 
@@ -504,6 +507,9 @@ components/models-config/     模型配置弹窗的子组件
 | `stream-state.ts` | `streamReducer` 流式消息状态机 |
 | `use-session-commands.ts` | prompt / steer / follow-up / abort / fork 等命令 |
 | `use-session-model-tools.ts` | 模型、Thinking Level 与工具预设命令 |
+| `prompt-dispatch-gate.ts` | prompt / steer / follow-up 的发送门控 |
+| `session-command-target.ts` | 会话命令目标解析与临时会话映射 |
+| `user-message-reconciliation.ts` | 本地用户消息与服务端历史的对账去重 |
 
 ---
 
@@ -610,7 +616,7 @@ components/models-config/     模型配置弹窗的子组件
 
 1. **端口选择**（`port-selection.ts`）— 找一个可用端口
 2. **创建 `BrowserWindow`** — 先显示本地 `startup.html`
-3. **启动 Next.js 子进程** — `spawn(process.execPath, [server.js], { env: ELECTRON_RUN_AS_NODE=1 })`
+3. **启动 Next.js 子进程** — macOS 用 `utilityProcess.fork(server.js)`，Windows/Linux 用 `spawn(process.execPath, [server.js], { env: ELECTRON_RUN_AS_NODE=1 })`
 4. **等待服务就绪**（`server-wait.ts`）— 打包模式必须取得 `/api/health` 成功响应；开发模式可接受 health 或 stdout `Ready`
 5. **等待页面就绪**（`navigation.ts`）— `loadURL("http://127.0.0.1:PORT")` 有界重试，页面真正加载完成后才把服务标记为 `ready`
 6. **托盘**（`tray.ts`）— 最小化到托盘 / 右键退出
@@ -621,6 +627,8 @@ components/models-config/     模型配置弹窗的子组件
 | 文件 | 职责 |
 |---|---|
 | `preload.ts` | `contextBridge`：`selectDirectory` / `getPathForFile` / 更新 / `setTheme` |
+| `app-icon.ts` | 按平台选择 `.ico` 或 `.icns` 原生图标 |
+| `server-process.ts` | 统一 ChildProcess / UtilityProcess 的日志、退出、错误与进程树清理接口 |
 | `process-tree.ts` | 杀掉子进程树（不只是直接子进程） |
 | `restart-policy.ts` | 子进程崩溃后的重启策略 |
 | `crash-recovery.ts` | 渲染进程崩溃（`render-process-gone`）后的有界自动重载策略 |
@@ -629,7 +637,7 @@ components/models-config/     模型配置弹窗的子组件
 | `log-format.ts` | 日志格式化 |
 | `env-filter.ts` | 过滤敏感环境变量传给子进程 |
 
-### 生产环境打包布局（NSIS 安装包内）
+### 生产环境打包布局（Windows NSIS / macOS DMG 与 ZIP 内）
 
 ```
 resources/
@@ -639,7 +647,7 @@ resources/
     .next/static/
     public/
   app/
-    build/                 ← tray-icon.ico
+    build/                 ← icon.ico + icon.icns
   electron.asar            ← 编译后的 electron/dist/
 ```
 
@@ -773,6 +781,21 @@ outputFileTracingExcludes: {
 
 将所有 `*turbo*.runtime.prod.js` 从 `node_modules/next/.../next-server` 复制进 standalone。不要删掉该步骤。
 
+### 14.10c macOS Universal 必须补齐双架构原生运行时
+
+Next.js NFT 只会追踪构建宿主架构的可选原生依赖。在 Apple Silicon 上生成的 `.next/standalone` 默认只有 `@img/sharp-darwin-arm64` 与对应 libvips；直接交给 electron-builder 合成 Universal 应用会有两个问题：
+
+1. standalone 中 Pi TUI 等包已经按 `darwin-arm64` / `darwin-x64` 分目录携带原生文件，两份中间应用里的文件完全相同，`@electron/universal` 会把它误判为需要再次 `lipo` 的同路径 Mach-O 并中止。
+2. 即使只跳过合并，Intel 进程仍缺 `@img/sharp-darwin-x64` 与 x64 libvips，Next Image 在 x86_64 下无法加载 Sharp。
+
+**修复链路**：
+
+- `scripts/ensure-standalone-macos-universal-runtimes.mjs` 从 standalone 的 `sharp/package.json` 读取精确可选依赖版本，把宿主已有包复制过去，并通过 `npm pack` 下载另一架构包，最终保证 arm64/x64 Sharp 与 libvips 并存。
+- `electron-builder.yml` 的 `mac.x64ArchFiles` 只匹配 Pi TUI、Clipboard、Sharp 与 libvips 的架构专用目录，让 Universal 合并器保留这些并列资源；Electron 主可执行文件等其他 Mach-O 仍正常执行 `lipo`。
+- `@electron/rebuild` 由 electron-builder 自动调用，打包脚本不得再显式运行一遍，也不需要作为顶层 devDependency。
+
+验证不能只看构建退出码：最终主程序的 `lipo -archs` 应为 `x86_64 arm64`，并应分别用原生 arm64 与 Rosetta x64 进程加载 packaged standalone 中的 `sharp`。
+
 ### 14.11 安全文件访问：allowed-roots 鉴权模型
 
 `app/api/files/[...path]/route.ts` 是 FileExplorer / FileViewer 的后端，直接读用户磁盘，必须防止任意路径访问。
@@ -853,7 +876,7 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 | AI SDK | @earendil-works/pi-ai | ^0.84.3 |
 | 品牌图标 | @lobehub/icons | ^5.6.0 |
 | 桌面壳 | Electron | ^43.4.1 |
-| 打包 | electron-builder（NSIS） | ^26.15.3 |
+| 打包 | electron-builder（Windows NSIS；macOS Universal DMG + ZIP） | ^26.15.3 |
 | 自动更新 | electron-updater | ^6.8.9 |
 | Lint | ESLint（flat config） | ^9 |
 | 测试 | node:test | 内置 |

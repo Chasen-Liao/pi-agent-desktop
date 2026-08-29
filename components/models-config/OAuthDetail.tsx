@@ -3,9 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { OAuthProvider, OAuthLoginState } from "./types";
 import { SectionTitle } from "./FormControls";
+import { useI18n } from "../I18nProvider";
 
 
 export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefresh: () => void }) {
+  const { t } = useI18n();
   const [loginState, setLoginState] = useState<OAuthLoginState>({ phase: "idle" });
   const [inputValue, setInputValue] = useState("");
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -133,11 +135,11 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>Subscription</SectionTitle>
+        <SectionTitle>{t("provider.subscription")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "var(--success)" : "var(--border)", display: "inline-block" }} />
           <span style={{ fontSize: 11, color: provider.loggedIn ? "var(--success)" : "var(--text-dim)" }}>
-            {provider.loggedIn ? "connected" : "not connected"}
+            {provider.loggedIn ? t("common.connected") : t("common.notConnected")}
           </span>
         </div>
       </div>
@@ -150,7 +152,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
           </p>
         )}
         {loginState.phase === "connecting" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Opening browser…</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("common.openingBrowser")}</p>
         )}
         {loginState.phase === "select" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -200,7 +202,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
                 disabled={!inputValue.trim()}
                 style={{ padding: "6px 12px", background: inputValue.trim() ? "var(--accent)" : "var(--bg-panel)", border: "none", borderRadius: 5, color: inputValue.trim() ? "var(--accent-contrast)" : "var(--text-dim)", cursor: inputValue.trim() ? "pointer" : "not-allowed", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
               >
-                Submit
+                {t("common.submit")}
               </button>
             </div>
           </div>
@@ -225,7 +227,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
           <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{loginState.message}</p>
         )}
         {loginState.phase === "success" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--success)" }}>Connected successfully.</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--success)" }}>{t("provider.connected")}</p>
         )}
         {loginState.phase === "error" && (
           <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}>{loginState.message}</p>
@@ -239,7 +241,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
             onClick={() => { eventSourceRef.current?.close(); setLoginState({ phase: "idle" }); }}
             style={{ padding: "5px 12px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         ) : (
           <>
@@ -247,14 +249,14 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
               onClick={handleLogin}
               style={{ padding: "5px 14px", background: "var(--accent)", border: "none", borderRadius: 5, color: "var(--accent-contrast)", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
             >
-              {provider.loggedIn ? "Re-login" : "Login"}
+              {provider.loggedIn ? t("common.relogin") : t("common.login")}
             </button>
             {provider.loggedIn && (
               <button
                 onClick={handleLogout}
                 style={{ padding: "5px 12px", background: "none", border: "1px solid var(--danger-border)", borderRadius: 5, color: "var(--danger)", cursor: "pointer", fontSize: 12 }}
               >
-                Disconnect
+                {t("common.disconnect")}
               </button>
             )}
           </>

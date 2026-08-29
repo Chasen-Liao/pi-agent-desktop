@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useI18n } from "./I18nProvider";
 
 interface Props {
   visible: boolean;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function ExecutePlanBar({ visible, disabled, onExecute }: Props) {
+  const { t } = useI18n();
   if (!visible) return null;
   return (
     <div
@@ -25,7 +27,7 @@ export function ExecutePlanBar({ visible, disabled, onExecute }: Props) {
       }}
     >
       <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-        计划已就绪。执行将切换到 Ask 模式（写/跑前会确认）。
+        {t("plan.ready")}
       </span>
       <button
         type="button"
@@ -43,7 +45,7 @@ export function ExecutePlanBar({ visible, disabled, onExecute }: Props) {
           whiteSpace: "nowrap",
         }}
       >
-        执行此计划
+        {t("plan.execute")}
       </button>
     </div>
   );
