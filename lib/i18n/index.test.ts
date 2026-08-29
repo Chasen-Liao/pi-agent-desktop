@@ -35,4 +35,8 @@ test("translates and interpolates UI messages", () => {
     translate("en", "sidebar.newSessionIn", { path: "/tmp/project" }),
     "New session in /tmp/project",
   );
+  assert.equal(
+    translate("zh-CN", "extension.addFailed"),
+    "添加扩展或技能失败",
+  );
 });

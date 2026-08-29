@@ -122,6 +122,7 @@ test("POST /api/sessions/[id]/clone returns 404 for non-existent session", async
 test("POST /api/sessions/[id]/clone creates cloned session", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pi-clone-test-"));
   let clonedSessionFile: string | null = null;
+  let clonedSessionFileIsolated = false;
   try {
     const { id } = createTestSession(dir);
     const req = new Request(`http://localhost/api/sessions/${id}/clone`, {
@@ -136,15 +137,16 @@ test("POST /api/sessions/[id]/clone creates cloned session", async () => {
     assert.equal(typeof data.sessionId, "string");
     assert.equal(typeof data.sessionFile, "string");
     clonedSessionFile = data.sessionFile;
+    clonedSessionFileIsolated = data.sessionFile.startsWith(`${testAgentDir}${sep}`);
     assert.ok(
-      data.sessionFile.startsWith(`${testAgentDir}${sep}`),
+      clonedSessionFileIsolated,
       `clone escaped isolated agent directory: ${data.sessionFile}`
     );
 
     const clonedSm = SessionManager.open(data.sessionFile, dir);
     assert.equal(clonedSm.getSessionName(), "Cloned Session");
   } finally {
-    if (clonedSessionFile) {
+    if (clonedSessionFile && clonedSessionFileIsolated) {
       rmSync(clonedSessionFile, { force: true });
     }
     rmSync(dir, { recursive: true, force: true });

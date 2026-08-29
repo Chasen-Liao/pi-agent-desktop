@@ -281,7 +281,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
@@ -290,7 +290,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
     setBust(0);
     setSize(null);
     setNaturalSize(null);
-    setError(null);
+    setLoadFailed(false);
     setWatching(false);
 
     if (esRef.current) {
@@ -378,8 +378,8 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
           backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
         }}
       >
-        {error ? (
-          <div style={{ color: "var(--danger)", fontSize: 13 }}>{error}</div>
+        {loadFailed ? (
+          <div style={{ color: "var(--danger)", fontSize: 13 }}>{t("file.loadImageFailed")}</div>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -389,7 +389,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
               const img = e.currentTarget;
               setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
             }}
-            onError={() => setError(t("file.loadImageFailed"))}
+            onError={() => setLoadFailed(true)}
             style={{
               maxWidth: "100%",
               maxHeight: "100%",
@@ -417,7 +417,7 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
@@ -426,7 +426,7 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
     setBust(0);
     setSize(null);
     setDuration(null);
-    setError(null);
+    setLoadFailed(false);
     setWatching(false);
 
     if (esRef.current) {
@@ -445,7 +445,7 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
         if (typeof d.size === "number") setSize(d.size);
       } catch { /* ignore */ }
       setDuration(null);
-      setError(null);
+      setLoadFailed(false);
       setBust((b) => b + 1);
     });
     es.addEventListener("error", () => setWatching(false));
@@ -510,9 +510,9 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
         }}
       >
         <div style={{ width: "min(680px, 100%)" }}>
-          {error && (
+          {loadFailed && (
             <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12, textAlign: "center" }}>
-              {error}
+              {t("file.loadAudioFailed")}
             </div>
           )}
           <audio
@@ -521,7 +521,7 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
             preload="metadata"
             src={src}
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-            onError={() => setError(t("file.loadAudioFailed"))}
+            onError={() => setLoadFailed(true)}
             style={{ width: "100%" }}
           />
         </div>

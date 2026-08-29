@@ -599,7 +599,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "extension.skillToggleFailed": "切换技能状态失败",
   "extension.skillRemoveConfirm": "移除技能“{name}”？",
   "extension.skillRemoveFailed": "移除技能失败",
-  "extension.addFailed": "添加项目失败",
+  "extension.addFailed": "添加扩展或技能失败",
   "extension.diagnosticError": "错误",
   "extension.diagnosticWarning": "警告",
   "mcp.description": "配置模型上下文协议服务器（stdio 或 SSE）",
