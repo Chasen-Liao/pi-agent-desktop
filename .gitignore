@@ -30,6 +30,7 @@
 # misc
 .DS_Store
 *.pem
+/asar_list.txt
 
 # debug
 npm-debug.log*
