@@ -147,7 +147,7 @@ pi-agent-desktop/
 ├── next.config.ts                output:"standalone" + server external packages
 ├── tailwind.config.ts            Tailwind 4 配置
 ├── tsconfig.json                 strict + bundler resolution
-├── electron-builder.yml          Windows NSIS + macOS DMG/ZIP 打包配置
+├── electron-builder.yml          Windows NSIS + macOS DMG/ZIP + Linux DEB 打包配置
 ├── eslint.config.mjs             ESLint 9 flat config
 │
 ├── bin/
@@ -647,7 +647,7 @@ components/models-config/     模型配置弹窗的子组件
 | `log-format.ts` | 日志格式化 |
 | `env-filter.ts` | 过滤敏感环境变量传给子进程 |
 
-### 生产环境打包布局（Windows NSIS / macOS DMG 与 ZIP 内）
+### 生产环境打包布局（Windows NSIS / macOS DMG 与 ZIP / Linux DEB 内）
 
 ```
 resources/
@@ -886,7 +886,7 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 | AI SDK | @earendil-works/pi-ai | ^0.84.3 |
 | 品牌图标 | @lobehub/icons | ^5.6.0 |
 | 桌面壳 | Electron | ^43.4.1 |
-| 打包 | electron-builder（Windows NSIS；macOS Universal DMG + ZIP） | ^26.15.3 |
+| 打包 | electron-builder（Windows NSIS；macOS Universal DMG + ZIP；Linux DEB） | ^26.15.3 |
 | 自动更新 | electron-updater | ^6.8.9 |
 | Lint | ESLint（flat config） | ^9 |
 | 测试 | node:test | 内置 |

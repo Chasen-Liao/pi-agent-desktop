@@ -10,7 +10,7 @@ npm run dev          # port 30141
 npm run dev:electron # builds electron + opens window
 
 # Production build & package
-npm run dist         # Current OS package: NSIS on Windows, DMG + ZIP on macOS
+npm run dist         # Current OS package: NSIS on Windows, DMG + ZIP on macOS, DEB on Linux
 npm run dist:mac     # Universal macOS package (Intel + Apple Silicon)
 ```
 
