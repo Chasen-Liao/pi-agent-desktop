@@ -5,7 +5,7 @@
 >
 - **项目**：`@chasen-liao/pi-agent-desktop` v0.8.4
 - **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.84.3 / `@earendil-works/pi-ai` ^0.84.3
-- **更新日期**：2026-08-29
+- **更新日期**：2026-08-31
 
 ---
 
@@ -154,12 +154,13 @@ pi-agent-desktop/
 │   └── pi-web.js                 CLI 入口 → next start（npm i -g / npx）
 │
 ├── app/                          Next.js App Router
-│   ├── layout.tsx                主题初始化 + 字体 + 防 FOUC 脚本
+│   ├── layout.tsx                主题初始化 + I18nProvider + 字体 + 防 FOUC 脚本
 │   ├── page.tsx                  挂载 <AppShell/>
 │   ├── globals.css               CSS 变量主题 + View Transitions
 │   └── api/                      38 条 API 路由（见 §12）
 │
 ├── components/                   React 组件（见 §10）
+│   ├── I18nProvider.tsx          界面语言（en / zh-CN / system）
 │   ├── AppShell.tsx              顶层布局
 │   ├── ChatWindow.tsx            对话外壳（核心）
 │   ├── ChatInput.tsx             输入栏
@@ -224,6 +225,7 @@ pi-agent-desktop/
 │       └── use-session-model-tools.ts
 │
 ├── lib/                          服务端 / 共享库
+│   ├── i18n/                     界面文案：en / zh-CN 词典与 locale 解析
 │   ├── rpc-manager.ts            ★ AgentSessionWrapper + 注册表 + startRpcSession
 │   ├── follow-up-queue.ts        可重排 Follow-up Queue 与 revision 并发控制
 │   ├── session-reader.ts         ★ .jsonl 解析 + 路径缓存 + 会话树
@@ -258,8 +260,10 @@ pi-agent-desktop/
 ├── electron/                     Electron 主进程（见 §13）
 │   ├── main.ts                   ★ 主进程入口
 │   ├── app-icon.ts               Windows / macOS 原生图标路径选择
-│   ├── preload.ts                contextBridge：目录选择、拖放路径、更新、主题
+│   ├── preload.ts                contextBridge：目录选择、拖放路径、更新、主题、平台标记
 │   ├── tray.ts                   系统托盘
+│   ├── server-process.ts         ChildProcess / UtilityProcess 统一封装
+│   ├── title-bar-overlay.ts      Windows 标题栏 overlay；macOS 跳过
 │   ├── port-selection.ts         端口选择算法
 │   ├── server-wait.ts            等待 Next.js 子进程就绪
 │   ├── process-tree.ts           进程树管理
@@ -423,10 +427,11 @@ Pi 有两种独立的分支机制，**不要混淆**：
 
 > 完整清单基于 CodeGraph 索引。所有组件**手写，零 UI 库依赖**，通过 CSS 变量实现暗色/亮色主题。
 
-### 顶层组件（26 个）
+### 顶层组件（27 个）
 
 | 组件 | 职责 |
 |---|---|
+| `I18nProvider.tsx` | 界面语言 Context：`en` / `zh-CN` / `system`，词典在 `lib/i18n` |
 | `AppShell.tsx` | 顶层布局：侧边栏 + 聊天区 + 标签页；URL `?session=` 状态；模型/技能弹窗 |
 | `ChatWindow.tsx` | 对话区域外壳；委托 `useAgentSession` 处理所有 agent 交互 |
 | `ChatInput.tsx` | 输入栏：模型选择、工具预设、AgentMode、Thinking Level、Steer 与 Follow-up Queue |
@@ -626,14 +631,19 @@ components/models-config/     模型配置弹窗的子组件
 
 | 文件 | 职责 |
 |---|---|
-| `preload.ts` | `contextBridge`：`selectDirectory` / `getPathForFile` / 更新 / `setTheme` |
+| `preload.ts` | `contextBridge`：`selectDirectory` / `getPathForFile` / 更新 / `setTheme` / 平台标记 |
 | `app-icon.ts` | 按平台选择 `.ico` 或 `.icns` 原生图标 |
 | `server-process.ts` | 统一 ChildProcess / UtilityProcess 的日志、退出、错误与进程树清理接口 |
+| `title-bar-overlay.ts` | Windows `setTitleBarOverlay`；macOS 隐藏标题栏走交通灯安全区 |
 | `process-tree.ts` | 杀掉子进程树（不只是直接子进程） |
 | `restart-policy.ts` | 子进程崩溃后的重启策略 |
 | `crash-recovery.ts` | 渲染进程崩溃（`render-process-gone`）后的有界自动重载策略 |
 | `startup-failure.ts` | 启动失败诊断 UI（`startup.html`） |
 | `navigation.ts` | 主页面导航的单次超时、有限重试与错误封装 |
+| `port-selection.ts` | 端口选择 |
+| `server-wait.ts` | 等待 Next.js 子进程就绪 |
+| `csp.ts` | 内容安全策略 |
+| `update-install-gate.ts` | 自动更新安装门闩 |
 | `log-format.ts` | 日志格式化 |
 | `env-filter.ts` | 过滤敏感环境变量传给子进程 |
 

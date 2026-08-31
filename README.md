@@ -107,6 +107,7 @@ electron/          # Electron 主进程
 hooks/             # React Hooks（会话管理、面板布局等）
 lib/
   ltm/               # 长期记忆（SQLite + MemoryService + hooks）
+  i18n/              # 界面文案（en / zh-CN / system）
   session-reader.ts  # 解析 .jsonl 会话文件
   rpc-manager.ts     # 管理 AgentSession 生命周期
   normalize.ts       # 规范化 toolCall 字段名

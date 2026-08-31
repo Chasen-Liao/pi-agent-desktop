@@ -35,6 +35,8 @@ macOS 产物发布前还应运行 `hdiutil verify release/*.dmg`、`unzip -t rel
 
 Windows 安装包当前未代码签名，Release Notes 必须披露 SmartScreen 提示。macOS 构建会在钥匙串中存在有效 Developer ID 证书时自动签名，并在配置了 electron-builder 支持的 Apple 凭据时公证；没有签名或公证的发布包必须在 Release Notes 披露 Gatekeeper 提示。
 
+截至 2026-08-31：最新 GitHub Release 仍是 `v0.8.4`，资产只有 Windows 安装包。macOS Universal 打包已合入 `main`（#22），尚未随 Release 发布。macOS 产物可由有 Write 权限的协作者在 macOS 上执行 `npm run dist:mac` 后，上传到**同一** `vX.Y.Z` tag；不要另开一套版本号。
+
 ## npm Release
 
 `npm run release` 会先执行 `npm version patch --no-git-tag-version`，然后构建 standalone 并发布 npm 包。它**不用于 GitHub Desktop Release**；当 manifest 已经是目标桌面版本时运行它会把版本继续递增。

@@ -1,6 +1,7 @@
 # Electron 36 → 43 升级方案
 
-> 日期：2026-08-26 · 分支：`feat/electron-43-upgrade` · 状态：待执行
+> 日期：2026-08-26 · 分支：`feat/electron-43-upgrade` · 状态：已落地（历史方案，勿当现役任务）
+> Electron 43.4.1 已在 `main`。macOS `utilityProcess` 由 #22 于 2026-08-31 完成；Windows/Linux 仍走 `ELECTRON_RUN_AS_NODE`。
 > 决策来源：bounded council（oracle-fork + reviewer，2 passes，已收敛）
 
 ## 1. 背景与动机
@@ -56,7 +57,7 @@
 
 ## 6. 已知妥协与后续任务
 
-1. **runAsNode fuse 保持开启**（有意架构妥协）：官方将 ELECTRON_RUN_AS_NODE 定性为攻击面并建议改用 utilityProcess 缓解（官方同时反驳了相关 CVE 的严重性定性，非 deprecated）；本项目的 Next 子进程架构与之冲突，本次不阻塞。→ 另立任务：utilityProcess 改造或捆绑独立 node.exe。
+1. **runAsNode fuse 保持开启**（有意架构妥协）：官方将 ELECTRON_RUN_AS_NODE 定性为攻击面并建议改用 utilityProcess 缓解（官方同时反驳了相关 CVE 的严重性定性，非 deprecated）。macOS packaged server 已于 2026-08-31（#22）改为 `utilityProcess.fork`；Windows/Linux 仍 `ELECTRON_RUN_AS_NODE`。
 2. **ASAR Integrity 不纳入本次**（39+ 已转正，asar:true 且无原生模块，成本低）：遵循最小变更原则，升级收敛后单独小任务启用。
 
 ## 7. Council 决策记录
