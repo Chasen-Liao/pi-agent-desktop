@@ -3,8 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import type { ApiKeyProvider } from "./types";
 import { Field, SecretTextInput, SectionTitle } from "./FormControls";
+import { useI18n } from "../I18nProvider";
 
 export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRefresh: () => void }) {
+  const { t } = useI18n();
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -63,28 +65,31 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>API Key</SectionTitle>
+        <SectionTitle>{t("provider.apiKey")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
           <span style={{ fontSize: 11, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
-            {provider.configured ? "configured" : "not configured"}
+            {provider.configured ? t("common.configured") : t("common.notConfigured")}
           </span>
         </div>
       </div>
 
       <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
         {provider.configured
-          ? `API key is stored. Enter a new key below to replace it, or disconnect to remove it.`
-          : `Enter your ${provider.displayName} API key to enable ${provider.modelCount} model${provider.modelCount !== 1 ? "s" : ""}.`}
+          ? t("provider.apiKeyStored")
+          : t(provider.modelCount === 1 ? "provider.apiKeyEnableModel" : "provider.apiKeyEnableModels", {
+              provider: provider.displayName,
+              count: provider.modelCount,
+            })}
       </p>
 
-      <Field label="API Key">
+      <Field label={t("provider.apiKey")}>
         <div style={{ display: "flex", gap: 6 }}>
           <SecretTextInput
             value={apiKey}
             onChange={setApiKey}
             onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
-            placeholder={provider.configured ? "Enter new key to replace…" : "sk-…"}
+            placeholder={provider.configured ? t("provider.replaceApiKey") : "sk-…"}
             style={{ flex: 1 }}
             autoComplete="off"
             spellCheck={false}
@@ -108,7 +113,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             )}
-            {savedOk ? "Saved" : saving ? "Saving…" : "Save"}
+            {savedOk ? t("common.saved") : saving ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </Field>
@@ -126,7 +131,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
             cursor: removing ? "not-allowed" : "pointer", fontSize: 12,
           }}
         >
-          {removing ? "Removing…" : "Disconnect"}
+          {removing ? t("common.removing") : t("common.disconnect")}
         </button>
       )}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
@@ -18,6 +18,7 @@ import type { ChatInputHandle } from "./ChatInput";
 import { usePanelLayout } from "@/hooks/usePanelLayout";
 import { useFileTabs } from "@/hooks/useFileTabs";
 import { StatsBar } from "./StatsBar";
+import { useI18n } from "./I18nProvider";
 
 function isEditableTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -31,10 +32,15 @@ function getPathName(path: string | null): string {
   return parts[parts.length - 1] ?? "Pi";
 }
 
+const SHELL_MENU_GAP = 6;
+const SHELL_MENU_EDGE_PADDING = 8;
+const SHELL_MENU_RIGHT_OFFSET = 4;
+
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isDark, toggleTheme } = useTheme();
+  const { preference: localePreference, setPreference: setLocalePreference, t } = useI18n();
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
   // When user clicks +, we only store the cwd — no fake session id
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null);
@@ -48,6 +54,7 @@ export function AppShell() {
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
   const shellMenuRef = useRef<HTMLDivElement>(null);
   const shellMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const [shellMenuPosition, setShellMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportSessionId, setExportSessionId] = useState<string | null>(null);
   const [branchCloneModal, setBranchCloneModal] = useState<{
@@ -154,6 +161,27 @@ export function AppShell() {
       document.removeEventListener("keydown", closeShellMenuWithKeyboard);
     };
   }, [shellMenuOpen]);
+
+  const updateShellMenuPosition = useCallback(() => {
+    const button = shellMenuButtonRef.current;
+    if (!button) return;
+
+    const rect = button.getBoundingClientRect();
+    setShellMenuPosition({
+      top: rect.bottom + SHELL_MENU_GAP,
+      right: Math.max(
+        SHELL_MENU_EDGE_PADDING,
+        window.innerWidth - rect.right + SHELL_MENU_RIGHT_OFFSET,
+      ),
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!shellMenuOpen) return;
+    updateShellMenuPosition();
+    window.addEventListener("resize", updateShellMenuPosition);
+    return () => window.removeEventListener("resize", updateShellMenuPosition);
+  }, [shellMenuOpen, updateShellMenuPosition]);
 
   useEffect(() => {
     if (!activeTopPanel || !topBarRef.current) return;
@@ -405,7 +433,7 @@ export function AppShell() {
         {(
           [
             {
-              label: "Models",
+              label: t("shell.models"),
               onClick: () => setModelsConfigOpen(true),
               disabled: false,
               icon: (
@@ -424,7 +452,7 @@ export function AppShell() {
               ),
             },
             {
-              label: "Skills",
+              label: t("shell.skills"),
               onClick: () => setSkillsConfigOpen(true),
               disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd,
               icon: (
@@ -484,7 +512,7 @@ export function AppShell() {
               className="panel-resize-handle panel-resize-handle-left"
               role="separator"
               aria-orientation="vertical"
-              aria-label="Resize sidebar"
+              aria-label={t("shell.resizeSidebar")}
               onPointerDown={(e) => beginPanelResize("left", e)}
             />
           )}
@@ -494,10 +522,14 @@ export function AppShell() {
         <div className="relative flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Top bar with sidebar toggle */}
           <div ref={topBarRef} className="material-toolbar flex items-center shrink-0 border-b border-divider h-toolbar-height [-webkit-app-region:drag]">
+            <div
+              aria-hidden="true"
+              className={`macos-titlebar-leading-safe-area${sidebarOpen ? "" : " is-active"}`}
+            />
             <button
               onClick={() => setSidebarOpen((v) => !v)}
-              title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-              aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+              title={sidebarOpen ? t("shell.hideSidebar") : t("shell.showSidebar")}
+              aria-label={sidebarOpen ? t("shell.hideSidebar") : t("shell.showSidebar")}
               className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-r border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-150 [-webkit-app-region:no-drag]"
             >
               {sidebarOpen ? (
@@ -519,7 +551,7 @@ export function AppShell() {
                 <>
                   <span className="text-text-dim">/</span>
                   <span className="max-w-52 truncate text-text-muted">
-                    {selectedSession?.name || selectedSession?.firstMessage || "New session"}
+                    {selectedSession?.name || selectedSession?.firstMessage || t("shell.newSessionName")}
                   </span>
                 </>
               )}
@@ -565,7 +597,7 @@ export function AppShell() {
                 ref={shellMenuButtonRef}
                 type="button"
                 onClick={() => setShellMenuOpen((open) => !open)}
-                aria-label="Workbench menu"
+                aria-label={t("shell.workbenchMenu")}
                 aria-haspopup="menu"
                 aria-controls="workbench-menu"
                 aria-expanded={shellMenuOpen}
@@ -575,66 +607,82 @@ export function AppShell() {
                   <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
                 </svg>
               </button>
-              {shellMenuOpen && (
-              <div
-                id="workbench-menu"
-                role="menu"
-                className="t-dropdown is-open material-popover absolute right-1 top-[calc(100%+6px)] z-[700] w-52 rounded-panel border border-border p-1.5 shadow-popover"
-                data-origin="top-right"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={(event) => {
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    setShellMenuOpen(false);
-                    toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-                  }}
-                  className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
+              {shellMenuOpen && shellMenuPosition && (
+                <div
+                  id="workbench-menu"
+                  role="menu"
+                  className="t-dropdown is-open material-popover fixed z-[700] w-52 rounded-panel border border-border p-1.5 shadow-popover"
+                  style={shellMenuPosition}
+                  data-origin="top-right"
                 >
-                  <span className="w-4 text-center">{isDark ? "☀" : "◐"}</span>
-                  {isDark ? "Light appearance" : "Dark appearance"}
-                </button>
-                {showChat && (
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => { setShellMenuOpen(false); toggleTopPanel("system"); }}
+                    onClick={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setShellMenuOpen(false);
+                      toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+                    }}
                     className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
                   >
-                    <span className={`w-4 text-center ${systemPrompt ? "text-accent" : "text-text-dim"}`}>⌘</span> System prompt
+                    <span className="w-4 text-center">{isDark ? "☀" : "◐"}</span>
+                    {isDark ? t("shell.lightAppearance") : t("shell.darkAppearance")}
                   </button>
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => { setShellMenuOpen(false); setExtensionsModalOpen(true); }}
-                  className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
-                >
-                  <span className="w-4 text-center">⌘</span> Extensions & MCP
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={!selectedSession}
-                  onClick={() => {
-                    setShellMenuOpen(false);
-                    setExportSessionId(selectedSession?.id ?? null);
-                    setExportModalOpen(true);
-                  }}
-                  className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-35"
-                >
-                  <span className="w-4 text-center">⇩</span> Export session
-                </button>
-              </div>
+                  {showChat && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { setShellMenuOpen(false); toggleTopPanel("system"); }}
+                      className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
+                    >
+                      <span className={`w-4 text-center ${systemPrompt ? "text-accent" : "text-text-dim"}`}>⌘</span> {t("shell.systemPrompt")}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setShellMenuOpen(false); setExtensionsModalOpen(true); }}
+                    className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
+                  >
+                    <span className="w-4 text-center">⌘</span> {t("shell.extensionsMcp")}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!selectedSession}
+                    onClick={() => {
+                      setShellMenuOpen(false);
+                      setExportSessionId(selectedSession?.id ?? null);
+                      setExportModalOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    <span className="w-4 text-center">⇩</span> {t("shell.exportSession")}
+                  </button>
+                  <div className="my-1 border-t border-divider" />
+                  <label className="flex w-full items-center gap-2 rounded-control px-2.5 py-1.5 text-[12px] text-text">
+                    <span className="w-4 text-center" aria-hidden="true">文</span>
+                    <span className="flex-1">{t("language.label")}</span>
+                    <select
+                      value={localePreference}
+                      onChange={(event) => setLocalePreference(event.target.value as "system" | "en" | "zh-CN")}
+                      aria-label={t("language.label")}
+                      className="max-w-28 rounded-control border border-border bg-bg-panel px-1.5 py-1 text-[11px] text-text outline-none focus:border-focus-ring"
+                    >
+                      <option value="system">{t("language.system")}</option>
+                      <option value="en">{t("language.english")}</option>
+                      <option value="zh-CN">{t("language.chineseSimplified")}</option>
+                    </select>
+                  </label>
+                </div>
               )}
             </div>
             {!rightPanelOpen && (
               <>
                 <button
                   onClick={() => setRightPanelOpen(true)}
-                  title="Show file panel"
-                  aria-label="Show file panel"
+                  title={t("shell.showFilePanel")}
+                  aria-label={t("shell.showFilePanel")}
                   className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-l border-divider text-text-muted hover:text-text cursor-pointer shrink-0 transition-colors duration-150 [-webkit-app-region:no-drag]"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -663,11 +711,11 @@ export function AppShell() {
                       </div>
                     ) : systemPrompt === "" ? (
                       <div className="px-4 py-2.5 text-[12px] text-text-muted italic">
-                        System prompt is empty (tools are disabled)
+                        {t("shell.systemPromptEmpty")}
                       </div>
                     ) : (
                       <div className="px-4 py-2.5 text-[12px] text-text-muted italic">
-                        Send a message to load the system prompt
+                        {t("shell.systemPromptLoadHint")}
                       </div>
                     )}
                   </div>
@@ -696,16 +744,16 @@ export function AppShell() {
             ) : showPlaceholder ? (
               activeCwd ? (
                 <div className="h-full flex items-center justify-center text-text-muted text-[15px]">
-                  Select a session from the sidebar
+                  {t("shell.selectSession")}
                 </div>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center px-6 text-center select-none">
                   <div className="mb-3 grid h-10 w-10 place-items-center rounded-[13px] border border-border bg-bg-elevated font-mono text-[21px] font-semibold text-text-strong shadow-input">
                     π
                   </div>
-                  <div className="text-[15px] font-medium text-text">Open a project</div>
+                  <div className="text-[15px] font-medium text-text">{t("shell.openProject")}</div>
                   <div className="mt-1 max-w-64 text-[12px] leading-[1.6] text-text-muted">
-                    Choose a directory from the sidebar to start a session with Pi.
+                    {t("shell.openProjectHint")}
                   </div>
                 </div>
               )
@@ -727,7 +775,7 @@ export function AppShell() {
               className="panel-resize-handle panel-resize-handle-right"
               role="separator"
               aria-orientation="vertical"
-              aria-label="Resize file panel"
+              aria-label={t("shell.resizeFilePanel")}
               onPointerDown={(e) => beginPanelResize("right", e)}
             />
           )}
@@ -743,8 +791,8 @@ export function AppShell() {
             </div>
             <button
               onClick={() => setRightPanelOpen(false)}
-              title="Hide file panel"
-              aria-label="Hide file panel"
+              title={t("shell.hideFilePanel")}
+              aria-label={t("shell.hideFilePanel")}
               className="flex items-center justify-center w-9 h-full p-0 bg-transparent border-none border-l border-divider text-text hover:text-text cursor-pointer shrink-0 transition-colors duration-150 [-webkit-app-region:no-drag]"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -760,7 +808,7 @@ export function AppShell() {
             {activeFileTab?.filePath ? (
               <FileViewer filePath={activeFileTab.filePath} cwd={activeCwd ?? undefined} />
             ) : (
-              <div className="h-full flex items-center justify-center text-text-dim text-[12px]">No file open</div>
+              <div className="h-full flex items-center justify-center text-text-dim text-[12px]">{t("shell.noFileOpen")}</div>
             )}
           </div>
         </div>

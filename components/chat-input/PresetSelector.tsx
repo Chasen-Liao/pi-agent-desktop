@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useI18n } from "../I18nProvider";
 
 const TOOL_PRESETS = ["off", "default", "full"] as const;
 const TOOL_PRESET_MAP: Record<"off" | "default" | "full", "none" | "default" | "full"> = {
@@ -20,6 +21,7 @@ export function PresetSelector({
   toolPreset,
   onToolPresetChange,
 }: PresetSelectorProps) {
+  const { t } = useI18n();
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -42,7 +44,7 @@ export function PresetSelector({
       <button
         onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
         disabled={isStreaming}
-        title="切换工具预设"
+        title={t("toolPreset.title")}
         style={{
           display: "flex", alignItems: "center", gap: 5,
           padding: "8px 12px",
@@ -60,7 +62,7 @@ export function PresetSelector({
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
         </svg>
-        <span>{Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ?? "default"}</span>
+        <span>{t(`toolPreset.${Object.entries(TOOL_PRESET_MAP).find(([, value]) => value === (toolPreset ?? "default"))?.[0] ?? "default"}` as "toolPreset.off" | "toolPreset.default" | "toolPreset.full")}</span>
       </button>
       {toolDropdownOpen && (
         <div
@@ -75,7 +77,8 @@ export function PresetSelector({
           {TOOL_PRESETS.map((lvl) => {
             const preset = TOOL_PRESET_MAP[lvl];
             const isActive = (toolPreset ?? "default") === preset;
-            const desc = lvl === "off" ? "无工具，纯聊天" : lvl === "default" ? "4 项内置工具" : "全部内置工具";
+            const label = t(`toolPreset.${lvl}`);
+            const desc = t(`toolPreset.${lvl}.desc`);
             return (
               <button
                 key={lvl}
@@ -95,7 +98,7 @@ export function PresetSelector({
                 {isActive
                   ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
                   : <span style={{ width: 10, flexShrink: 0 }} />}
-                <span style={{ flex: 1 }}>{lvl}</span>
+                <span style={{ flex: 1 }}>{label}</span>
                 <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
               </button>
             );

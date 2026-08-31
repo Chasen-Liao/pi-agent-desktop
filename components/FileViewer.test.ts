@@ -45,3 +45,9 @@ test("diff and markdown branches precede the large source fallback", () => {
   assert.ok(diffIndex < largeSourceIndex, "diff branch should stay before large source fallback");
   assert.ok(markdownIndex < largeSourceIndex, "markdown preview should stay before large source fallback");
 });
+
+test("media viewers translate load errors during rendering", () => {
+  assert.doesNotMatch(source, /setError\(t\("file\.load(?:Image|Audio)Failed"\)\)/);
+  assert.match(source, /loadFailed[\s\S]*t\("file\.loadImageFailed"\)/);
+  assert.match(source, /loadFailed[\s\S]*t\("file\.loadAudioFailed"\)/);
+});

@@ -40,6 +40,28 @@ test("packaged readiness requires HTTP health", () => {
   assert.match(source, /waitForNextServerReady\(port, nextProcess, nextServerReadyOptions\(\)\)/);
 });
 
+test("packaged macOS server uses a background utility process", () => {
+  const packagedStart = source.indexOf("const serverEnv =");
+  const monitorStart = source.indexOf("function monitorNextServerProcess", packagedStart);
+  assert.ok(packagedStart >= 0 && monitorStart > packagedStart);
+  const packagedSource = source.slice(packagedStart, monitorStart);
+  assert.match(packagedSource, /process\.platform === "darwin"/);
+  assert.match(packagedSource, /utilityProcess\.fork\(serverScript/);
+  assert.match(packagedSource, /serviceName: "Pi Agent Next Server"/);
+  const darwinBranchStart = packagedSource.indexOf(
+    'process.platform === "darwin"',
+  );
+  const fallbackBranchStart = packagedSource.indexOf(
+    ": wrapChildServerProcess",
+    darwinBranchStart,
+  );
+  assert.ok(fallbackBranchStart > darwinBranchStart);
+  assert.doesNotMatch(
+    packagedSource.slice(darwinBranchStart, fallbackBranchStart),
+    /process\.execPath|ELECTRON_RUN_AS_NODE/,
+  );
+});
+
 test("main waits for app navigation before marking the server ready", () => {
   const awaitedShowAppCalls = source.match(/await showApp\(port\)/g) ?? [];
   assert.equal(awaitedShowAppCalls.length, 2, "initial startup and restart must both await navigation");

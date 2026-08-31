@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useI18n } from "./I18nProvider";
 
 export type BranchCloneMode = "branch" | "clone";
 
@@ -23,6 +24,7 @@ export function BranchCloneModal({
   cwd,
   onSuccess,
 }: BranchCloneModalProps) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [targetCwd, setTargetCwd] = useState(cwd || "");
   const [submitting, setSubmitting] = useState(false);
@@ -40,7 +42,7 @@ export function BranchCloneModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === "branch" && !targetEntryId) {
-      setError("Target entry ID is required for branching");
+      setError(t("branch.required"));
       return;
     }
 
@@ -74,13 +76,13 @@ export function BranchCloneModal({
       }
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : t("branch.failed"));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const title = mode === "branch" ? "Create Session Branch" : "Clone / Fork Session";
+  const title = mode === "branch" ? t("branch.createTitle") : t("branch.cloneTitle");
 
   return (
     <div
@@ -95,7 +97,7 @@ export function BranchCloneModal({
           <h3 className="font-semibold text-text text-[14px]">{title}</h3>
           <button
             onClick={onClose}
-            aria-label="Close modal"
+            aria-label={t("common.close")}
             className="text-text-muted hover:text-text text-[18px] leading-none px-2 py-1 cursor-pointer"
           >
             ✕
@@ -111,15 +113,13 @@ export function BranchCloneModal({
           )}
 
           <p className="text-[12px] text-text-muted">
-            {mode === "branch"
-              ? "Branch history up to selected entry point into a new isolated session file."
-              : "Duplicate the complete session into current or specified target directory."}
+            {mode === "branch" ? t("branch.description") : t("branch.cloneDescription")}
           </p>
 
           {mode === "branch" && targetEntryId && (
             <div>
               <label className="block text-[11px] font-medium text-text-muted mb-1">
-                Branch Point Entry Node
+                {t("branch.point")}
               </label>
               <input
                 type="text"
@@ -132,7 +132,7 @@ export function BranchCloneModal({
 
           <div>
             <label className="block text-[11px] font-medium text-text-muted mb-1">
-              {mode === "branch" ? "Branch Name (Optional)" : "Cloned Session Name (Optional)"}
+              {mode === "branch" ? t("branch.name") : t("branch.cloneName")}
             </label>
             <input
               type="text"
@@ -147,13 +147,13 @@ export function BranchCloneModal({
           {mode === "clone" && (
             <div>
               <label className="block text-[11px] font-medium text-text-muted mb-1">
-                Target Directory (cwd)
+                {t("branch.targetDirectory")}
               </label>
               <input
                 type="text"
                 value={targetCwd}
                 onChange={(e) => setTargetCwd(e.target.value)}
-                placeholder="Leave blank for current working directory"
+                placeholder={t("branch.currentDirectoryPlaceholder")}
                 className="w-full px-2.5 py-1.5 rounded-control bg-bg border border-border text-text font-mono text-[12px] focus:outline-none focus:border-accent"
               />
             </div>
@@ -166,7 +166,7 @@ export function BranchCloneModal({
               onClick={onClose}
               className="px-3 py-1.5 rounded-control border border-border text-text-muted hover:text-text hover:bg-bg-hover transition-colors text-[12px] cursor-pointer"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
@@ -174,10 +174,10 @@ export function BranchCloneModal({
               className="px-4 py-1.5 rounded-control bg-accent text-accent-contrast font-medium hover:opacity-90 transition-opacity cursor-pointer text-[12px] disabled:opacity-50"
             >
               {submitting
-                ? "Processing..."
+                ? t("branch.processing")
                 : mode === "branch"
-                ? "Create Branch"
-                : "Clone Session"}
+                ? t("branch.createAction")
+                : t("branch.cloneAction")}
             </button>
           </div>
         </form>

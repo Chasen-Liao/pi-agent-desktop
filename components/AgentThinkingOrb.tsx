@@ -3,26 +3,31 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { AgentPhase } from "@/hooks/agent-session/agent-phase";
 import { LiquidOrbCanvas } from "./LiquidOrbCanvas";
+import { useI18n } from "./I18nProvider";
+import type { TranslationKey, TranslationValues } from "@/lib/i18n";
 
 interface Props {
   phase: AgentPhase;
   thinking?: string;
 }
 
-function getPhaseLabel(phase: AgentPhase): string {
+function getPhaseLabel(
+  phase: AgentPhase,
+  t: (key: TranslationKey, values?: TranslationValues) => string,
+): string {
   if (phase?.kind === "running_tools") {
     const names = phase.tools.map((tool) => tool.name);
-    if (names.length === 0) return "Running tools…";
-    if (names.length === 1) return `Running ${names[0]}…`;
-    if (names.length <= 3) return `Running ${names.join(", ")}…`;
-    return `Running ${names.slice(0, 2).join(", ")} (+${names.length - 2})…`;
+    if (names.length === 0) return t("agent.runningTools");
+    if (names.length <= 3) return t("agent.runningTool", { tools: names.join(", ") });
+    return t("agent.runningManyTools", { tools: names.slice(0, 2).join(", "), count: names.length - 2 });
   }
-  if (phase?.kind === "waiting_model") return "Waiting for model…";
-  return "Thinking…";
+  if (phase?.kind === "waiting_model") return t("agent.waitingModel");
+  return t("agent.thinking");
 }
 
 export function AgentThinkingOrb({ phase, thinking = "" }: Props) {
-  const label = getPhaseLabel(phase);
+  const { t } = useI18n();
+  const label = getPhaseLabel(phase, t);
   const [activeLabel, setActiveLabel] = useState(label);
   const activeLabelRef = useRef(label);
   const [previousLabel, setPreviousLabel] = useState<string | null>(null);
@@ -77,7 +82,7 @@ export function AgentThinkingOrb({ phase, thinking = "" }: Props) {
         disabled={!hasThinking}
         aria-expanded={expanded && hasThinking}
         aria-controls={hasThinking ? thinkingPanelId : undefined}
-        aria-label={hasThinking ? (expanded ? "Collapse thinking" : "Expand thinking") : activeLabel}
+        aria-label={hasThinking ? (expanded ? t("message.collapseThinking") : t("message.expandThinking")) : activeLabel}
       >
         <LiquidOrbCanvas />
         <span className="t-think text-[12px]" role="status" aria-live="polite">

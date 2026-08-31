@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useI18n } from "./I18nProvider";
 
 export interface SessionExportModalProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ export interface SessionExportModalProps {
 }
 
 export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExportModalProps) {
+  const { t } = useI18n();
   const [format, setFormat] = useState<"html" | "markdown">("html");
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,7 @@ export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExport
 
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Export failed");
+      setError(err instanceof Error ? err.message : t("export.failed"));
     } finally {
       setDownloading(false);
     }
@@ -41,16 +43,16 @@ export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExport
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Export Session"
+      aria-label={t("export.title")}
       className="ui-dialog-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
     >
       <div className="t-modal is-open ui-dialog-surface w-full max-w-md rounded-[14px] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-divider bg-bg-elevated">
-          <h3 className="font-semibold text-text text-[14px]">Export Session</h3>
+          <h3 className="font-semibold text-text text-[14px]">{t("export.title")}</h3>
           <button
             onClick={onClose}
-            aria-label="Close modal"
+            aria-label={t("common.close")}
             className="text-text-muted hover:text-text text-[18px] leading-none px-2 py-1 cursor-pointer"
           >
             ✕
@@ -60,7 +62,7 @@ export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExport
         {/* Content Body */}
         <div className="p-4 flex flex-col gap-4">
           <p className="text-[12px] text-text-muted">
-            Export session <code className="font-mono text-[11px] text-accent">{sessionId}</code> into standalone HTML or plain Markdown.
+            {t("export.description", { session: sessionId })}
           </p>
 
           {error && (
@@ -89,10 +91,10 @@ export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExport
               />
               <div className="flex flex-col gap-0.5">
                 <span className="font-semibold text-[13px] text-text">
-                  Standalone HTML (.html)
+                  {t("export.html.title")}
                 </span>
                 <span className="text-[11px] text-text-muted leading-relaxed">
-                  Interactive HTML document with syntax highlighting, styled assistant thoughts, and collapsible tool calls.
+                  {t("export.html.desc")}
                 </span>
               </div>
             </label>
@@ -115,10 +117,10 @@ export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExport
               />
               <div className="flex flex-col gap-0.5">
                 <span className="font-semibold text-[13px] text-text">
-                  Plain Markdown (.md)
+                  {t("export.markdown.title")}
                 </span>
                 <span className="text-[11px] text-text-muted leading-relaxed">
-                  Clean text format containing user messages, assistant responses, and code blocks. Ideal for copy-pasting or LLM context.
+                  {t("export.markdown.desc")}
                 </span>
               </div>
             </label>
@@ -131,14 +133,14 @@ export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExport
             onClick={onClose}
             className="px-3 py-1.5 rounded-control border border-border text-text-muted hover:text-text hover:bg-bg-hover transition-colors text-[12px] cursor-pointer"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={handleDownload}
             disabled={downloading}
             className="px-4 py-1.5 rounded-control bg-accent text-accent-contrast font-medium hover:opacity-90 transition-opacity cursor-pointer text-[12px] disabled:opacity-50 flex items-center gap-1.5"
           >
-            {downloading ? "Preparing Export..." : `Download ${format.toUpperCase()}`}
+            {downloading ? t("export.preparing") : t("export.download", { format: format.toUpperCase() })}
           </button>
         </div>
       </div>

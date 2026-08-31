@@ -1,10 +1,9 @@
 import { app, Menu, Tray, BrowserWindow, nativeImage } from "electron";
-import path from "path";
 import { setQuitting } from "./main";
+import { getAppIconPath } from "./app-icon";
 
 export function createTray(mainWindow: BrowserWindow): Tray {
-  // Use .ico for Windows tray icon (SVG not reliably supported on Win10)
-  const iconPath = path.join(app.getAppPath(), "build", "icon.ico");
+  const iconPath = getAppIconPath(app.getAppPath());
 
   let icon: Electron.NativeImage;
   try {

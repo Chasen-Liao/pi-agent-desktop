@@ -1,13 +1,31 @@
-import test from "node:test";
+import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath } from "../../../../lib/session-reader.ts";
 import { POST as branchSession } from "./branch/route.ts";
 import { POST as cloneSession } from "./clone/route.ts";
 import { GET as exportSession } from "./export/route.ts";
+
+const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
+const testAgentDir = mkdtempSync(join(tmpdir(), "pi-routes-agent-"));
+
+before(() => {
+  // SessionManager.forkFrom() uses the default agent directory when cloning.
+  // Keep route tests out of the developer's real ~/.pi session store.
+  process.env.PI_CODING_AGENT_DIR = testAgentDir;
+});
+
+after(() => {
+  if (originalAgentDir === undefined) {
+    delete process.env.PI_CODING_AGENT_DIR;
+  } else {
+    process.env.PI_CODING_AGENT_DIR = originalAgentDir;
+  }
+  rmSync(testAgentDir, { recursive: true, force: true });
+});
 
 function createTestSession(dir: string) {
   const sm = SessionManager.create(dir, dir);
@@ -103,6 +121,8 @@ test("POST /api/sessions/[id]/clone returns 404 for non-existent session", async
 
 test("POST /api/sessions/[id]/clone creates cloned session", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pi-clone-test-"));
+  let clonedSessionFile: string | null = null;
+  let clonedSessionFileIsolated = false;
   try {
     const { id } = createTestSession(dir);
     const req = new Request(`http://localhost/api/sessions/${id}/clone`, {
@@ -116,10 +136,19 @@ test("POST /api/sessions/[id]/clone creates cloned session", async () => {
     assert.equal(data.success, true);
     assert.equal(typeof data.sessionId, "string");
     assert.equal(typeof data.sessionFile, "string");
+    clonedSessionFile = data.sessionFile;
+    clonedSessionFileIsolated = data.sessionFile.startsWith(`${testAgentDir}${sep}`);
+    assert.ok(
+      clonedSessionFileIsolated,
+      `clone escaped isolated agent directory: ${data.sessionFile}`
+    );
 
     const clonedSm = SessionManager.open(data.sessionFile, dir);
     assert.equal(clonedSm.getSessionName(), "Cloned Session");
   } finally {
+    if (clonedSessionFile && clonedSessionFileIsolated) {
+      rmSync(clonedSessionFile, { force: true });
+    }
     rmSync(dir, { recursive: true, force: true });
   }
 });

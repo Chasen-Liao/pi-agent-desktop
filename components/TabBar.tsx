@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { getFileIcon } from "./FileIcons";
+import { useI18n } from "./I18nProvider";
 
 export interface Tab {
   id: string;
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
+  const { t } = useI18n();
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
 
   return (
@@ -76,7 +78,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
               onMouseEnter={() => setHoveredClose(tab.id)}
               onMouseLeave={() => setHoveredClose(null)}
-              aria-label={`Close ${tab.label}`}
+              aria-label={`${t("tabs.close")} ${tab.label}`}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 20, height: 20,
@@ -89,7 +91,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
                 flexShrink: 0,
                 transition: "background 0.1s, color 0.1s",
               }}
-              title="Close"
+              title={t("tabs.close")}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                 <line x1="2" y1="2" x2="8" y2="8" />

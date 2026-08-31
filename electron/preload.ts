@@ -1,6 +1,22 @@
 import type { IpcRendererEvent } from "electron";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 
+const preloadPage = globalThis as typeof globalThis & {
+  addEventListener?: (event: string, listener: () => void) => void;
+  document?: {
+    documentElement?: {
+      dataset: Record<string, string | undefined>;
+    };
+  };
+};
+
+preloadPage.addEventListener?.("DOMContentLoaded", () => {
+  const dataset = preloadPage.document?.documentElement?.dataset;
+  if (dataset) {
+    dataset.electronPlatform = process.platform;
+  }
+});
+
 contextBridge.exposeInMainWorld("electronAPI", {
   selectDirectory: () => ipcRenderer.invoke("select-directory"),
   /** Resolve a drag-dropped File to its absolute filesystem path (Electron only). */

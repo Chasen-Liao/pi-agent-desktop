@@ -21,17 +21,20 @@
   "scripts": {
     "dev": "next dev -p 30141",
     "build": "npm run build:standalone",
-    "build:standalone": "next build && node scripts/ensure-standalone-next-runtimes.mjs && node scripts/ensure-standalone-pi-runtime.mjs && node scripts/smoke-standalone-server.mjs",
+    "build:standalone": "next build && node scripts/ensure-standalone-next-runtimes.mjs && node scripts/ensure-standalone-pi-runtime.mjs && node scripts/ensure-standalone-macos-universal-runtimes.mjs && node scripts/smoke-standalone-server.mjs",
     "start": "next start -p 30141",
     "lint": "eslint .",
     "check:electron-deps": "node lib/electron-updater-runtime-deps.mjs --check",
     "test": "node --test --test-force-exit \"lib/**/*.test.ts\" \"lib/**/*.test.mjs\" \"electron/**/*.test.ts\" \"app/**/*.test.ts\" \"hooks/**/*.test.ts\" \"components/**/*.test.ts\" \"scripts/**/*.test.mjs\" \"package.test.ts\" \"middleware.test.ts\"",
     "test:windows": "node --test --test-force-exit \"electron/**/*.test.ts\" \"lib/file-paths.test.ts\" \"lib/path-policy.test.ts\" \"lib/session-lock.test.ts\" \"lib/session-path-cache.test.ts\" \"lib/file-browser.test.ts\" \"lib/custom-path-selection.test.ts\" \"lib/electron-*.test.mjs\" \"lib/installer-script.test.mjs\" \"lib/electron-builder-config.test.mjs\" \"package.test.ts\"",
+    "test:macos": "node --test --test-force-exit \"electron/**/*.test.ts\" \"lib/file-paths.test.ts\" \"lib/path-policy.test.ts\" \"lib/session-lock.test.ts\" \"lib/session-path-cache.test.ts\" \"lib/file-browser.test.ts\" \"lib/custom-path-selection.test.ts\" \"lib/electron-*.test.mjs\" \"lib/electron-builder-config.test.mjs\" \"scripts/ensure-standalone-macos-universal-runtimes.test.mjs\" \"package.test.ts\"",
     "release": "npm version patch --no-git-tag-version && npm run build:standalone && npm publish --access public",
     "build:electron": "tsc -p electron/tsconfig.json && node -e \"const fs=require('fs'); fs.copyFileSync('electron/startup.html', 'electron/dist/startup.html'); fs.copyFileSync('electron/startup.js', 'electron/dist/startup.js')\"",
     "dev:electron": "npm run build:electron && npx electron .",
-    "pack": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --dir && node scripts/smoke-packaged-standalone.mjs",
-    "dist": "npm run build:standalone && npm run build:electron && npx @electron/rebuild && npx electron-builder --publish never && node scripts/smoke-packaged-standalone.mjs"
+    "pack": "npm run build:standalone && npm run build:electron && npx electron-builder --dir && node scripts/smoke-packaged-standalone.mjs",
+    "pack:mac": "npm run build:standalone && npm run build:electron && npx electron-builder --mac --universal --dir && node scripts/smoke-packaged-standalone.mjs",
+    "dist": "npm run build:standalone && npm run build:electron && npx electron-builder --publish never && node scripts/smoke-packaged-standalone.mjs",
+    "dist:mac": "npm run build:standalone && npm run build:electron && npx electron-builder --mac --universal --publish never && node scripts/smoke-packaged-standalone.mjs"
   },
   "build": {
     "extends": "electron-builder.yml"
@@ -43,7 +46,6 @@
     "@earendil-works/pi-ai": "^0.84.3",
     "@earendil-works/pi-coding-agent": "^0.84.3",
     "@electron/packager": "^20.3.0",
-    "@electron/rebuild": "^4.0.4",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@lobehub/icons": "^5.6.0",
@@ -58,6 +60,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
     "fs-extra": "^8.1.0",
+    "minimatch": "^10.2.5",
     "next": "16.3.2",
     "postcss": "^8",
     "react": "^19.2.4",

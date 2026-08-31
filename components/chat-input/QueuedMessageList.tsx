@@ -2,6 +2,7 @@
 
 import { useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import type { FollowUpQueueItem } from "@/lib/follow-up-queue";
+import { useI18n } from "../I18nProvider";
 
 type Props = {
   items: FollowUpQueueItem[];
@@ -12,6 +13,7 @@ type Props = {
 type DropTarget = { id: string; after: boolean } | null;
 
 export function QueuedMessageList({ items, disabled = false, onReorder }: Props) {
+  const { t } = useI18n();
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -27,7 +29,7 @@ export function QueuedMessageList({ items, disabled = false, onReorder }: Props)
     orderedIds.splice(currentIndex, 1);
     orderedIds.splice(clampedIndex, 0, id);
     onReorder(orderedIds);
-    setAnnouncement(`Moved to position ${clampedIndex + 1} of ${items.length}`);
+    setAnnouncement(t("queue.moved", { position: clampedIndex + 1, total: items.length }));
     requestAnimationFrame(() => rowRefs.current.get(id)?.focus());
   };
 
@@ -43,7 +45,7 @@ export function QueuedMessageList({ items, disabled = false, onReorder }: Props)
     const targetIndex = orderedIds.indexOf(dropTarget.id);
     orderedIds.splice(targetIndex + (dropTarget.after ? 1 : 0), 0, draggingId);
     onReorder(orderedIds);
-    setAnnouncement(`Moved to position ${orderedIds.indexOf(draggingId) + 1} of ${items.length}`);
+    setAnnouncement(t("queue.moved", { position: orderedIds.indexOf(draggingId) + 1, total: items.length }));
     requestAnimationFrame(() => rowRefs.current.get(draggingId)?.focus());
     setDraggingId(null);
     setDropTarget(null);
@@ -60,7 +62,7 @@ export function QueuedMessageList({ items, disabled = false, onReorder }: Props)
     <>
       <ol
         className="queued-message-list"
-        aria-label="Queued follow-up messages"
+        aria-label={t("queue.title")}
         onDragOver={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -96,7 +98,7 @@ export function QueuedMessageList({ items, disabled = false, onReorder }: Props)
               className="queued-message-grip"
               draggable={!disabled}
               disabled={disabled}
-              aria-label={`Drag queued message ${index + 1}`}
+              aria-label={t("queue.drag", { number: index + 1 })}
               onDragStart={(event) => {
                 event.stopPropagation();
                 setDraggingId(item.id);
@@ -115,9 +117,9 @@ export function QueuedMessageList({ items, disabled = false, onReorder }: Props)
                 <circle cx="3" cy="13" r="1" /><circle cx="9" cy="13" r="1" />
               </svg>
             </button>
-            <span className="queued-message-copy">{item.message || "Image"}</span>
+            <span className="queued-message-copy">{item.message || t("queue.image")}</span>
             {item.attachmentCount > 0 && (
-              <span className="queued-message-attachments" aria-label={`${item.attachmentCount} attachments`}>
+              <span className="queued-message-attachments" aria-label={t("queue.attachments", { count: item.attachmentCount })}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                   <rect x="3" y="3" width="18" height="18" rx="3" />
                   <circle cx="8.5" cy="8.5" r="1.5" />
@@ -127,10 +129,10 @@ export function QueuedMessageList({ items, disabled = false, onReorder }: Props)
               </span>
             )}
             <div className="queued-message-actions">
-              <button type="button" disabled={disabled || index === 0} onClick={() => move(item.id, index - 1)} aria-label="Move queued message up">
+              <button type="button" disabled={disabled || index === 0} onClick={() => move(item.id, index - 1)} aria-label={t("queue.moveUp")}>
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 9 4-4 4 4" /></svg>
               </button>
-              <button type="button" disabled={disabled || index === items.length - 1} onClick={() => move(item.id, index + 1)} aria-label="Move queued message down">
+              <button type="button" disabled={disabled || index === items.length - 1} onClick={() => move(item.id, index + 1)} aria-label={t("queue.moveDown")}>
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 5 4 4 4-4" /></svg>
               </button>
             </div>

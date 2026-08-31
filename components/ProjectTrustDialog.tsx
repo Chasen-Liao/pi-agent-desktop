@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { NeedsTrustPayload } from "@/lib/trust-types";
+import { useI18n } from "./I18nProvider";
 
 export type { NeedsTrustPayload };
 
@@ -12,13 +13,14 @@ interface Props {
 }
 
 export function ProjectTrustDialog({ payload, onChoose, onCancel }: Props) {
+  const { t } = useI18n();
   if (!payload) return null;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Project trust"
+      aria-label={t("trust.title")}
       className="ui-dialog-backdrop"
       style={{
         position: "fixed",
@@ -45,9 +47,9 @@ export function ProjectTrustDialog({ payload, onChoose, onCancel }: Props) {
           gap: 12,
         }}
       >
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>信任此项目？</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{t("trust.question")}</div>
         <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-          项目目录含有 .pi 配置或 skills。信任后会加载项目级设置、扩展与技能。
+          {t("trust.description")}
         </p>
         <code
           style={{
@@ -76,7 +78,15 @@ export function ProjectTrustDialog({ payload, onChoose, onCancel }: Props) {
                 fontSize: 12,
               }}
             >
-              {opt.label}
+              {opt.id === "trust"
+                ? t("trust.option.trust")
+                : opt.id === "trust-parent"
+                  ? t("trust.option.parent", { path: opt.parentPath ?? "" })
+                  : opt.id === "trust-session"
+                    ? t("trust.option.session")
+                    : opt.id === "deny"
+                      ? t("trust.option.deny")
+                      : t("trust.option.denySession")}
             </button>
           ))}
         </div>
@@ -94,7 +104,7 @@ export function ProjectTrustDialog({ payload, onChoose, onCancel }: Props) {
               fontSize: 12,
             }}
           >
-            取消
+            {t("common.cancel")}
           </button>
         )}
       </div>
