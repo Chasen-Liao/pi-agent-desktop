@@ -1,17 +1,54 @@
-/** Whitespace tokens, drop length <= 2 (ASCII-oriented v1). */
+/**
+ * Similarity for the supersede check in SqliteBackend.remember().
+ *
+ * v1 scored whitespace tokens only. CJK text has no whitespace, so every
+ * Chinese memory was a single giant token and two different memories scored
+ * ~0 — the supersede path never fired for Chinese. Now CJK runs are tokenized
+ * into character bigrams, and pairs containing CJK are scored with the Dice
+ * coefficient (higher than Jaccard for near-duplicates: bigram sets are large,
+ * so Jaccard under-scores them and the threshold stays out of reach).
+ */
+const CJK_DICE_THRESHOLD = 0.5;
+const LATIN_JACCARD_THRESHOLD = 0.7;
+
+function hasCJK(text: string): boolean {
+  return /[\u4e00-\u9fff]/.test(text);
+}
+
+function cjkBigrams(text: string): Set<string> {
+  const set = new Set<string>();
+  // Bigrams come only from contiguous CJK runs — bigramming Latin words too
+  // ("alpha beta gamma" -> "ta" shared via alphabetagamma/delta) pollutes the
+  // token set and makes disjoint English strings score > 0.
+  for (const run of text.match(/[\u4e00-\u9fff]+/g) ?? []) {
+    for (let i = 0; i + 1 < run.length; i++) set.add(run.slice(i, i + 2));
+  }
+  return set;
+}
+
+function latinTokens(text: string): Set<string> {
+  return new Set(text.split(/\s+/).filter((t) => t.length > 2));
+}
+
 export function jaccardSimilarity(a: string, b: string): number {
   const na = a.normalize("NFC").toLowerCase();
   const nb = b.normalize("NFC").toLowerCase();
-  const setA = tokens(na);
-  const setB = tokens(nb);
+  const setA = new Set([...cjkBigrams(na), ...latinTokens(na)]);
+  const setB = new Set([...cjkBigrams(nb), ...latinTokens(nb)]);
   if (setA.size === 0 || setB.size === 0) {
+    // Single-char CJK has no bigrams; fall back to the v1 rule so identical
+    // strings still score 1 (regression guard: jaccardSimilarity("好","好") === 1).
     return na.trim().replace(/\s+/g, " ") === nb.trim().replace(/\s+/g, " ") ? 1 : 0;
   }
   let inter = 0;
   for (const t of setA) if (setB.has(t)) inter++;
+  if (hasCJK(na) || hasCJK(nb)) {
+    return (2 * inter) / (setA.size + setB.size);
+  }
   return inter / (setA.size + setB.size - inter);
 }
 
-function tokens(text: string): Set<string> {
-  return new Set(text.split(/\s+/).filter((t) => t.length > 2));
+/** Supersede decision: Dice 0.5 for CJK-containing pairs, Jaccard 0.7 for Latin (unchanged v1 behavior). */
+export function isNearDuplicate(a: string, b: string): boolean {
+  return jaccardSimilarity(a, b) >= (hasCJK(a) || hasCJK(b) ? CJK_DICE_THRESHOLD : LATIN_JACCARD_THRESHOLD);
 }

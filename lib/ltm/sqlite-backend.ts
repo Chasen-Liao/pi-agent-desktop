@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { MemoryBackend } from "./backend";
-import { jaccardSimilarity } from "./jaccard.ts";
+import { isNearDuplicate } from "./jaccard.ts";
 import type {
   ForgetInput,
   MemoryType,
@@ -14,7 +14,6 @@ import type {
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 50;
-const SUPERSEDE_THRESHOLD = 0.7;
 const SNIPPET_MAX = 240;
 const TITLE_MAX = 80;
 const NARRATIVE_MAX = 4000;
@@ -31,6 +30,16 @@ export function sanitizeFtsQuery(q: string): string {
   const tokens = cleaned.split(/\s+/).filter((t) => t.length > 0);
   if (tokens.length === 0) return "";
   return tokens.map((t) => `"${t.replace(/"/g, "")}"`).join(" ");
+}
+
+/** Tokens shorter than 3 chars cannot be matched by the trigram tokenizer. */
+function shortTokens(q: string): string[] {
+  if (!q || !q.trim()) return [];
+  const cleaned = q
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ");
+  return cleaned.split(/\s+/).filter((t) => t.length > 0 && t.length < 3);
 }
 
 function newId(prefix: "mem" | "obs"): string {
@@ -123,16 +132,76 @@ export class SqliteBackend implements MemoryBackend {
         id UNINDEXED,
         project_id UNINDEXED,
         title,
-        narrative
+        narrative,
+        tokenize = 'trigram'
       );
 
       CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
         id UNINDEXED,
         project_id UNINDEXED,
         title,
-        content
+        content,
+        tokenize = 'trigram'
       );
     `);
+    this.migrateFtsIfNeeded();
+  }
+
+  /**
+   * v0 -> v1: rebuild FTS tables with the trigram tokenizer.
+   *
+   * Tables created before CJK support used the default unicode61 tokenizer,
+   * which cannot match CJK substrings at all. CREATE VIRTUAL TABLE IF NOT
+   * EXISTS never rewrites an existing table, and the FTS5 'rebuild' command
+   * cannot change a tokenizer (it only reindexes the table's own content), so
+   * the only path is drop + recreate + repopulate from the base tables, which
+   * are the authoritative copy. A regular FTS5 table stores its text inside
+   * its shadow tables, so dropping it loses nothing memories/observations
+   * does not already hold. Runs in a transaction and is guarded by
+   * PRAGMA user_version (unused elsewhere in this project).
+   */
+  private migrateFtsIfNeeded(): void {
+    const row = this.db.prepare("PRAGMA user_version").get() as {
+      user_version: number;
+    };
+    if (row.user_version >= 1) return;
+    this.db.exec("BEGIN");
+    try {
+      this.db.exec("DROP TABLE IF EXISTS memories_fts;");
+      this.db.exec(`
+        CREATE VIRTUAL TABLE memories_fts USING fts5(
+          id UNINDEXED, project_id UNINDEXED, title, content,
+          tokenize = 'trigram'
+        );
+      `);
+      this.db.exec(`
+        INSERT INTO memories_fts(id, project_id, title, content)
+        SELECT id, project_id, title, content FROM memories;
+      `);
+      this.db.exec("DROP TABLE IF EXISTS observations_fts;");
+      this.db.exec(`
+        CREATE VIRTUAL TABLE observations_fts USING fts5(
+          id UNINDEXED, project_id UNINDEXED, title, narrative,
+          tokenize = 'trigram'
+        );
+      `);
+      this.db.exec(`
+        INSERT INTO observations_fts(id, project_id, title, narrative)
+        SELECT id, project_id, title, narrative FROM observations;
+      `);
+      this.db.exec("COMMIT");
+    } catch (err) {
+      try {
+        this.db.exec("ROLLBACK");
+      } catch (rollbackErr) {
+        console.error(
+          "LTM: ROLLBACK failed after FTS migration error",
+          rollbackErr
+        );
+      }
+      throw err;
+    }
+    this.db.exec("PRAGMA user_version = 1;");
   }
 
   async remember(
@@ -157,7 +226,7 @@ export class SqliteBackend implements MemoryBackend {
         .all(input.projectId) as Array<{ id: string; content: string }>;
 
       for (const row of latest) {
-        if (jaccardSimilarity(content, row.content) > SUPERSEDE_THRESHOLD) {
+        if (isNearDuplicate(content, row.content)) {
           parentId = row.id;
           this.db
             .prepare(
@@ -292,6 +361,83 @@ export class SqliteBackend implements MemoryBackend {
           type: r.kind as RecallHit["type"],
           createdAt: r.created_at,
         });
+      }
+    }
+
+    // Trigram MATCH needs >= 3 characters per token, so 1-2 char CJK lookups
+    // ("记忆", "压缩") return nothing from FTS. Fall back to a per-token LIKE
+    // scan (not whole-query: multi-token queries are rarely contiguous in the
+    // text) — project-scoped, per-project row counts are small. LIKE hits get
+    // score 0 so FTS hits (bm25 > 0) rank above them.
+    const shortToks = shortTokens(input.query);
+    if (shortToks.length > 0) {
+      const seen = new Set(hits.map((h) => h.id));
+      if (wantMemory) {
+        for (const tok of shortToks) {
+          const rows = this.db
+            .prepare(
+              `SELECT id, title, content, type, created_at FROM memories
+               WHERE project_id = ? AND is_latest = 1
+                 AND (title LIKE ? OR content LIKE ?)
+               LIMIT ?`
+            )
+            .all(
+              input.projectId,
+              `%${tok}%`,
+              `%${tok}%`,
+              limit
+            ) as Array<{
+            id: string;
+            title: string;
+            content: string;
+            type: MemoryType;
+            created_at: string;
+          }>;
+          for (const r of rows) {
+            if (seen.has(r.id)) continue;
+            seen.add(r.id);
+            hits.push({
+              kind: "memory",
+              id: r.id,
+              title: r.title,
+              snippet: snippetOf(r.content),
+              score: 0,
+              type: r.type,
+              createdAt: r.created_at,
+            });
+          }
+        }
+      }
+      if (wantObs) {
+        for (const tok of shortToks) {
+          const rows = this.db
+            .prepare(
+              `SELECT id, title, narrative, kind, created_at FROM observations
+               WHERE project_id = ?
+                 AND (title LIKE ? OR narrative LIKE ?)
+               LIMIT ?`
+            )
+            .all(input.projectId, `%${tok}%`, `%${tok}%`, limit) as Array<{
+            id: string;
+            title: string;
+            narrative: string;
+            kind: string;
+            created_at: string;
+          }>;
+          for (const r of rows) {
+            if (seen.has(r.id)) continue;
+            seen.add(r.id);
+            hits.push({
+              kind: "observation",
+              id: r.id,
+              title: r.title,
+              snippet: snippetOf(r.narrative),
+              score: 0,
+              type: r.kind as RecallHit["type"],
+              createdAt: r.created_at,
+            });
+          }
+        }
       }
     }
 
