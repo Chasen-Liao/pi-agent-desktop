@@ -148,6 +148,7 @@ pi-agent-desktop/
 ├── tailwind.config.ts            Tailwind 4 配置
 ├── tsconfig.json                 strict + bundler resolution
 ├── electron-builder.yml          Windows NSIS + macOS DMG/ZIP + Linux DEB 打包配置
+├── .github/workflows/            ci.yml 测试；desktop-packages.yml 打 v* 桌面包
 ├── eslint.config.mjs             ESLint 9 flat config
 │
 ├── bin/
