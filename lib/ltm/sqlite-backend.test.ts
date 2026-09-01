@@ -455,3 +455,114 @@ test("close runs wal_checkpoint(TRUNCATE) before db.close (LTM-12)", () => {
   assert.match(source, /try\s*\{[^{}]*wal_checkpoint[^{}]*\}\s*catch\s*\(/);
   assert.match(source, /console\.error\([^)]*checkpoint[^)]*\)/i);
 });
+
+test("CJK substring queries are recallable via trigram (CJK-1)", async () => {
+  await withTempBackend(async (backend) => {
+    await backend.remember({
+      projectId: "proj_cjk",
+      content: "项目使用 SQLite 存储长期记忆，检索走 FTS5 全文索引",
+    });
+    const hits = await backend.recall({
+      projectId: "proj_cjk",
+      query: "长期记忆",
+      limit: 5,
+    });
+    assert.ok(hits.length > 0, "CJK substring query should hit via trigram");
+  });
+});
+
+test("short CJK queries fall back to LIKE when trigram cannot match (CJK-2)", async () => {
+  await withTempBackend(async (backend) => {
+    await backend.remember({
+      projectId: "proj_like",
+      content: "压缩前要把即将被摘要的分支文本存进 observations 表",
+    });
+    const hits = await backend.recall({
+      projectId: "proj_like",
+      query: "压缩",
+      limit: 5,
+    });
+    assert.ok(hits.length > 0, "2-char CJK query should hit via LIKE fallback");
+  });
+});
+
+test("LIKE fallback does not leak across projects (CJK-3)", async () => {
+  await withTempBackend(async (backend) => {
+    await backend.remember({
+      projectId: "proj_x",
+      content: "用户偏好：回复简洁直接，不要客套话",
+    });
+    const hits = await backend.recall({
+      projectId: "proj_y",
+      query: "偏好",
+      limit: 5,
+    });
+    assert.equal(hits.length, 0);
+  });
+});
+
+test("CJK revision of an existing memory supersedes it (CJK-4)", async () => {
+  await withTempBackend(async (backend) => {
+    const first = await backend.remember({
+      projectId: "proj_sup",
+      content: "长期记忆模块使用 SQLite 的 FTS5 做中文检索，需要 trigram 分词",
+    });
+    const second = await backend.remember({
+      projectId: "proj_sup",
+      content: "长期记忆用 SQLite FTS5 做中文检索，必须启用 trigram tokenizer 才支持中文",
+    });
+    const stats = await backend.stats("proj_sup");
+    assert.equal(stats.memoryCount, 1, "near-duplicate CJK save should supersede");
+    assert.notEqual(second.id, first.id);
+  });
+});
+
+test("migration rebuilds a legacy unicode61 FTS index with trigram (CJK-5)", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const dir = mkdtempSync(join(tmpdir(), "ltm-mig-"));
+  const dbPath = join(dir, "legacy.sqlite");
+  try {
+    // Simulate a pre-CJK database: base tables + FTS without tokenizer.
+    {
+      const db = new DatabaseSync(dbPath);
+      db.exec(`
+        CREATE TABLE memories (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL, type TEXT NOT NULL,
+          title TEXT NOT NULL, content TEXT NOT NULL, concepts_json TEXT,
+          files_json TEXT, source_observation_ids_json TEXT,
+          is_latest INTEGER NOT NULL, parent_id TEXT,
+          created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
+        CREATE TABLE observations (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL, session_id TEXT NOT NULL,
+          kind TEXT NOT NULL, title TEXT NOT NULL, narrative TEXT NOT NULL,
+          source_json TEXT, created_at TEXT NOT NULL
+        );
+        CREATE VIRTUAL TABLE memories_fts USING fts5(
+          id UNINDEXED, project_id UNINDEXED, title, content
+        );
+        INSERT INTO memories VALUES (
+          'mem_legacy', 'proj_legacy', 'fact', '存储长期记忆标题',
+          '项目使用 SQLite 存储长期记忆', NULL, NULL, NULL, 1, NULL,
+          '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'
+        );
+        INSERT INTO memories_fts(id, project_id, title, content)
+          VALUES ('mem_legacy', 'proj_legacy', '存储长期记忆标题', '项目使用 SQLite 存储长期记忆');
+      `);
+      db.close();
+    }
+    const backend = new SqliteBackend(dbPath);
+    try {
+      const hits = await backend.recall({
+        projectId: "proj_legacy",
+        query: "长期记忆",
+        limit: 5,
+      });
+      assert.ok(hits.length > 0, "legacy row should be recallable after migration");
+    } finally {
+      await backend.close?.();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
