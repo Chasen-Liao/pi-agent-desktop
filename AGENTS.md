@@ -23,7 +23,7 @@ macOS CI subset: `npm run test:macos`
 **Never run `next build` during dev** — pollutes `.next/` and breaks `npm run dev`.
 
 Release：按 [docs/RELEASING.md](docs/RELEASING.md) 执行。桌面 GitHub Release 推 `vX.Y.Z` tag，由 `.github/workflows/desktop-packages.yml` 打 Win/Linux/macOS 并上传；不要用会自动 bump patch 的 `npm run release`。
-Issue / PR：按 [CONTRIBUTING.md](CONTRIBUTING.md)。默认 merge commit；Fork 第一次 CI 要批准 workflow。
+Issue / PR：按 [CONTRIBUTING.md](CONTRIBUTING.md)。新分支用 `dev/`（日常）或 `future/`（大功能），不要用 `feat/`。默认 merge commit；Fork 第一次 CI 要批准 workflow。
 
 ---
 

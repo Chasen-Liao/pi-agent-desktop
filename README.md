@@ -138,7 +138,7 @@ scripts/
 
 ## 协作
 
-报 Issue、提 PR、合并方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。发版见 [docs/RELEASING.md](docs/RELEASING.md)。
+报 Issue、提 PR、合并方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。新功能用 `dev/` 或 `future/` 分支。发版见 [docs/RELEASING.md](docs/RELEASING.md)。
 
 ## 许可
 
