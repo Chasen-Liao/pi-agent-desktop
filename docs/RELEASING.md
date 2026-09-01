@@ -39,7 +39,7 @@
 
 Windows 安装包当前未代码签名，Release Notes 必须披露 SmartScreen 提示。GitHub Actions 打的 macOS 包同样未签名、未公证，Release Notes 必须披露 Gatekeeper 提示。Linux 的 `.deb` 安装包通过 electron-updater 的 `DebUpdater` 自动更新：应用内下载新 `.deb` 后经 `dpkg -i` 或 `apt --allow-unauthenticated` 安装，安装时需要 root 授权提示。下载完整性由 `latest-linux.yml` 的 SHA512 校验（与 Windows NSIS 相同），但 `.deb` 本身未做 debsig，系统包管理器不会再验包签名。自动更新依赖 Release 资产中的 `latest-linux.yml`，漏传则 Linux 端收不到更新。Release Notes 必须披露未签名 deb 与 root 安装。
 
-截至 2026-09-01：桌面 GitHub Release 流程是推 `v*` tag，由 `.github/workflows/desktop-packages.yml` 打 Windows / Linux / macOS。`v0.8.4` 及更早只有 Windows 资产。
+截至 2026-09-01：最新桌面 GitHub Release 是 `v0.8.5`，含 Windows NSIS、macOS Universal、Linux deb 及三份 `latest*.yml`。`v0.8.4` 及更早只有 Windows 资产。Issue / PR 约定见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
 ## npm Release
 

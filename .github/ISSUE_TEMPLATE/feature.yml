@@ -1,0 +1,22 @@
+name: Feature
+description: 新功能或行为变化
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决什么
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 范围
+      placeholder: 做什么、不做什么
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其它
+      placeholder: 相关 Issue、截图、替代方案

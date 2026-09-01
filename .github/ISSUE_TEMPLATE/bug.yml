@@ -1,0 +1,46 @@
+name: Bug
+description: 功能不正常、崩溃、白屏、数据丢失
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      placeholder: v0.8.5 或 main @ commit
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 系统
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - 浏览器（npm run dev）
+        - 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      placeholder: 1. … 2. … 3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 日志 / 安装包名（不要贴密钥或 .jsonl 全文）
