@@ -117,7 +117,10 @@ mac:
   # Standalone contains architecture-specific native packages side-by-side.
   # They are identical in both intermediate apps and must not be lipo'd by
   # @electron/universal; runtime package resolution selects the right arch.
-  x64ArchFiles: "Contents/Resources/standalone/node_modules/{@earendil-works/pi-tui/native/darwin/prebuilds/**,@mariozechner/clipboard-darwin-{arm64,x64}/**,@img/sharp-darwin-{arm64,x64}/**,@img/sharp-libvips-darwin-{arm64,x64}/**}"
+  # Brace includes standalone/.next: minimatch skips dotdirs unless named.
+  # NFT copies native addons under hashed pi-coding-agent there; both arch
+  # builds contain the same .node/.dylib and must not be lipo'd.
+  x64ArchFiles: "Contents/Resources/standalone{,/.next}/**/{@earendil-works/pi-tui/native/darwin/prebuilds/**,@mariozechner/clipboard-darwin-{arm64,x64}/**,@img/sharp-darwin-{arm64,x64}/**,@img/sharp-libvips-darwin-{arm64,x64}/**}"
   artifactName: "Pi-Agent-Desktop-${version}-mac-${arch}.${ext}"
 
 dmg:
