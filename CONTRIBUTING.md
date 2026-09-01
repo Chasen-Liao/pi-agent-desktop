@@ -21,7 +21,11 @@
 
 ## Pull Request
 
-1. 从最新 `main` 开分支。分支名：`fix/…`、`feat/…`、`docs/…`、`ci/…`。
+1. 从最新 `main` 开分支。前缀：
+   - `dev/…` 日常开发（修 bug、小功能）
+   - `future/…` 较大或尚未排期的功能
+   - `docs/…`、`ci/…`、`release/vX.Y.Z` 仍可用
+   不要再用 `feat/`。
 2. 标题用 `fix` / `feat` / `docs` / `ci` / `chore`，必要时加范围，例如 `fix(ltm): …`。
 3. 正文写清：**Why**、**Scope**、**Out of scope**、**Verification**（跑过哪条命令）。
 4. 用户可见文案改 `lib/i18n/dictionaries.ts` 的 `en` 与 `zh-CN`，不要硬编码。
