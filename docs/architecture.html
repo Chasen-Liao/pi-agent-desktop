@@ -1091,7 +1091,7 @@
     <div class="section-tag">// Components</div>
     <h2 class="section-title">核心组件与子组件目录</h2>
     <p class="section-desc">
-      全部手写，零 UI 组件库依赖。每个组件通过 CSS 变量实现暗色/亮色主题，使用 React 19 的最新特性构建。CodeGraph 索引实际统计：顶层 17 个 + 子组件目录 3 个（<code>chat-input/</code>、<code>session-sidebar/</code>、<code>models-config/</code>）。
+      全部手写，零 UI 组件库依赖。每个组件通过 CSS 变量实现暗色/亮色主题，使用 React 19 的最新特性构建。顶层 27 个组件文件 + 子组件目录 3 个（<code>chat-input/</code>、<code>session-sidebar/</code>、<code>models-config/</code>）。
     </p>
 
     <div class="comp-grid">
@@ -1271,7 +1271,7 @@
       </div>
       <div class="tech-item" style="transition-delay:0.55s">
         <div class="tech-icon">📦</div>
-        <div><div class="tech-name">electron-builder</div><div class="tech-ver">^26.15.3 NSIS + DMG/ZIP</div></div>
+        <div><div class="tech-name">electron-builder</div><div class="tech-ver">^26.15.3 NSIS + DMG/ZIP + DEB</div></div>
       </div>
       <div class="tech-item" style="transition-delay:0.6s">
         <div class="tech-icon">🔄</div>
@@ -1373,12 +1373,13 @@
 
     <div class="file-tree">
       <div class="ft-line ft-dir" style="--depth:0"><span class="ft-icon">📁</span><span class="ft-name">pi-agent-desktop/</span></div>
-      <div class="ft-line" style="--depth:1"><span class="ft-icon">📦</span><span class="ft-name">package.json</span><span class="ft-comment">@chasen-liao/pi-agent-desktop v0.8.4</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">📦</span><span class="ft-name">package.json</span><span class="ft-comment">@chasen-liao/pi-agent-desktop v0.8.5</span></div>
       <div class="ft-line" style="--depth:1"><span class="ft-icon">⚙️</span><span class="ft-name">next.config.ts</span><span class="ft-comment">standalone + 外部包</span></div>
       <div class="ft-line" style="--depth:1"><span class="ft-icon">🎨</span><span class="ft-name">tailwind.config.ts</span></div>
       <div class="ft-line" style="--depth:1"><span class="ft-icon">📘</span><span class="ft-name">tsconfig.json</span><span class="ft-comment">strict + bundler</span></div>
-      <div class="ft-line" style="--depth:1"><span class="ft-icon">📦</span><span class="ft-name">electron-builder.yml</span><span class="ft-comment">NSIS + Universal DMG/ZIP + 原生模块合并规则</span></div>
-      <div class="ft-line" style="--depth:1"><span class="ft-icon">🧹</span><span class="ft-name">eslint.config.mjs</span><span class="ft-comment">flat config</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">📦</span><span class="ft-name">electron-builder.yml</span><span class="ft-comment">NSIS + Universal DMG/ZIP + Linux DEB + 原生模块合并规则</span></div>
+      <div class="ft-line" style="--depth:1"><span class="ft-icon">⚙️</span><span class="ft-name">.github/workflows/</span><span class="ft-comment">ci.yml 测试；desktop-packages.yml 打 v* 桌面包</span></div>
+        <div class="ft-line" style="--depth:1"><span class="ft-icon">🧹</span><span class="ft-name">eslint.config.mjs</span><span class="ft-comment">flat config</span></div>
       <div class="ft-line" style="--depth:1"><span class="ft-icon">🤖</span><span class="ft-name">AGENTS.md</span><span class="ft-comment">开发速查摘要</span></div>
       <div class="ft-line" style="--depth:1"><span class="ft-icon">🧠</span><span class="ft-name">CLAUDE.md</span><span class="ft-comment">Claude Code 指南</span></div>
 
@@ -1512,7 +1513,7 @@
 </section>
 
 <footer>
-  <p>Pi Agent Desktop 架构深度解析 · 版本 0.8.4 · 2026-08-31 · <a href="https://github.com/Chasen-Liao/pi-agent-desktop" style="color:var(--accent3);text-decoration:none;">pi-agent-desktop</a></p>
+  <p>Pi Agent Desktop 架构深度解析 · 版本 0.8.5 · 2026-09-01 · <a href="https://github.com/Chasen-Liao/pi-agent-desktop" style="color:var(--accent3);text-decoration:none;">pi-agent-desktop</a></p>
 </footer>
 
 <script>
