@@ -12,6 +12,7 @@ npm run dev:electron # builds electron + opens window
 # Production build & package
 npm run dist         # Current OS package: NSIS on Windows, DMG + ZIP on macOS, DEB on Linux
 npm run dist:mac     # Universal macOS package (Intel + Apple Silicon)
+# GitHub Release: push tag vX.Y.Z → .github/workflows/desktop-packages.yml
 ```
 
 Typecheck: `npx tsc --noEmit`  
@@ -21,7 +22,7 @@ Windows CI subset: `npm run test:windows`
 macOS CI subset: `npm run test:macos`
 **Never run `next build` during dev** — pollutes `.next/` and breaks `npm run dev`.
 
-Release：按 [docs/RELEASING.md](docs/RELEASING.md) 执行；桌面 GitHub Release 不使用会自动 bump patch 的 `npm run release`。
+Release：按 [docs/RELEASING.md](docs/RELEASING.md) 执行。桌面 GitHub Release 推 `vX.Y.Z` tag，由 `.github/workflows/desktop-packages.yml` 打 Win/Linux/macOS 并上传；不要用会自动 bump patch 的 `npm run release`。
 
 ---
 

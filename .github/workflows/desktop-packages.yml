@@ -1,0 +1,169 @@
+name: Desktop packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+jobs:
+  package:
+    name: package (${{ matrix.pack_id }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pack_id: windows
+            runner: windows-latest
+            dist_script: dist
+          - pack_id: linux
+            runner: ubuntu-latest
+            dist_script: dist
+          - pack_id: macos
+            runner: macos-latest
+            dist_script: dist:mac
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Tag must match package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "v${version}" ]; then
+            echo "tag ${tag} does not match package.json version v${version}"
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install Linux packaging tools
+        if: matrix.pack_id == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build installer
+        run: npm run ${{ matrix.dist_script }}
+
+      - name: Verify Linux deb
+        if: matrix.pack_id == 'linux'
+        run: dpkg-deb -I release/*.deb
+
+      - name: Verify macOS universal artifacts
+        if: matrix.pack_id == 'macos'
+        run: |
+          hdiutil verify release/*.dmg
+          unzip -t release/*-mac-universal.zip
+          archs="$(lipo -archs "release/mac-universal/Pi Agent Desktop.app/Contents/MacOS/Pi Agent Desktop")"
+          echo "lipo archs: ${archs}"
+          echo "${archs}" | grep -q "x86_64"
+          echo "${archs}" | grep -q "arm64"
+
+      - name: Upload Windows artifacts
+        if: matrix.pack_id == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          if-no-files-found: error
+          path: |
+            release/Pi-Agent-Desktop-Setup-*.exe
+            release/Pi-Agent-Desktop-Setup-*.exe.blockmap
+            release/latest.yml
+
+      - name: Upload Linux artifacts
+        if: matrix.pack_id == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          if-no-files-found: error
+          path: |
+            release/Pi-Agent-Desktop-*-linux-*.deb
+            release/latest-linux.yml
+
+      - name: Upload macOS artifacts
+        if: matrix.pack_id == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          if-no-files-found: error
+          path: |
+            release/Pi-Agent-Desktop-*-mac-universal.dmg
+            release/Pi-Agent-Desktop-*-mac-universal.dmg.blockmap
+            release/Pi-Agent-Desktop-*-mac-universal.zip
+            release/Pi-Agent-Desktop-*-mac-universal.zip.blockmap
+            release/latest-mac.yml
+
+  publish:
+    name: upload GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: dist-artifacts
+          merge-multiple: true
+
+      - name: Publish assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          notes="docs/releases/${tag}.md"
+          shopt -s nullglob
+          assets=(
+            dist-artifacts/Pi-Agent-Desktop-Setup-*.exe
+            dist-artifacts/Pi-Agent-Desktop-Setup-*.exe.blockmap
+            dist-artifacts/latest.yml
+            dist-artifacts/Pi-Agent-Desktop-*-linux-*.deb
+            dist-artifacts/latest-linux.yml
+            dist-artifacts/Pi-Agent-Desktop-*-mac-universal.dmg
+            dist-artifacts/Pi-Agent-Desktop-*-mac-universal.dmg.blockmap
+            dist-artifacts/Pi-Agent-Desktop-*-mac-universal.zip
+            dist-artifacts/Pi-Agent-Desktop-*-mac-universal.zip.blockmap
+            dist-artifacts/latest-mac.yml
+          )
+          if [ "${#assets[@]}" -ne 10 ]; then
+            echo "expected 10 release assets, found ${#assets[@]}:"
+            printf '%s\n' "${assets[@]}"
+            ls -la dist-artifacts
+            exit 1
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists"
+          elif [ -f "$notes" ]; then
+            gh release create "$tag" --title "Pi Agent Desktop ${tag}" --notes-file "$notes" --verify-tag
+          else
+            gh release create "$tag" --title "Pi Agent Desktop ${tag}" --generate-notes --verify-tag
+          fi
+          gh release upload "$tag" "${assets[@]}" --clobber
+          gh release edit "$tag" --draft=false
