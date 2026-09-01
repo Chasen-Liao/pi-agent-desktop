@@ -91,6 +91,18 @@ nsis:
   artifactName: "Pi-Agent-Desktop-Setup-${version}.${ext}"
   include: build/installer.nsh
 
+linux:
+  executableName: pi-agent-desktop
+  syncDesktopName: true
+  maintainer: "Chasen <Chasen-Liao@users.noreply.github.com>"
+  target:
+    - target: deb
+      arch:
+        - x64
+  icon: build/icon.png
+  category: Development
+  artifactName: "Pi-Agent-Desktop-${version}-linux-${arch}.${ext}"
+
 mac:
   target:
     - target: dmg
