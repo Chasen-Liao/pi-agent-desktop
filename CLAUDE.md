@@ -40,7 +40,7 @@ npm run dist
 npm run dist:mac
 ```
 
-`AGENTS.md` 明确提醒：开发时不要直接运行 `next build`，会污染 `.next/` 并影响 `npm run dev`。如确需验证生产构建，使用项目脚本 `npm run build` 或完整打包脚本。Issue / PR 流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+`AGENTS.md` 明确提醒：开发时不要直接运行 `next build`，会污染 `.next/` 并影响 `npm run dev`。如确需验证生产构建，使用项目脚本 `npm run build` 或完整打包脚本。Issue / PR 流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。新分支前缀：`dev/`、`future/`，不要用 `feat/`。
 
 ## CodeGraph MCP 代码查询
 
