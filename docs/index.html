@@ -413,7 +413,7 @@
       .start-col h3 { font-size: 20px; margin: 12px 0 6px; }
       .start-col > p { color: var(--muted); font-size: 14.5px; margin-bottom: 22px; }
 
-      .os-row { display: flex; gap: 10px; margin-bottom: 12px; }
+      .os-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
       .os-note { font-size: 13px; color: var(--muted); line-height: 1.65; margin: 0 0 18px; }
       .os-note a { color: var(--primary); }
       .os-chip {
@@ -720,7 +720,7 @@
         <div class="container hero-inner">
           <div class="hero-badge reveal">
             <span>Pi 编程智能体的原生桌面客户端</span>
-            <span class="tag">v0.8.4</span>
+            <span class="tag">v0.8.5</span>
           </div>
           <h1 id="hero-title" class="reveal d1">
             个人极简版 Codex
@@ -732,7 +732,7 @@
           <div class="hero-actions reveal d3">
             <a class="btn btn--primary btn--lg" href="https://github.com/Chasen-Liao/pi-agent-desktop/releases" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
-              下载 Windows 版
+              下载桌面版
             </a>
             <a class="btn btn--ghost btn--lg" href="#start">
               从源码运行
@@ -1065,8 +1065,13 @@
                   <b>macOS</b>
                   <span style="font-size:12px;color:var(--dim)">Universal DMG</span>
                 </div>
+                <div class="os-chip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
+                  <b>Linux</b>
+                  <span style="font-size:12px;color:var(--dim)">amd64 .deb</span>
+                </div>
               </div>
-              <p class="os-note">macOS 打包支持 Intel 与 Apple Silicon。是否提供 Mac 下载，请以当前 GitHub Release 的资产列表为准。</p>
+              <p class="os-note">Windows NSIS、macOS Universal（Intel + Apple Silicon）、Linux x64 deb。安装包未代码签名；实际文件名以 GitHub Release 资产为准。</p>
               <a class="btn btn--brand" href="https://github.com/Chasen-Liao/pi-agent-desktop/releases" target="_blank" rel="noopener" style="width:100%">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
                 打开 Releases 下载

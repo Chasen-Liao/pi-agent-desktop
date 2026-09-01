@@ -37,7 +37,8 @@
 - **会话分叉与克隆** — API/UI 支持从任意节点 Branch 及 Clone 会话到新目录
 - **会话导出** — 一键导出为 HTML / Markdown 格式
 - **AgentMode 持久化** — 自动写入 `.jsonl` 自定义 `desktop_agent_mode` 节点，重载恢复历史模式
-- **长期记忆 LTM** — 项目级 SQLite 记忆（`memory_save` / `memory_recall` / `memory_forget`），跨会话检索；`agent_end` 与 compact 前自动观察写入
+- **长期记忆 LTM** — 项目级 SQLite 记忆（`memory_save` / `memory_recall` / `memory_forget`），跨会话检索；中文/日韩走 FTS5 trigram；`agent_end` 与 compact 前自动观察写入
+- **界面语言** — 中 / 英，可跟随系统
 - **会话内分支** — 回退到任意节点继续对话，在同一文件内创建分支
 - **分支导航器** — 可视化切换同一会话内的各个分支
 - **模型切换** — 对话中途随时切换模型
@@ -50,9 +51,11 @@
 
 前往 [Releases](https://github.com/Chasen-Liao/pi-agent-desktop/releases) 页面下载最新版安装程序。
 
-Windows 用户下载 `Pi-Agent-Desktop-Setup-x.x.x.exe`，运行即可安装。
+按系统下载对应安装包（以当前 Release 资产为准）：
 
-macOS 打包支持 Intel 与 Apple Silicon 的 Universal 应用。发布页提供 Mac 资产时，下载 `Pi-Agent-Desktop-x.x.x-mac-universal.dmg`；ZIP 是自动更新所需的配套产物。实际可下载版本以 Releases 资产为准。
+- Windows：`Pi-Agent-Desktop-Setup-x.x.x.exe`
+- macOS Universal（Intel + Apple Silicon）：`Pi-Agent-Desktop-x.x.x-mac-universal.dmg`（ZIP 供自动更新）
+- Linux x64：`Pi-Agent-Desktop-x.x.x-linux-amd64.deb`
 
 ## 开发
 
@@ -81,11 +84,13 @@ npm run test:windows
 # macOS CI 子集（路径 / Electron / 打包配置）
 npm run test:macos
 
-# 构建安装包
+# 构建当前系统安装包（Windows NSIS / Linux DEB；macOS 请用下一行）
 npm run dist
 
-# 在 macOS 上构建 Universal DMG + ZIP
+# 构建 Intel + Apple Silicon Universal macOS 安装包
 npm run dist:mac
+
+# GitHub Release：推 vX.Y.Z tag，由 Actions 打三端（见 docs/RELEASING.md）
 ```
 
 ## 项目结构
@@ -122,7 +127,7 @@ scripts/
 
 - **前端**：Next.js + React + TypeScript
 - **桌面**：Electron
-- **打包**：electron-builder（Windows NSIS；macOS Universal DMG + ZIP）
+- **打包**：electron-builder（Windows NSIS；macOS Universal DMG + ZIP；Linux DEB）
 - **通信**：SSE (Server-Sent Events) 实时流式传输
 
 ## 致谢

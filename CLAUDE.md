@@ -33,7 +33,7 @@ npm run build
 # 打包目录版 Electron 应用
 npm run pack
 
-# 构建当前平台安装包（Windows NSIS / macOS DMG + ZIP）
+# 构建当前平台安装包（Windows NSIS / macOS DMG + ZIP / Linux DEB）
 npm run dist
 
 # 构建 Intel + Apple Silicon Universal macOS 安装包
@@ -65,7 +65,7 @@ npm run dist:mac
 - **会话 Branching & Cloning**：支持从会话节点分叉新分支 (`/api/sessions/[id]/branch`) 或全量 Clone 到目标目录 (`/api/sessions/[id]/clone`)。
 - **会话导出 (HTML/MD)**：支持将会话流式或静态导出为独立的 HTML（含语法高亮）或 Markdown 文件 (`/api/sessions/[id]/export`)。
 - **AgentMode `.jsonl` 持久化**：在模式切换时向 Session `.jsonl` 追加 `desktop_agent_mode` Custom Entry，Session 重载时自动恢复历史模式。
-- **长期记忆 LTM（v0.7.19）**：项目级 SQLite 记忆库 `lib/ltm`；工具 `memory_save` / `memory_recall` / `memory_forget`；API `/api/memory/*`；`agent_end` 与 compact 前自动 observe。设计见 [docs/superpowers/specs/2026-08-03-long-term-memory-design.md](docs/superpowers/specs/2026-08-03-long-term-memory-design.md)；会话记忆基线见 [docs/memory-architecture.html](docs/memory-architecture.html)。
+- **长期记忆 LTM**：项目级 SQLite 记忆库 `lib/ltm`；工具 `memory_save` / `memory_recall` / `memory_forget`；API `/api/memory/*`；FTS5 `trigram` + 短词 LIKE 召回；CJK supersede 用 Dice。设计见 [docs/superpowers/specs/2026-08-03-long-term-memory-design.md](docs/superpowers/specs/2026-08-03-long-term-memory-design.md)。
 - **可重排 Follow-up Queue（v0.8.0）**：Agent 运行中 Enter 发送 steer、Alt+Enter 排队；队列由 `AgentSessionWrapper` 管理并通过 SSE 同步，支持拖拽或键盘重排。
 
 ## 高层架构
