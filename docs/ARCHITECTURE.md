@@ -278,7 +278,8 @@ pi-agent-desktop/
 ├── build/
 │   ├── installer.nsh             NSIS 自定义安装脚本
 │   ├── icon.ico                  Windows 应用与托盘图标
-│   └── icon.icns                 macOS 应用与托盘图标
+│   ├── icon.icns                 macOS 应用与托盘图标
+│   └── icon.png                  Linux deb 桌面项与 hicolor 图标（512px）
 │
 ├── docs/                         本目录
 │   ├── ARCHITECTURE.md           ★ 本文档
