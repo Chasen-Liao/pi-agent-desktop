@@ -24,6 +24,10 @@ test("build scripts name the standalone Next.js build explicitly", () => {
     pkg.scripts["build:standalone"],
     /ensure-standalone-macos-universal-runtimes\.mjs/
   );
+  assert.match(
+    pkg.scripts["build:standalone"],
+    /dereference-standalone-symlinks\.mjs/
+  );
   assert.equal(pkg.scripts.build, "npm run build:standalone");
 });
 

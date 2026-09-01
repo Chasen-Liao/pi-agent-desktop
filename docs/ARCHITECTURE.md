@@ -804,6 +804,7 @@ Next.js NFT 只会追踪构建宿主架构的可选原生依赖。在 Apple Sili
 
 - `scripts/ensure-standalone-macos-universal-runtimes.mjs` 从 standalone 的 `sharp/package.json` 读取精确可选依赖版本，把宿主已有包复制过去，并通过 `npm pack` 下载另一架构包，最终保证 arm64/x64 Sharp 与 libvips 并存。
 - `electron-builder.yml` 的 `mac.x64ArchFiles` 只匹配 Pi TUI、Clipboard、Sharp 与 libvips 的架构专用目录，让 Universal 合并器保留这些并列资源；Electron 主可执行文件等其他 Mach-O 仍正常执行 `lipo`。
+- standalone `node_modules` 若仍含指向构建机 `node_modules` 的符号链接，`@electron/universal` 会对 x64/arm64 临时目录算出不同的 `relativePath`（同一 `semver.js` 在一边是 `../../../node_modules/...`，另一边是 `../../../../../../../../Users/runner/...`）并中止合并。`scripts/dereference-standalone-symlinks.mjs` 在打包前把这些链接落实成文件。
 - `@electron/rebuild` 由 electron-builder 自动调用，打包脚本不得再显式运行一遍，也不需要作为顶层 devDependency。
 
 验证不能只看构建退出码：最终主程序的 `lipo -archs` 应为 `x86_64 arm64`，并应分别用原生 arm64 与 Rosetta x64 进程加载 packaged standalone 中的 `sharp`。
