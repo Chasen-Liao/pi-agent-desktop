@@ -58,5 +58,9 @@ next-env.d.ts
 
 # local SQLite runtime data (pi-coding-agent state store)
 /data/
+
+# agent session leftovers and Windows NUL device file
+/.sessions/
+nul
 # Bun lockfile (project uses npm, see package-lock.json)
 bun.lock

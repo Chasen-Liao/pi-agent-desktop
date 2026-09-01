@@ -1,0 +1,34 @@
+name: Packaging
+description: 安装包、自动更新、签名提示、CI 打包
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / tag
+      placeholder: v0.8.5
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options:
+        - Windows NSIS
+        - macOS Universal
+        - Linux deb
+        - 自动更新
+        - Desktop packages workflow
+    validations:
+      required: true
+  - type: input
+    id: asset
+    attributes:
+      label: 安装包或 latest*.yml 文件名
+      placeholder: Pi-Agent-Desktop-0.8.5-mac-universal.dmg
+  - type: textarea
+    id: what
+    attributes:
+      label: 现象
+    validations:
+      required: true
