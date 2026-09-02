@@ -322,7 +322,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       ) : (
       <>
       <div className="relative flex flex-1 overflow-hidden">
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pt-4 [scrollbar-width:none]">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pt-4 pb-6 [scrollbar-width:none]">
           <div className="mx-auto max-w-[820px] px-4">
 
             <MessageList
@@ -347,10 +347,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 ? <AgentThinkingOrb phase={agentPhase} thinking={activeThinking} />
                 : null}
             />
-
-            {agentRunning && (
-              <div style={{ height: scrollContainerRef.current ? scrollContainerRef.current.clientHeight : "80vh" }} />
-            )}
 
             <div ref={messagesEndRef} />
           </div>

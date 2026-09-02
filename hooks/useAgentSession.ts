@@ -197,7 +197,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     lastUserMsgRef,
     pendingScrollToUserRef,
     initialScrollDoneRef,
-  } = useChatScroll({ messageCount: messages.length, agentRunning });
+  } = useChatScroll({
+    messageCount: messages.length,
+    agentRunning,
+    streamingMessage: streamState.streamingMessage,
+  });
 
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
   const {
