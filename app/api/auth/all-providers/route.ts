@@ -3,7 +3,7 @@ import { createPiRuntime } from "@/lib/pi-runtime";
 export const dynamic = "force-dynamic";
 
 // Providers that use OAuth — handled separately via /api/auth/providers
-const OAUTH_PROVIDER_IDS = new Set(["anthropic", "github-copilot", "openai-codex"]);
+const OAUTH_PROVIDER_IDS = new Set(["anthropic", "github-copilot", "openai-codex", "antigravity"]);
 
 export async function GET() {
   const { runtime, registry } = await createPiRuntime();
@@ -22,6 +22,7 @@ export async function GET() {
 
   for (const p of providers) {
     if (OAUTH_PROVIDER_IDS.has(p.id)) continue;
+    if (!p.auth.apiKey) continue;
     const status = runtime.getProviderAuthStatus(p.id);
     // Skip custom providers whose key is injected via models.json
     if (status.source === "models_json_key") continue;

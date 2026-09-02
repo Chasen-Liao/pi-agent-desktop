@@ -75,6 +75,7 @@ export const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boo
   "perplexity":             { Icon: PerplexityColorIcon,  hasColor: true },
   "together":               { Icon: TogetherColorIcon,    hasColor: true },
   "grok":                   { Icon: GrokIcon,             hasColor: false },
+  "antigravity":            { Icon: GoogleColorIcon,      hasColor: true },
   "ant-ling":               { Icon: AntGroupIcon,         hasColor: false },
   "baseten":                { Icon: BasetenIcon,          hasColor: false },
   "nvidia":                 { Icon: NvidiaColorIcon,      hasColor: true },

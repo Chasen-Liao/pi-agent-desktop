@@ -10,6 +10,7 @@ export async function GET() {
   const DISPLAY_NAMES: Record<string, string> = {
     "openai-codex": "ChatGPT Plus/Pro",
     "github-copilot": "GitHub Copilot",
+    "antigravity": "Antigravity (Google)",
   };
 
   const result = providers

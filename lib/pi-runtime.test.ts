@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { setProviderApiKey, removeProviderApiKey } from "./pi-runtime.ts";
+import { setProviderApiKey, removeProviderApiKey, createPiRuntime } from "./pi-runtime.ts";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 // Regression test for issue #21: API keys must be persisted via the SDK
@@ -52,4 +52,13 @@ test("removeProviderApiKey deletes the stored credential via runtime.logout", as
 
   await removeProviderApiKey(runtime, "deepseek");
   assert.deepEqual(calls, [["deepseek"]]);
+});
+
+test("createPiRuntime loads extension providers and registers dynamic models", async () => {
+  const { runtime, registry } = await createPiRuntime();
+  assert.ok(runtime);
+  assert.ok(registry);
+  const providers = runtime.getProviders();
+  assert.ok(Array.isArray(providers));
+  assert.ok(providers.length > 0);
 });

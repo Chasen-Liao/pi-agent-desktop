@@ -3,6 +3,7 @@
  * Auth/model routes should use this module instead of the removed AuthStorage public API.
  */
 import {
+  createAgentSessionServices,
   ModelRegistry,
   ModelRuntime,
   getAgentDir,
@@ -13,6 +14,7 @@ import { join } from "path";
 export type { AuthInteraction, AuthType };
 
 export interface CreatePiRuntimeOptions {
+  cwd?: string;
   /** Override models.json path (used by models-config test). */
   modelsPath?: string | null;
   /** Allow network catalog refresh during create. Default false for API routes. */
@@ -29,14 +31,20 @@ export async function createPiRuntime(options: CreatePiRuntimeOptions = {}): Pro
   registry: ModelRegistry;
 }> {
   const agentDir = getAgentDir();
+  const cwd = options.cwd ?? process.cwd();
   const runtime = await ModelRuntime.create({
     authPath: options.authPath ?? join(agentDir, "auth.json"),
     modelsPath: options.modelsPath === undefined ? join(agentDir, "models.json") : options.modelsPath,
     allowModelNetwork: options.allowModelNetwork ?? false,
   });
-  const registry = new ModelRegistry(runtime);
+  const services = await createAgentSessionServices({
+    cwd,
+    agentDir,
+    modelRuntime: runtime,
+  });
+  const registry = new ModelRegistry(services.modelRuntime);
   await registry.refresh();
-  return { runtime, registry };
+  return { runtime: services.modelRuntime, registry };
 }
 
 /** Providers that expose OAuth login (for the OAuth panel). */
