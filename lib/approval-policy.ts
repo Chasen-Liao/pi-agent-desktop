@@ -69,8 +69,8 @@ export function toolNamesForPreset(
   customTools: readonly string[] = []
 ): string[] {
   if (preset === "none") return [...PRESET_NONE];
-  if (preset === "full") return [...PRESET_FULL, ...customTools];
-  return [...PRESET_DEFAULT, ...customTools];
+  const base = preset === "full" ? PRESET_FULL : PRESET_DEFAULT;
+  return Array.from(new Set([...base, ...customTools]));
 }
 
 /**

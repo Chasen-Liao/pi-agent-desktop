@@ -16,9 +16,12 @@ export function createDesktopApprovalFactory(modeRef: AgentModeRef): ExtensionFa
     pi.on("tool_call", async (event, ctx) => {
       const all = typeof pi.getAllTools === "function" ? pi.getAllTools() : [];
       const toolDef = all.find((t) => t.name === event.toolName);
-      const isCustom =
-        !toolDef ||
-        (toolDef.sourceInfo?.source !== "builtin" && !event.toolName.startsWith("memory_recall"));
+      const isBuiltin = toolDef?.sourceInfo?.source === "builtin";
+      const isBuiltinLtmRecall =
+        event.toolName === "memory_recall" &&
+        (toolDef?.sourceInfo?.source === "builtin" ||
+          toolDef?.sourceInfo?.path === "<inline:desktop-ltm>");
+      const isCustom = !toolDef || (!isBuiltin && !isBuiltinLtmRecall);
       if (!needsAskConfirm(modeRef.current, event.toolName, isCustom)) return;
       const ok = await ctx.ui.confirm(
         `允许 ${event.toolName}?`,

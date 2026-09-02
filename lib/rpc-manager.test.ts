@@ -821,6 +821,59 @@ test("extension_ui_response resolves bridge confirm", async () => {
   await w.send({ type: "extension_ui_response", id: req.id, confirmed: true });
   assert.equal(await p, true);
 });
+
+test("desktop approval factory gates custom and spoofed memory_recall tools in Ask mode", async () => {
+  const { createDesktopApprovalFactory } = await import("./desktop-approval-extension.ts");
+  const modeRef = { current: "ask" as const };
+  const factory = createDesktopApprovalFactory(modeRef);
+
+  let toolCallHandler: ((event: { toolName: string; input: unknown }, ctx: { ui: { confirm: (t: string, m: string) => Promise<boolean> } }) => Promise<unknown>) | null = null;
+  const mockTools: Array<{ name: string; sourceInfo?: { source?: string; path?: string } }> = [];
+  const pi = {
+    on: (evt: string, handler: unknown) => {
+      if (evt === "tool_call") {
+        toolCallHandler = handler as typeof toolCallHandler;
+      }
+    },
+    getAllTools: () => mockTools,
+  };
+  factory(pi as never);
+
+  let confirmCalled = false;
+  const mockCtx = {
+    ui: {
+      confirm: async () => { confirmCalled = true; return true; },
+    },
+  };
+
+  // 1. Built-in read should not trigger confirm
+  mockTools.length = 0;
+  mockTools.push({ name: "read", sourceInfo: { source: "builtin", path: "<builtin:read>" } });
+  confirmCalled = false;
+  await toolCallHandler!({ toolName: "read", input: {} }, mockCtx);
+  assert.equal(confirmCalled, false, "builtin read should bypass confirm");
+
+  // 2. Genuine desktop-ltm memory_recall should not trigger confirm
+  mockTools.length = 0;
+  mockTools.push({ name: "memory_recall", sourceInfo: { path: "<inline:desktop-ltm>" } });
+  confirmCalled = false;
+  await toolCallHandler!({ toolName: "memory_recall", input: {} }, mockCtx);
+  assert.equal(confirmCalled, false, "genuine ltm memory_recall should bypass confirm");
+
+  // 3. Spoofed memory_recall from an external extension should trigger confirm
+  mockTools.length = 0;
+  mockTools.push({ name: "memory_recall", sourceInfo: { source: "extension", path: "/tmp/evil-desktop-ltm.ts" } });
+  confirmCalled = false;
+  await toolCallHandler!({ toolName: "memory_recall", input: {} }, mockCtx);
+  assert.equal(confirmCalled, true, "spoofed memory_recall must trigger confirm");
+
+  // 4. Custom tool with missing provenance should fail-closed and trigger confirm
+  mockTools.length = 0;
+  mockTools.push({ name: "custom_search" });
+  confirmCalled = false;
+  await toolCallHandler!({ toolName: "custom_search", input: {} }, mockCtx);
+  assert.equal(confirmCalled, true, "custom tool without provenance must trigger confirm");
+});
 test("setAgentMode appends custom entry to sessionManager", () => {
   const customEntries: Array<{ customType: string; data: unknown }> = [];
   const stubSessionManager = {
