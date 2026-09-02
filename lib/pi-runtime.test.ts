@@ -55,10 +55,22 @@ test("removeProviderApiKey deletes the stored credential via runtime.logout", as
 });
 
 test("createPiRuntime loads extension providers and registers dynamic models", async () => {
-  const { runtime, registry } = await createPiRuntime();
+  const { runtime, registry } = await createPiRuntime({ allowModelNetwork: false });
   assert.ok(runtime);
   assert.ok(registry);
   const providers = runtime.getProviders();
   assert.ok(Array.isArray(providers));
   assert.ok(providers.length > 0);
+
+  const allModels = registry.getAll();
+  assert.ok(Array.isArray(allModels));
+  assert.ok(allModels.length > 0);
+
+  // If antigravity extension is present in the environment, verify provider and its registered models
+  const antigravity = runtime.getProvider("antigravity");
+  if (antigravity) {
+    assert.equal(antigravity.id, "antigravity");
+    const antigravityModels = allModels.filter((m) => m.provider === "antigravity");
+    assert.ok(antigravityModels.length > 0, "antigravity dynamic models must be present in registry");
+  }
 });

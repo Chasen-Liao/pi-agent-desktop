@@ -43,7 +43,7 @@ export async function createPiRuntime(options: CreatePiRuntimeOptions = {}): Pro
     modelRuntime: runtime,
   });
   const registry = new ModelRegistry(services.modelRuntime);
-  await registry.refresh();
+  await registry.refresh({ allowNetwork: options.allowModelNetwork ?? false });
   return { runtime: services.modelRuntime, registry };
 }
 
