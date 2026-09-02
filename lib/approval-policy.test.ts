@@ -49,10 +49,14 @@ test("needsAskConfirm only for bash/write/edit in ask mode", () => {
   assert.equal(needsAskConfirm("plan", "write"), false);
 });
 
-test("needsAskConfirm requires confirm for memory write tools in ask mode (S2)", () => {
+test("needsAskConfirm requires confirm for memory write tools and custom tools in ask mode (S2)", () => {
   assert.equal(needsAskConfirm("ask", "memory_save"), true);
   assert.equal(needsAskConfirm("ask", "memory_forget"), true);
   assert.equal(needsAskConfirm("ask", "memory_recall"), false);
+  assert.equal(needsAskConfirm("ask", "ffgrep"), true);
+  assert.equal(needsAskConfirm("ask", "subagent"), true);
+  assert.equal(needsAskConfirm("full", "subagent"), false);
+  assert.equal(needsAskConfirm("plan", "subagent"), false);
 });
 
 test("askBlockResult shape", () => {

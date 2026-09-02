@@ -16,6 +16,14 @@ export const BUILTIN_TOOL_NAMES: readonly string[] = [
   "ls",
 ];
 
+export const READ_ONLY_TOOLS: readonly string[] = [
+  "read",
+  "grep",
+  "find",
+  "ls",
+  "memory_recall",
+];
+
 export const PLAN_TOOLS: readonly string[] = ["read", "grep", "find", "ls"];
 export const ASK_CONFIRM_TOOLS: readonly string[] = [
   "bash",
@@ -80,10 +88,15 @@ export function extractCustomToolNames(allToolNames: readonly string[]): string[
   return allToolNames.filter((name) => !known.has(name));
 }
 
-/** Whether Ask mode requires a confirm dialog before this tool runs. */
+/**
+ * Whether Ask mode requires a confirm dialog before this tool runs.
+ * In Ask mode, mutating built-ins (bash/write/edit/memory_save/memory_forget)
+ * and all custom extension-registered tools require user confirmation.
+ * Only recognized read-only tools (read, grep, find, ls, memory_recall) bypass confirmation.
+ */
 export function needsAskConfirm(mode: AgentMode, toolName: string): boolean {
   if (mode !== "ask") return false;
-  return (ASK_CONFIRM_TOOLS as readonly string[]).includes(toolName);
+  return !READ_ONLY_TOOLS.includes(toolName);
 }
 
 export function askBlockResult(): { block: true; reason: string } {
@@ -105,6 +118,10 @@ export function summarizeToolCall(toolName: string, input: unknown): string {
   }
   if (typeof obj.file_path === "string") {
     return `${toolName}: ${obj.file_path}`;
+  }
+  if (typeof obj.query === "string") {
+    const q = obj.query.length > 200 ? `${obj.query.slice(0, 200)}…` : obj.query;
+    return `${toolName}: ${q}`;
   }
   try {
     const s = JSON.stringify(obj);
