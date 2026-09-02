@@ -15,7 +15,7 @@ const flushMicrotasks = (): Promise<void> => new Promise((r) => setImmediate(r))
 
 test("startRpcSession does not pass a hardcoded default tool allowlist", () => {
   assert.doesNotMatch(source, /const allCodingToolNames = \[[^\]]+\]/);
-  assert.match(source, /effectiveTools\.length === 0 \? \{ noTools: "all" as const \}/);
+  assert.match(source, /initialEffective\.length === 0 \? \{ noTools: "all" as const \}/);
   assert.match(source, /effectiveToolsForMode/);
   assert.match(source, /setActiveToolsByName\(effectiveTools\)/);
 });
@@ -25,14 +25,14 @@ test("startRpcSession registers desktopLtmInlineExtension", () => {
   assert.match(source, /withMemoryTools/);
 });
 
-test("startRpcSession passes agentMode to withMemoryTools so plan drops write tools (S2)", () => {
+test("startRpcSession passes agentMode to withMemoryTools and preserves extension custom tools", () => {
   // Regression: the start/restore path previously called
   // withMemoryTools(effectiveToolsForMode(...)) without mode, so a plan
   // session restored from history re-enabled memory_save/memory_forget
   // (LTM write/delete) with no Ask confirm.
   assert.match(
     source,
-    /withMemoryTools\(\s*effectiveToolsForMode\(agentMode, toolPreset\),\s*agentMode\s*\)/
+    /withMemoryTools\(\s*effectiveToolsForMode\(agentMode, toolPreset, customToolNames\),\s*agentMode\s*\)/
   );
 });
 
@@ -45,6 +45,8 @@ function makeStubInner(overrides: {
   steer?: (msg: string, imgs?: unknown) => Promise<unknown>;
   followUp?: (msg: string, imgs?: unknown) => Promise<unknown>;
   setActiveToolsByName?: (names: string[]) => void;
+  getAllTools?: () => Array<{ name: string; description: string }>;
+  getActiveToolNames?: () => string[];
   abort?: () => Promise<void>;
   isStreaming?: boolean;
 } = {}) {
@@ -65,8 +67,8 @@ function makeStubInner(overrides: {
     followUp: overrides.followUp ?? (() => Promise.resolve()),
     setActiveToolsByName: overrides.setActiveToolsByName ?? (() => {}),
     abort: overrides.abort ?? (async () => {}),
-    getAllTools: () => [],
-    getActiveToolNames: () => [],
+    getAllTools: overrides.getAllTools ?? (() => []),
+    getActiveToolNames: overrides.getActiveToolNames ?? (() => []),
     subscribe: overrides.subscribe ?? ((cb: (event: unknown) => void) => { void cb; return () => {}; }),
   } as never;
 }
@@ -730,19 +732,38 @@ test("agent event reaches every listener even if an earlier listener throws (M2)
   assert.deepEqual(events[0], { type: "custom_event" });
 });
 
-test("set_agent_mode plan forces read tools", async () => {
+test("set_agent_mode plan forces read tools and restores custom tools on switch back", async () => {
   const applied: string[][] = [];
   const w = new AgentSessionWrapper(makeStubInner({
+    getAllTools: () => [
+      { name: "read", description: "" },
+      { name: "bash", description: "" },
+      { name: "edit", description: "" },
+      { name: "write", description: "" },
+      { name: "ffgrep", description: "" },
+      { name: "web_search", description: "" },
+    ],
     setActiveToolsByName: (names) => { applied.push([...names]); },
   }));
   w.initPolicy("ask", "default");
+  w.applyAgentMode("ask");
+  assert.ok(applied.at(-1)?.includes("ffgrep"));
+  assert.ok(applied.at(-1)?.includes("web_search"));
+
   const result = await w.send({ type: "set_agent_mode", mode: "plan" }) as { agentMode: string };
   assert.equal(result.agentMode, "plan");
-  // Plan is read-only: memory_recall stays, write/delete channels are dropped.
+  // Plan is read-only: memory_recall stays, write/delete and custom tools are dropped.
   assert.deepEqual(
     applied.at(-1)?.slice().sort(),
     ["find", "grep", "ls", "memory_recall", "read"]
   );
+
+  // Switch back to ask: custom tools and memory write/delete are restored
+  await w.send({ type: "set_agent_mode", mode: "ask" });
+  assert.ok(applied.at(-1)?.includes("ffgrep"));
+  assert.ok(applied.at(-1)?.includes("web_search"));
+  assert.ok(applied.at(-1)?.includes("memory_save"));
+  assert.ok(applied.at(-1)?.includes("bash"));
 });
 
 test("get_state includes agentMode", async () => {

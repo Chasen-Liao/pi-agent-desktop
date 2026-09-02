@@ -5,6 +5,7 @@ import {
   PLAN_TOOLS,
   askBlockResult,
   effectiveToolsForMode,
+  extractCustomToolNames,
   isAgentMode,
   needsAskConfirm,
   summarizeToolCall,
@@ -15,12 +16,27 @@ test("plan mode always returns the four read tools", () => {
   assert.deepEqual(effectiveToolsForMode("plan", "none"), [...PLAN_TOOLS]);
   assert.deepEqual(effectiveToolsForMode("plan", "default"), [...PLAN_TOOLS]);
   assert.deepEqual(effectiveToolsForMode("plan", "full"), [...PLAN_TOOLS]);
+  assert.deepEqual(effectiveToolsForMode("plan", "default", ["ffgrep", "web_search"]), [...PLAN_TOOLS]);
 });
 
-test("ask/full use tool preset lists", () => {
+test("ask/full use tool preset lists and preserve custom tools", () => {
   assert.deepEqual(effectiveToolsForMode("ask", "none"), []);
+  assert.deepEqual(effectiveToolsForMode("ask", "none", ["ffgrep"]), []);
   assert.deepEqual(effectiveToolsForMode("full", "default"), toolNamesForPreset("default"));
+  assert.deepEqual(
+    effectiveToolsForMode("full", "default", ["ffgrep", "subagent"]),
+    ["read", "bash", "edit", "write", "ffgrep", "subagent"]
+  );
   assert.deepEqual(effectiveToolsForMode("ask", "full"), toolNamesForPreset("full"));
+  assert.deepEqual(
+    effectiveToolsForMode("ask", "full", ["ffgrep"]),
+    ["bash", "read", "edit", "write", "grep", "find", "ls", "ffgrep"]
+  );
+});
+
+test("extractCustomToolNames filters builtins and memory tools", () => {
+  const all = ["read", "bash", "edit", "write", "grep", "find", "ls", "memory_save", "memory_recall", "memory_forget", "ffgrep", "fffind", "tavily_search"];
+  assert.deepEqual(extractCustomToolNames(all), ["ffgrep", "fffind", "tavily_search"]);
 });
 
 test("needsAskConfirm only for bash/write/edit in ask mode", () => {

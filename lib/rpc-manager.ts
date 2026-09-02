@@ -8,6 +8,7 @@ import {
   DEFAULT_AGENT_MODE,
   DEFAULT_TOOL_PRESET,
   effectiveToolsForMode,
+  extractCustomToolNames,
   isAgentMode,
   isToolPreset,
   type AgentMode,
@@ -118,6 +119,11 @@ export class AgentSessionWrapper {
     }
   }
 
+  private getCustomToolNames(): string[] {
+    const all = typeof this.inner.getAllTools === "function" ? this.inner.getAllTools() : [];
+    return extractCustomToolNames(all.map((t) => t.name));
+  }
+
   applyAgentMode(mode: AgentMode): void {
     if (mode === "plan" && this._agentMode !== "plan") {
       this._toolPresetBeforePlan = this._toolPreset;
@@ -128,7 +134,11 @@ export class AgentSessionWrapper {
     }
     this._agentMode = mode;
     this._modeRef.current = mode;
-    const tools = withMemoryTools(effectiveToolsForMode(mode, this._toolPreset), mode);
+    const customTools = this.getCustomToolNames();
+    const tools = withMemoryTools(
+      effectiveToolsForMode(mode, this._toolPreset, customTools),
+      mode
+    );
     this.inner.setActiveToolsByName(tools);
     if (tools.length === 0) {
       const state = this.inner.agent?.state as { systemPrompt?: string } | undefined;
@@ -145,8 +155,11 @@ export class AgentSessionWrapper {
 
   /** Infer preset from tool name list when client calls set_tools. */
   private inferPresetFromTools(names: string[]): ToolPreset {
+    const customTools = this.getCustomToolNames();
     const key = [...names].sort().join(",");
     if (key === "") return "none";
+    if (key === [...toolNamesForPreset("default", customTools)].sort().join(",")) return "default";
+    if (key === [...toolNamesForPreset("full", customTools)].sort().join(",")) return "full";
     if (key === [...toolNamesForPreset("default")].sort().join(",")) return "default";
     if (key === [...toolNamesForPreset("full")].sort().join(",")) return "full";
     return "default";
@@ -803,11 +816,6 @@ export async function startRpcSession(
       else if (key === [...toolNamesForPreset("full")].sort().join(",")) toolPreset = "full";
     }
 
-    const effectiveTools = withMemoryTools(
-      effectiveToolsForMode(agentMode, toolPreset),
-      agentMode
-    );
-
     const modeRef: AgentModeRef = { current: agentMode };
     const resourceLoader = new DefaultResourceLoader({
       cwd,
@@ -819,9 +827,10 @@ export async function startRpcSession(
     });
     await resourceLoader.reload();
 
+    const initialEffective = effectiveToolsForMode(agentMode, toolPreset);
     // Pi 0.82+: empty tools allowlist is expressed via noTools: "all"
     const createOptions =
-      effectiveTools.length === 0 ? { noTools: "all" as const } : { tools: effectiveTools };
+      initialEffective.length === 0 ? { noTools: "all" as const } : {};
 
     const { session: inner } = await createAgentSession({
       cwd,
@@ -831,15 +840,21 @@ export async function startRpcSession(
       ...createOptions,
     });
 
+    const allTools = typeof inner.getAllTools === "function" ? inner.getAllTools() : [];
+    const customToolNames = extractCustomToolNames(allTools.map((t) => t.name));
+
+    const effectiveTools = withMemoryTools(
+      effectiveToolsForMode(agentMode, toolPreset, customToolNames),
+      agentMode
+    );
+
     if (effectiveTools.length > 0) {
       inner.setActiveToolsByName(effectiveTools);
-    }
-
-    // When all tools are disabled, clear the system prompt entirely.
-    // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
-    // the only way to truly clear it is to call agent.setSystemPrompt directly.
-    if (effectiveTools.length === 0) {
-      inner.agent.state.systemPrompt = "";
+    } else {
+      inner.setActiveToolsByName([]);
+      if (inner.agent?.state) {
+        inner.agent.state.systemPrompt = "";
+      }
     }
 
     // AgentSession is structurally compatible with AgentSessionLike; cast keeps
