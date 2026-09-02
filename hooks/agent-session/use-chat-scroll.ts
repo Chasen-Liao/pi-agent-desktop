@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseChatScrollOptions {
   messageCount: number;
@@ -15,41 +15,45 @@ export function useChatScroll({
 }: UseChatScrollOptions) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
+  const [containerNode, setContainerNode] = useState<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
   const initialScrollDoneRef = useRef(false);
   const isAtBottomRef = useRef(true);
+
+  const setScrollContainer = useCallback((node: HTMLDivElement | null) => {
+    scrollContainerRef.current = node;
+    setContainerNode(node);
+  }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
 
   const handleScroll = useCallback(() => {
-    const container = scrollContainerRef.current;
+    const container = containerNode;
     if (!container) return;
     const distanceToBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
     // Consider user at bottom if within 80px of bottom
     isAtBottomRef.current = distanceToBottom < 80;
-  }, []);
+  }, [containerNode]);
 
-  // Track user scroll position
+  // Track user scroll position on the active container node
   useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [handleScroll]);
+    if (!containerNode) return;
+    containerNode.addEventListener("scroll", handleScroll, { passive: true });
+    return () => containerNode.removeEventListener("scroll", handleScroll);
+  }, [containerNode, handleScroll]);
 
-  // Initial load scroll to bottom
+  // Initial load scroll to bottom once container mounts
   useEffect(() => {
-    if (messageCount <= 0) return;
+    if (messageCount <= 0 || !containerNode) return;
     if (!initialScrollDoneRef.current) {
       initialScrollDoneRef.current = true;
       isAtBottomRef.current = true;
       scrollToBottom("instant");
     }
-  }, [messageCount, scrollToBottom]);
+  }, [messageCount, containerNode, scrollToBottom]);
 
   // When user sends a message, scroll down and lock to bottom
   useEffect(() => {
@@ -78,7 +82,7 @@ export function useChatScroll({
   return {
     messagesEndRef,
     scrollContainerRef,
-    lastUserMsgRef,
+    setScrollContainer,
     pendingScrollToUserRef,
     initialScrollDoneRef,
     scrollToBottom,

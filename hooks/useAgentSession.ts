@@ -194,7 +194,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     messagesEndRef,
     scrollContainerRef,
-    lastUserMsgRef,
+    setScrollContainer,
     pendingScrollToUserRef,
     initialScrollDoneRef,
   } = useChatScroll({
@@ -668,7 +668,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     eventSourceRef,
     messagesEndRef,
     scrollContainerRef,
-    lastUserMsgRef,
+    setScrollContainer,
     pendingScrollToUserRef,
     initialScrollDoneRef,
     // Actions
