@@ -121,7 +121,7 @@ export class AgentSessionWrapper {
 
   private getCustomToolNames(): string[] {
     const all = typeof this.inner.getAllTools === "function" ? this.inner.getAllTools() : [];
-    return extractCustomToolNames(all.map((t) => t.name));
+    return extractCustomToolNames(all);
   }
 
   applyAgentMode(mode: AgentMode): void {
@@ -155,13 +155,12 @@ export class AgentSessionWrapper {
 
   /** Infer preset from tool name list when client calls set_tools. */
   private inferPresetFromTools(names: string[]): ToolPreset {
-    const customTools = this.getCustomToolNames();
-    const key = [...names].sort().join(",");
-    if (key === "") return "none";
-    if (key === [...toolNamesForPreset("default", customTools)].sort().join(",")) return "default";
-    if (key === [...toolNamesForPreset("full", customTools)].sort().join(",")) return "full";
-    if (key === [...toolNamesForPreset("default")].sort().join(",")) return "default";
-    if (key === [...toolNamesForPreset("full")].sort().join(",")) return "full";
+    if (names.length === 0) return "none";
+    const nameSet = new Set(names);
+    // grep, find, ls distinguish the full preset from default
+    if (nameSet.has("grep") || nameSet.has("find") || nameSet.has("ls")) {
+      return "full";
+    }
     return "default";
   }
 
@@ -575,7 +574,18 @@ export class AgentSessionWrapper {
             withMemoryTools([...effectiveToolsForMode("plan", this._toolPreset)], "plan")
           );
         } else {
-          this.inner.setActiveToolsByName(withMemoryTools(toolNames, this._agentMode));
+          const customTools = this.getCustomToolNames();
+          const effective =
+            this._toolPreset === "none"
+              ? []
+              : withMemoryTools(
+                  effectiveToolsForMode(this._agentMode, this._toolPreset, customTools),
+                  this._agentMode
+                );
+          this.inner.setActiveToolsByName(effective);
+          if (effective.length === 0 && this.inner.agent?.state) {
+            this.inner.agent.state.systemPrompt = "";
+          }
         }
         return null;
       }
@@ -827,21 +837,15 @@ export async function startRpcSession(
     });
     await resourceLoader.reload();
 
-    const initialEffective = effectiveToolsForMode(agentMode, toolPreset);
-    // Pi 0.82+: empty tools allowlist is expressed via noTools: "all"
-    const createOptions =
-      initialEffective.length === 0 ? { noTools: "all" as const } : {};
-
     const { session: inner } = await createAgentSession({
       cwd,
       agentDir,
       sessionManager,
       resourceLoader,
-      ...createOptions,
     });
 
     const allTools = typeof inner.getAllTools === "function" ? inner.getAllTools() : [];
-    const customToolNames = extractCustomToolNames(allTools.map((t) => t.name));
+    const customToolNames = extractCustomToolNames(allTools);
 
     const effectiveTools = withMemoryTools(
       effectiveToolsForMode(agentMode, toolPreset, customToolNames),

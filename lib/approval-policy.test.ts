@@ -30,13 +30,40 @@ test("ask/full use tool preset lists and preserve custom tools", () => {
   assert.deepEqual(effectiveToolsForMode("ask", "full"), toolNamesForPreset("full"));
   assert.deepEqual(
     effectiveToolsForMode("ask", "full", ["ffgrep"]),
-    ["bash", "read", "edit", "write", "grep", "find", "ls", "ffgrep"]
+    ["bash", "powershell", "read", "edit", "write", "grep", "find", "ls", "ffgrep"]
   );
 });
 
 test("extractCustomToolNames filters builtins and memory tools", () => {
-  const all = ["read", "bash", "edit", "write", "grep", "find", "ls", "memory_save", "memory_recall", "memory_forget", "ffgrep", "fffind", "tavily_search"];
+  const all = [
+    "read",
+    "bash",
+    "powershell",
+    "edit",
+    "write",
+    "grep",
+    "find",
+    "ls",
+    "memory_save",
+    "memory_recall",
+    "memory_forget",
+    "ffgrep",
+    "fffind",
+    "tavily_search",
+  ];
   assert.deepEqual(extractCustomToolNames(all), ["ffgrep", "fffind", "tavily_search"]);
+});
+
+test("extractCustomToolNames handles ToolLike objects and provenance collision", () => {
+  const tools = [
+    { name: "read", sourceInfo: { source: "builtin" } },
+    { name: "bash", sourceInfo: { source: "builtin" } },
+    { name: "powershell", sourceInfo: { source: "builtin" } },
+    { name: "read", sourceInfo: { source: "extension" } }, // colliding extension tool
+    { name: "my_tool", sourceInfo: { source: "extension" } },
+    { name: "memory_save", sourceInfo: { source: "extension" } },
+  ];
+  assert.deepEqual(extractCustomToolNames(tools), ["read", "my_tool"]);
 });
 
 test("needsAskConfirm only for bash/write/edit in ask mode", () => {

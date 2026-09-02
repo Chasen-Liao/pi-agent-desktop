@@ -14,7 +14,12 @@ export type AgentModeRef = { current: AgentMode };
 export function createDesktopApprovalFactory(modeRef: AgentModeRef): ExtensionFactory {
   return (pi: ExtensionAPI) => {
     pi.on("tool_call", async (event, ctx) => {
-      if (!needsAskConfirm(modeRef.current, event.toolName)) return;
+      const all = typeof pi.getAllTools === "function" ? pi.getAllTools() : [];
+      const toolDef = all.find((t) => t.name === event.toolName);
+      const isCustom =
+        !toolDef ||
+        (toolDef.sourceInfo?.source !== "builtin" && !event.toolName.startsWith("memory_recall"));
+      if (!needsAskConfirm(modeRef.current, event.toolName, isCustom)) return;
       const ok = await ctx.ui.confirm(
         `允许 ${event.toolName}?`,
         summarizeToolCall(event.toolName, event.input)

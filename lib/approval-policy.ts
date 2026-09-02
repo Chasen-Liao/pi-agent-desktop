@@ -9,6 +9,7 @@ export type ToolPreset = "none" | "default" | "full";
 export const BUILTIN_TOOL_NAMES: readonly string[] = [
   "read",
   "bash",
+  "powershell",
   "edit",
   "write",
   "grep",
@@ -27,6 +28,7 @@ export const READ_ONLY_TOOLS: readonly string[] = [
 export const PLAN_TOOLS: readonly string[] = ["read", "grep", "find", "ls"];
 export const ASK_CONFIRM_TOOLS: readonly string[] = [
   "bash",
+  "powershell",
   "write",
   "edit",
   // LTM write/delete channels mutate durable project memory; keep them behind
@@ -37,7 +39,16 @@ export const ASK_CONFIRM_TOOLS: readonly string[] = [
 
 export const PRESET_NONE: readonly string[] = [];
 export const PRESET_DEFAULT: readonly string[] = ["read", "bash", "edit", "write"];
-export const PRESET_FULL: readonly string[] = ["bash", "read", "edit", "write", "grep", "find", "ls"];
+export const PRESET_FULL: readonly string[] = [
+  "bash",
+  "powershell",
+  "read",
+  "edit",
+  "write",
+  "grep",
+  "find",
+  "ls",
+];
 
 export const DEFAULT_AGENT_MODE: AgentMode = "full";
 export const DEFAULT_TOOL_PRESET: ToolPreset = "default";
@@ -75,27 +86,53 @@ export function effectiveToolsForMode(
   return toolNamesForPreset(preset, customTools);
 }
 
+export interface ToolLike {
+  name: string;
+  sourceInfo?: {
+    source?: string;
+  };
+}
+
 /**
- * Extract custom (non-builtin, non-memory) tool names from a list of tool names.
+ * Extract custom (non-builtin, non-memory) tool names from a list of tool names or definitions.
  */
-export function extractCustomToolNames(allToolNames: readonly string[]): string[] {
-  const known = new Set<string>([
+export function extractCustomToolNames(
+  allTools: readonly (string | ToolLike)[]
+): string[] {
+  const knownBuiltins = new Set<string>([
     ...BUILTIN_TOOL_NAMES,
     "memory_save",
     "memory_recall",
     "memory_forget",
   ]);
-  return allToolNames.filter((name) => !known.has(name));
+  const custom: string[] = [];
+  for (const t of allTools) {
+    if (typeof t === "string") {
+      if (!knownBuiltins.has(t)) custom.push(t);
+    } else {
+      const name = t.name;
+      const isBuiltinSource = t.sourceInfo?.source === "builtin";
+      const isMemoryTool = name.startsWith("memory_");
+      if (!isBuiltinSource && !isMemoryTool) {
+        // Any non-builtin tool is custom, even if its name collides with a builtin
+        custom.push(name);
+      } else if (!knownBuiltins.has(name)) {
+        custom.push(name);
+      }
+    }
+  }
+  return custom;
 }
 
 /**
  * Whether Ask mode requires a confirm dialog before this tool runs.
- * In Ask mode, mutating built-ins (bash/write/edit/memory_save/memory_forget)
+ * In Ask mode, mutating built-ins (bash/powershell/write/edit/memory_save/memory_forget)
  * and all custom extension-registered tools require user confirmation.
  * Only recognized read-only tools (read, grep, find, ls, memory_recall) bypass confirmation.
  */
-export function needsAskConfirm(mode: AgentMode, toolName: string): boolean {
+export function needsAskConfirm(mode: AgentMode, toolName: string, isCustom = false): boolean {
   if (mode !== "ask") return false;
+  if (isCustom) return true;
   return !READ_ONLY_TOOLS.includes(toolName);
 }
 

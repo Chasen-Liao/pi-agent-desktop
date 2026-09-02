@@ -15,7 +15,6 @@ const flushMicrotasks = (): Promise<void> => new Promise((r) => setImmediate(r))
 
 test("startRpcSession does not pass a hardcoded default tool allowlist", () => {
   assert.doesNotMatch(source, /const allCodingToolNames = \[[^\]]+\]/);
-  assert.match(source, /initialEffective\.length === 0 \? \{ noTools: "all" as const \}/);
   assert.match(source, /effectiveToolsForMode/);
   assert.match(source, /setActiveToolsByName\(effectiveTools\)/);
 });
@@ -764,6 +763,43 @@ test("set_agent_mode plan forces read tools and restores custom tools on switch 
   assert.ok(applied.at(-1)?.includes("web_search"));
   assert.ok(applied.at(-1)?.includes("memory_save"));
   assert.ok(applied.at(-1)?.includes("bash"));
+});
+
+test("set_tools preserves custom extension tools for default/full presets and clears for none", async () => {
+  const applied: string[][] = [];
+  const w = new AgentSessionWrapper(makeStubInner({
+    getAllTools: () => [
+      { name: "read", description: "" },
+      { name: "bash", description: "" },
+      { name: "edit", description: "" },
+      { name: "write", description: "" },
+      { name: "ffgrep", description: "" },
+    ],
+    setActiveToolsByName: (names) => { applied.push([...names]); },
+  }));
+  w.initPolicy("full", "default");
+
+  // Client sends builtin full list: extension tools should be preserved
+  await w.send({
+    type: "set_tools",
+    toolNames: ["bash", "read", "edit", "write", "grep", "find", "ls"],
+  });
+  assert.equal(w.toolPreset, "full");
+  assert.ok(applied.at(-1)?.includes("ffgrep"));
+  assert.ok(applied.at(-1)?.includes("grep"));
+
+  // Client sends empty list: preset becomes none and tools are cleared
+  await w.send({ type: "set_tools", toolNames: [] });
+  assert.equal(w.toolPreset, "none");
+  assert.deepEqual(applied.at(-1), []);
+
+  // Switch back to default: custom tools are restored
+  await w.send({
+    type: "set_tools",
+    toolNames: ["read", "bash", "edit", "write"],
+  });
+  assert.equal(w.toolPreset, "default");
+  assert.ok(applied.at(-1)?.includes("ffgrep"));
 });
 
 test("get_state includes agentMode", async () => {
