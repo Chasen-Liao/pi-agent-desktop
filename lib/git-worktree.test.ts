@@ -7,6 +7,8 @@ import {
   type GitRunner,
 } from "./git-worktree.ts";
 
+const identityRealpath = (path: string) => path;
+
 function scriptedRunner(
   handler: (args: string[], cwd: string) => { code?: number; stdout?: string; stderr?: string }
 ): GitRunner {
@@ -45,7 +47,7 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
       sourceCwd: "/workspace/project/packages/app",
       branchName: "pi-agent/refactor-ui",
     },
-    { runner, pathExists: () => false }
+    { runner, pathExists: () => false, realpath: identityRealpath }
   );
 
   assert.deepEqual(result, {
@@ -80,7 +82,7 @@ test("createGitWorktree resolves a relative target beside the repository", async
       targetCwd: "isolated-copy",
       branchName: "pi-agent/isolated-copy",
     },
-    { runner, pathExists: () => false }
+    { runner, pathExists: () => false, realpath: identityRealpath }
   );
 
   assert.equal(result.cwd, "/workspace/isolated-copy");
@@ -98,11 +100,38 @@ test("createGitWorktree rejects a target inside the source repository", async ()
         targetCwd: "/workspace/project/.worktrees/feature",
         branchName: "pi-agent/feature",
       },
-      { runner, pathExists: () => false }
+      { runner, pathExists: () => false, realpath: identityRealpath }
     ),
     (error: unknown) =>
       error instanceof GitWorktreeError && error.code === "TARGET_INSIDE_REPOSITORY"
   );
+});
+
+test("createGitWorktree rejects a symlinked parent that resolves inside the source repository", async () => {
+  const calls: Array<{ args: string[]; cwd: string }> = [];
+  const runner = scriptedRunner((args, cwd) => {
+    calls.push({ args, cwd });
+    return args[0] === "rev-parse" ? { stdout: "/workspace/project\n" } : {};
+  });
+
+  await assert.rejects(
+    createGitWorktree(
+      {
+        sourceCwd: "/workspace/project",
+        targetCwd: "/outside/link/new-worktree",
+        branchName: "pi-agent/symlink-check",
+      },
+      {
+        runner,
+        pathExists: () => false,
+        realpath: (path) => (path === "/outside/link" ? "/workspace/project" : path),
+      }
+    ),
+    (error: unknown) =>
+      error instanceof GitWorktreeError && error.code === "TARGET_INSIDE_REPOSITORY"
+  );
+
+  assert.equal(calls.some(({ args }) => args[0] === "worktree"), false);
 });
 
 test("createGitWorktree rejects an existing target directory", async () => {
@@ -117,7 +146,7 @@ test("createGitWorktree rejects an existing target directory", async () => {
         targetCwd: "/workspace/project-copy",
         branchName: "pi-agent/copy",
       },
-      { runner, pathExists: () => true }
+      { runner, pathExists: () => true, realpath: identityRealpath }
     ),
     (error: unknown) =>
       error instanceof GitWorktreeError && error.code === "TARGET_EXISTS"
@@ -133,7 +162,7 @@ test("createGitWorktree reports non-git source directories", async () => {
   await assert.rejects(
     createGitWorktree(
       { sourceCwd: "/workspace/plain", branchName: "pi-agent/test" },
-      { runner, pathExists: () => false }
+      { runner, pathExists: () => false, realpath: identityRealpath }
     ),
     (error: unknown) =>
       error instanceof GitWorktreeError && error.code === "NOT_GIT_REPOSITORY"
@@ -152,7 +181,7 @@ test("createGitWorktree surfaces git worktree creation failures", async () => {
   await assert.rejects(
     createGitWorktree(
       { sourceCwd: "/workspace/project", branchName: "pi-agent/test" },
-      { runner, pathExists: () => false }
+      { runner, pathExists: () => false, realpath: identityRealpath }
     ),
     (error: unknown) => {
       assert.ok(error instanceof GitWorktreeError);

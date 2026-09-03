@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 export interface GitCommandResult {
@@ -101,6 +101,22 @@ function isWithin(parent: string, candidate: string): boolean {
   );
 }
 
+function canonicalizeExistingPath(
+  path: string,
+  label: string,
+  realpath: (path: string) => string
+): string {
+  try {
+    return resolve(realpath(path));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new GitWorktreeError(
+      "WORKTREE_CREATE_FAILED",
+      `Unable to resolve ${label}${message ? `: ${message}` : ""}`
+    );
+  }
+}
+
 function generatedBranchName(): string {
   const stamp = Date.now().toString(36);
   return `pi-agent/worktree-${stamp}-${randomUUID().slice(0, 8)}`;
@@ -149,11 +165,17 @@ export async function resolveGitRoot(
 
 export async function createGitWorktree(
   options: CreateGitWorktreeOptions,
-  deps: { runner?: GitRunner; pathExists?: (path: string) => boolean } = {}
+  deps: {
+    runner?: GitRunner;
+    pathExists?: (path: string) => boolean;
+    realpath?: (path: string) => string;
+  } = {}
 ): Promise<GitWorktreeResult> {
   const runner = deps.runner ?? DEFAULT_GIT_RUNNER;
   const pathExists = deps.pathExists ?? existsSync;
-  const repoRoot = await resolveGitRoot(options.sourceCwd, runner);
+  const realpath = deps.realpath ?? realpathSync;
+  const resolvedRepoRoot = await resolveGitRoot(options.sourceCwd, runner);
+  const repoRoot = canonicalizeExistingPath(resolvedRepoRoot, "repository root", realpath);
   const branchName = options.branchName?.trim() || generatedBranchName();
 
   const branchError = validateWorktreeBranchName(branchName);
@@ -174,11 +196,21 @@ export async function createGitWorktree(
   }
 
   const targetCwd = options.targetCwd?.trim();
-  const targetPath = targetCwd
+  const unresolvedTargetPath = targetCwd
     ? isAbsolute(targetCwd)
       ? resolve(targetCwd)
       : resolve(dirname(repoRoot), targetCwd)
     : resolve(dirname(repoRoot), `${basename(repoRoot)}-${branchPathSlug(branchName)}`);
+
+  // realpath() the existing parent but preserve the final component because the
+  // worktree directory itself must not exist yet. This prevents symlinked parent
+  // directories from bypassing the repository-boundary check.
+  const targetParent = canonicalizeExistingPath(
+    dirname(unresolvedTargetPath),
+    "worktree parent directory",
+    realpath
+  );
+  const targetPath = resolve(targetParent, basename(unresolvedTargetPath));
 
   if (isWithin(repoRoot, targetPath)) {
     throw new GitWorktreeError(
