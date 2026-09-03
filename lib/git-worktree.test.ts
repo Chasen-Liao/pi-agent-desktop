@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { resolve } from "node:path";
 import {
   createGitWorktree,
   GitWorktreeError,
@@ -7,6 +8,7 @@ import {
   type GitRunner,
 } from "./git-worktree.ts";
 
+const fixturePath = (path: string) => resolve(path);
 const identityRealpath = (path: string) => path;
 
 function scriptedRunner(
@@ -51,9 +53,9 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
   );
 
   assert.deepEqual(result, {
-    cwd: "/workspace/project-pi-agent-refactor-ui",
+    cwd: fixturePath("/workspace/project-pi-agent-refactor-ui"),
     branchName: "pi-agent/refactor-ui",
-    repoRoot: "/workspace/project",
+    repoRoot: fixturePath("/workspace/project"),
   });
   assert.deepEqual(calls[0]?.args, ["rev-parse", "--show-toplevel"]);
   assert.deepEqual(calls[1]?.args, [
@@ -66,7 +68,7 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
     "add",
     "-b",
     "pi-agent/refactor-ui",
-    "/workspace/project-pi-agent-refactor-ui",
+    fixturePath("/workspace/project-pi-agent-refactor-ui"),
     "HEAD",
   ]);
 });
@@ -85,7 +87,7 @@ test("createGitWorktree resolves a relative target beside the repository", async
     { runner, pathExists: () => false, realpath: identityRealpath }
   );
 
-  assert.equal(result.cwd, "/workspace/isolated-copy");
+  assert.equal(result.cwd, fixturePath("/workspace/isolated-copy"));
 });
 
 test("createGitWorktree rejects a target inside the source repository", async () => {
@@ -124,7 +126,8 @@ test("createGitWorktree rejects a symlinked parent that resolves inside the sour
       {
         runner,
         pathExists: () => false,
-        realpath: (path) => (path === "/outside/link" ? "/workspace/project" : path),
+        realpath: (path) =>
+          path === fixturePath("/outside/link") ? fixturePath("/workspace/project") : path,
       }
     ),
     (error: unknown) =>
