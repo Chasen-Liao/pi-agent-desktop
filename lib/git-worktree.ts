@@ -152,7 +152,22 @@ export async function resolveGitRoot(
   runner: GitRunner = DEFAULT_GIT_RUNNER
 ): Promise<string> {
   const cwd = resolve(sourceCwd);
-  const result = await runGit(runner, ["rev-parse", "--show-toplevel"], cwd);
+  let result: GitCommandResult;
+  try {
+    result = await runGit(runner, ["rev-parse", "--show-toplevel"], cwd);
+  } catch (error) {
+    if (
+      error instanceof GitWorktreeError &&
+      error.code === "GIT_UNAVAILABLE" &&
+      !existsSync(cwd)
+    ) {
+      throw new GitWorktreeError(
+        "NOT_GIT_REPOSITORY",
+        `Cannot create a worktree because ${cwd} does not exist`
+      );
+    }
+    throw error;
+  }
   const root = result.stdout.trim();
   if (result.code !== 0 || !root) {
     throw new GitWorktreeError(
