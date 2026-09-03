@@ -5,9 +5,13 @@ export interface BranchPayload {
   name?: string;
 }
 
+export type CloneWorkspaceMode = "directory" | "worktree";
+
 export interface ClonePayload {
   targetCwd?: string;
   name?: string;
+  workspaceMode?: CloneWorkspaceMode;
+  branchName?: string;
 }
 
 export type ValidationResult<T> =
@@ -59,6 +63,28 @@ export function validateClonePayload(payload: unknown): ValidationResult<ClonePa
     return { valid: false, error: "name must be a string if provided" };
   }
 
+  if (
+    record.workspaceMode !== undefined &&
+    record.workspaceMode !== "directory" &&
+    record.workspaceMode !== "worktree"
+  ) {
+    return { valid: false, error: "workspaceMode must be 'directory' or 'worktree'" };
+  }
+
+  if (record.branchName !== undefined && typeof record.branchName !== "string") {
+    return { valid: false, error: "branchName must be a string if provided" };
+  }
+
+  const branchName =
+    typeof record.branchName === "string" && record.branchName.trim().length > 0
+      ? record.branchName.trim()
+      : undefined;
+  const workspaceMode = record.workspaceMode as CloneWorkspaceMode | undefined;
+
+  if (branchName && workspaceMode !== "worktree") {
+    return { valid: false, error: "branchName requires workspaceMode 'worktree'" };
+  }
+
   return {
     valid: true,
     data: {
@@ -68,6 +94,8 @@ export function validateClonePayload(payload: unknown): ValidationResult<ClonePa
       ...(typeof record.name === "string" && record.name.trim().length > 0
         ? { name: record.name.trim() }
         : {}),
+      ...(workspaceMode ? { workspaceMode } : {}),
+      ...(branchName ? { branchName } : {}),
     },
   };
 }

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useI18n } from "./I18nProvider";
 
 export type BranchCloneMode = "branch" | "clone";
+type CloneWorkspaceMode = "directory" | "worktree";
 
 export interface BranchCloneModalProps {
   isOpen: boolean;
@@ -27,6 +28,8 @@ export function BranchCloneModal({
   const { t } = useI18n();
   const [name, setName] = useState("");
   const [targetCwd, setTargetCwd] = useState(cwd || "");
+  const [workspaceMode, setWorkspaceMode] = useState<CloneWorkspaceMode>("directory");
+  const [branchName, setBranchName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,10 +37,20 @@ export function BranchCloneModal({
     if (isOpen) {
       setName("");
       setTargetCwd(cwd || "");
+      setWorkspaceMode("directory");
+      setBranchName("");
       setError(null);
     }
   }, [isOpen, cwd, sessionId, targetEntryId]);
   if (!isOpen || !sessionId) return null;
+
+  const selectWorkspaceMode = (nextMode: CloneWorkspaceMode) => {
+    setWorkspaceMode(nextMode);
+    setTargetCwd(nextMode === "directory" ? cwd || "" : "");
+    if (nextMode === "directory") {
+      setBranchName("");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +71,13 @@ export function BranchCloneModal({
       const payload =
         mode === "branch"
           ? { targetEntryId, name: name.trim() || undefined }
-          : { targetCwd: targetCwd.trim() || undefined, name: name.trim() || undefined };
+          : {
+              targetCwd: targetCwd.trim() || undefined,
+              name: name.trim() || undefined,
+              workspaceMode,
+              branchName:
+                workspaceMode === "worktree" ? branchName.trim() || undefined : undefined,
+            };
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -145,18 +164,77 @@ export function BranchCloneModal({
           </div>
 
           {mode === "clone" && (
-            <div>
-              <label className="block text-[11px] font-medium text-text-muted mb-1">
-                {t("branch.targetDirectory")}
-              </label>
-              <input
-                type="text"
-                value={targetCwd}
-                onChange={(e) => setTargetCwd(e.target.value)}
-                placeholder={t("branch.currentDirectoryPlaceholder")}
-                className="w-full px-2.5 py-1.5 rounded-control bg-bg border border-border text-text font-mono text-[12px] focus:outline-none focus:border-accent"
-              />
-            </div>
+            <>
+              <div>
+                <label className="block text-[11px] font-medium text-text-muted mb-1.5">
+                  {t("branch.workspaceMode")}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    aria-pressed={workspaceMode === "directory"}
+                    onClick={() => selectWorkspaceMode("directory")}
+                    className={`px-3 py-2 rounded-control border text-[12px] text-left transition-colors cursor-pointer disabled:opacity-50 ${
+                      workspaceMode === "directory"
+                        ? "border-accent bg-accent/10 text-text"
+                        : "border-border bg-bg text-text-muted hover:text-text hover:bg-bg-hover"
+                    }`}
+                  >
+                    {t("branch.workspaceDirectory")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    aria-pressed={workspaceMode === "worktree"}
+                    onClick={() => selectWorkspaceMode("worktree")}
+                    className={`px-3 py-2 rounded-control border text-[12px] text-left transition-colors cursor-pointer disabled:opacity-50 ${
+                      workspaceMode === "worktree"
+                        ? "border-accent bg-accent/10 text-text"
+                        : "border-border bg-bg text-text-muted hover:text-text hover:bg-bg-hover"
+                    }`}
+                  >
+                    {t("branch.workspaceWorktree")}
+                  </button>
+                </div>
+                {workspaceMode === "worktree" && (
+                  <p className="mt-1.5 text-[11px] text-text-muted">
+                    {t("branch.worktreeHint")}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-text-muted mb-1">
+                  {t("branch.targetDirectory")}
+                </label>
+                <input
+                  type="text"
+                  value={targetCwd}
+                  onChange={(e) => setTargetCwd(e.target.value)}
+                  placeholder={
+                    workspaceMode === "worktree"
+                      ? t("branch.worktreeDirectoryPlaceholder")
+                      : t("branch.currentDirectoryPlaceholder")
+                  }
+                  className="w-full px-2.5 py-1.5 rounded-control bg-bg border border-border text-text font-mono text-[12px] focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              {workspaceMode === "worktree" && (
+                <div>
+                  <label className="block text-[11px] font-medium text-text-muted mb-1">
+                    {t("branch.name")}
+                  </label>
+                  <input
+                    type="text"
+                    value={branchName}
+                    onChange={(e) => setBranchName(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-control bg-bg border border-border text-text font-mono text-[12px] focus:outline-none focus:border-accent"
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {/* Footer */}

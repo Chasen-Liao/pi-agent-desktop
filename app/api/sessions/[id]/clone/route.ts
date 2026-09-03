@@ -3,6 +3,10 @@ import { existsSync } from "fs";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { resolveSessionPath, cacheSessionPath } from "../../../../../lib/session-reader.ts";
 import { validateClonePayload } from "../../../../../lib/session-branch-clone.ts";
+import {
+  createGitWorktree,
+  GitWorktreeError,
+} from "../../../../../lib/git-worktree.ts";
 import { errorMessage, getRequestId, logApiError } from "../../../../../lib/api-error.ts";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +49,31 @@ export async function POST(
 
     const sourceSm = SessionManager.open(sessionFile);
     const header = sourceSm.getHeader();
-    const targetCwd = validation.data.targetCwd || header?.cwd || process.cwd();
+    const sourceCwd = header?.cwd || process.cwd();
+
+    let targetCwd = validation.data.targetCwd || sourceCwd;
+    let workspace: {
+      mode: "directory" | "worktree";
+      cwd: string;
+      branchName?: string;
+    } = {
+      mode: "directory",
+      cwd: targetCwd,
+    };
+
+    if (validation.data.workspaceMode === "worktree") {
+      const worktree = await createGitWorktree({
+        sourceCwd,
+        targetCwd: validation.data.targetCwd,
+        branchName: validation.data.branchName,
+      });
+      targetCwd = worktree.cwd;
+      workspace = {
+        mode: "worktree",
+        cwd: worktree.cwd,
+        branchName: worktree.branchName,
+      };
+    }
 
     const forkedSm = SessionManager.forkFrom(sessionFile, targetCwd);
     const newSessionFile = forkedSm.getSessionFile();
@@ -69,14 +97,17 @@ export async function POST(
         success: true,
         sessionId: newSessionId,
         sessionFile: newSessionFile,
+        workspace,
       },
       { headers: { "x-request-id": requestId } }
     );
   } catch (error) {
     logApiError({ route: `/api/sessions/${id}/clone`, method: "POST", requestId, error });
+    const status =
+      error instanceof GitWorktreeError && error.code !== "GIT_UNAVAILABLE" ? 400 : 500;
     return NextResponse.json(
       { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
+      { status, headers: { "x-request-id": requestId } }
     );
   }
 }
