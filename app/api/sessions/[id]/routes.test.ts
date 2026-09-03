@@ -1,8 +1,9 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, sep } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath } from "../../../../lib/session-reader.ts";
 import { POST as branchSession } from "./branch/route.ts";
@@ -27,8 +28,8 @@ after(() => {
   rmSync(testAgentDir, { recursive: true, force: true });
 });
 
-function createTestSession(dir: string) {
-  const sm = SessionManager.create(dir, dir);
+function createTestSession(dir: string, sessionCwd = dir) {
+  const sm = SessionManager.create(sessionCwd, dir);
   const userMsgId = sm.appendMessage({ role: "user", content: "Hello world" } as never);
   sm.appendMessage({ role: "assistant", content: [{ type: "text", text: "Hello back" }] } as never);
   (sm as unknown as { _rewriteFile?: () => void })._rewriteFile?.();
@@ -38,6 +39,10 @@ function createTestSession(dir: string) {
   cacheSessionPath(id, file);
 
   return { sm, file, id, userMsgId };
+}
+
+function runGit(cwd: string, args: string[]): string {
+  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 }
 
 test("POST /api/sessions/[id]/branch returns 404 for non-existent session", async () => {
@@ -160,6 +165,89 @@ test("POST /api/sessions/[id]/clone returns 400 for malformed JSON", async () =>
   }
 });
 
+test("POST /api/sessions/[id]/clone rejects a missing worktree source", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-clone-test-"));
+  try {
+    const sourceCwd = join(dir, "missing-workspace");
+    const { id } = createTestSession(dir, sourceCwd);
+    const req = new Request(`http://localhost/api/sessions/${id}/clone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceMode: "worktree", branchName: "pi-agent/missing-source" }),
+    });
+    const res = await cloneSession(req, { params: Promise.resolve({ id }) });
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.equal(data.errorCode, "NOT_GIT_REPOSITORY");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("POST /api/sessions/[id]/clone creates a session in a Git worktree", async () => {
+  const repoDir = mkdtempSync(join(tmpdir(), "pi-clone-worktree-test-"));
+  const targetParent = mkdtempSync(join(tmpdir(), "pi-clone-worktree-target-"));
+  const targetCwd = join(targetParent, "worktree");
+  const branchName = "pi-agent/route-worktree";
+  let clonedSessionFile: string | null = null;
+  let worktreeCreated = false;
+  try {
+    const { id } = createTestSession(repoDir);
+    runGit(repoDir, ["init"]);
+    runGit(repoDir, ["add", "."]);
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Pi Route Test",
+        "-c",
+        "user.email=pi-route-test@example.com",
+        "commit",
+        "-m",
+        "initial session",
+      ],
+      { cwd: repoDir, stdio: "ignore" }
+    );
+
+    const req = new Request(`http://localhost/api/sessions/${id}/clone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceMode: "worktree",
+        targetCwd,
+        branchName,
+        name: "Worktree Clone",
+      }),
+    });
+    const res = await cloneSession(req, { params: Promise.resolve({ id }) });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.success, true);
+    assert.equal(data.workspace.mode, "worktree");
+    assert.equal(data.workspace.cwd, resolve(targetCwd));
+    assert.equal(data.workspace.branchName, branchName);
+    clonedSessionFile = data.sessionFile;
+    worktreeCreated = true;
+
+    const clonedSm = SessionManager.open(data.sessionFile, testAgentDir);
+    assert.equal(clonedSm.getSessionName(), "Worktree Clone");
+    assert.equal(clonedSm.getCwd(), resolve(targetCwd));
+    assert.equal(resolve(runGit(targetCwd, ["rev-parse", "--show-toplevel"])), resolve(targetCwd));
+    assert.equal(runGit(targetCwd, ["branch", "--show-current"]), branchName);
+  } finally {
+    if (clonedSessionFile) rmSync(clonedSessionFile, { force: true });
+    if (worktreeCreated) {
+      execFileSync("git", ["worktree", "remove", "--force", targetCwd], {
+        cwd: repoDir,
+        stdio: "ignore",
+      });
+    }
+    rmSync(targetCwd, { recursive: true, force: true });
+    rmSync(targetParent, { recursive: true, force: true });
+    rmSync(repoDir, { recursive: true, force: true });
+  }
+});
+
 test("POST /api/sessions/[id]/clone creates cloned session", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pi-clone-test-"));
   let clonedSessionFile: string | null = null;
@@ -186,6 +274,7 @@ test("POST /api/sessions/[id]/clone creates cloned session", async () => {
 
     const clonedSm = SessionManager.open(data.sessionFile, dir);
     assert.equal(clonedSm.getSessionName(), "Cloned Session");
+    assert.deepEqual(data.workspace, { mode: "directory", cwd: resolve(dir) });
   } finally {
     if (clonedSessionFile && clonedSessionFileIsolated) {
       rmSync(clonedSessionFile, { force: true });
