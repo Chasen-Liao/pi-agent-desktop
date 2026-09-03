@@ -7,6 +7,11 @@ export interface BranchPayload {
 
 export type CloneWorkspaceMode = "directory" | "worktree";
 
+export type BranchValidationErrorCode =
+  | "INVALID_BRANCH_PAYLOAD"
+  | "INVALID_TARGET_ENTRY_ID"
+  | "INVALID_BRANCH_NAME";
+
 export type CloneValidationErrorCode =
   | "INVALID_CLONE_PAYLOAD"
   | "INVALID_TARGET_CWD"
@@ -14,6 +19,8 @@ export type CloneValidationErrorCode =
   | "INVALID_WORKSPACE_MODE"
   | "INVALID_BRANCH_NAME"
   | "BRANCH_NAME_REQUIRES_WORKTREE";
+
+export type ValidationErrorCode = BranchValidationErrorCode | CloneValidationErrorCode;
 
 export interface ClonePayload {
   targetCwd?: string;
@@ -24,21 +31,33 @@ export interface ClonePayload {
 
 export type ValidationResult<T> =
   | { valid: true; data: T }
-  | { valid: false; error: string; code?: CloneValidationErrorCode };
+  | { valid: false; error: string; code?: ValidationErrorCode };
 
 export function validateBranchPayload(payload: unknown): ValidationResult<BranchPayload> {
   if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
-    return { valid: false, error: "Payload must be an object" };
+    return {
+      valid: false,
+      error: "Payload must be an object",
+      code: "INVALID_BRANCH_PAYLOAD",
+    };
   }
 
   const record = payload as Record<string, unknown>;
 
   if (typeof record.targetEntryId !== "string" || record.targetEntryId.trim().length === 0) {
-    return { valid: false, error: "targetEntryId is required and must be a non-empty string" };
+    return {
+      valid: false,
+      error: "targetEntryId is required and must be a non-empty string",
+      code: "INVALID_TARGET_ENTRY_ID",
+    };
   }
 
   if (record.name !== undefined && typeof record.name !== "string") {
-    return { valid: false, error: "name must be a string if provided" };
+    return {
+      valid: false,
+      error: "name must be a string if provided",
+      code: "INVALID_BRANCH_NAME",
+    };
   }
 
   return {

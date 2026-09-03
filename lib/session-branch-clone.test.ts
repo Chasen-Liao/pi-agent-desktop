@@ -95,6 +95,20 @@ test("validateClonePayload returns stable error codes", () => {
   }
 });
 
+test("validateBranchPayload returns stable error codes", () => {
+  const cases: Array<[unknown, string]> = [
+    ["invalid", "INVALID_BRANCH_PAYLOAD"],
+    [{}, "INVALID_TARGET_ENTRY_ID"],
+    [{ targetEntryId: "e1", name: 42 }, "INVALID_BRANCH_NAME"],
+  ];
+
+  for (const [payload, code] of cases) {
+    const result = validateBranchPayload(payload);
+    assert.equal(result.valid, false);
+    if (!result.valid) assert.equal(result.code, code);
+  }
+});
+
 test("extractAncestryPath returns array from root to target entry", () => {
   const e1: SessionEntry = {
     type: "message",

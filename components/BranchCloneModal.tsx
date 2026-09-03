@@ -20,6 +20,11 @@ const CLONE_ERROR_TRANSLATIONS: Partial<Record<string, TranslationKey>> = {
   TARGET_INSIDE_REPOSITORY: "branch.targetInsideRepository",
   TARGET_EXISTS: "branch.targetExists",
   WORKTREE_CREATE_FAILED: "branch.worktreeCreateFailed",
+  SESSION_NOT_FOUND: "branch.sessionNotFound",
+  INVALID_BRANCH_PAYLOAD: "branch.invalidBranchPayload",
+  INVALID_TARGET_ENTRY_ID: "branch.invalidTargetEntryId",
+  TARGET_ENTRY_NOT_FOUND: "branch.targetEntryNotFound",
+  BRANCH_CREATE_FAILED: "branch.createFailed",
 };
 
 function getCloneErrorMessage(
