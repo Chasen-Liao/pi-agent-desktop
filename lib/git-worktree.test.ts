@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
   createGitWorktree,
   GitWorktreeError,
@@ -175,19 +173,36 @@ test("createGitWorktree reports non-git source directories", async () => {
 });
 
 test("createGitWorktree reports missing source directories as repository errors", async () => {
-  const sourceCwd = join(tmpdir(), `pi-agent-missing-source-${randomUUID()}`);
   const runner: GitRunner = async () => {
     throw Object.assign(new Error("spawn git ENOENT"), { code: "ENOENT" });
   };
 
   await assert.rejects(
-    createGitWorktree({ sourceCwd, branchName: "pi-agent/missing-source" }, { runner }),
+    createGitWorktree(
+      { sourceCwd: "/workspace/missing-source", branchName: "pi-agent/missing-source" },
+      { runner, sourcePathExists: () => false }
+    ),
     (error: unknown) => {
       assert.ok(error instanceof GitWorktreeError);
       assert.equal(error.code, "NOT_GIT_REPOSITORY");
       assert.match(error.message, /does not exist/);
       return true;
     }
+  );
+});
+
+test("createGitWorktree preserves Git unavailable errors for existing sources", async () => {
+  const runner: GitRunner = async () => {
+    throw Object.assign(new Error("spawn git ENOENT"), { code: "ENOENT" });
+  };
+
+  await assert.rejects(
+    createGitWorktree(
+      { sourceCwd: "/workspace/project", branchName: "pi-agent/git-unavailable" },
+      { runner, sourcePathExists: () => true }
+    ),
+    (error: unknown) =>
+      error instanceof GitWorktreeError && error.code === "GIT_UNAVAILABLE"
   );
 });
 

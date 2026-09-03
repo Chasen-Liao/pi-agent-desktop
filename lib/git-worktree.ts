@@ -36,11 +36,13 @@ export type GitWorktreeErrorCode =
 
 export class GitWorktreeError extends Error {
   readonly code: GitWorktreeErrorCode;
+  readonly originalError?: unknown;
 
-  constructor(code: GitWorktreeErrorCode, message: string) {
+  constructor(code: GitWorktreeErrorCode, message: string, originalError?: unknown) {
     super(message);
     this.name = "GitWorktreeError";
     this.code = code;
+    this.originalError = originalError;
   }
 }
 
@@ -88,7 +90,8 @@ async function runGit(
     const message = error instanceof Error ? error.message : String(error);
     throw new GitWorktreeError(
       "GIT_UNAVAILABLE",
-      `Unable to run Git${message ? `: ${message}` : ""}`
+      `Unable to run Git${message ? `: ${message}` : ""}`,
+      error
     );
   }
 }
@@ -149,7 +152,8 @@ export function validateWorktreeBranchName(branchName: string): string | null {
 
 export async function resolveGitRoot(
   sourceCwd: string,
-  runner: GitRunner = DEFAULT_GIT_RUNNER
+  runner: GitRunner = DEFAULT_GIT_RUNNER,
+  sourcePathExists: (path: string) => boolean = existsSync
 ): Promise<string> {
   const cwd = resolve(sourceCwd);
   let result: GitCommandResult;
@@ -159,7 +163,10 @@ export async function resolveGitRoot(
     if (
       error instanceof GitWorktreeError &&
       error.code === "GIT_UNAVAILABLE" &&
-      !existsSync(cwd)
+      error.originalError instanceof Error &&
+      "code" in error.originalError &&
+      error.originalError.code === "ENOENT" &&
+      !sourcePathExists(cwd)
     ) {
       throw new GitWorktreeError(
         "NOT_GIT_REPOSITORY",
@@ -183,13 +190,15 @@ export async function createGitWorktree(
   deps: {
     runner?: GitRunner;
     pathExists?: (path: string) => boolean;
+    sourcePathExists?: (path: string) => boolean;
     realpath?: (path: string) => string;
   } = {}
 ): Promise<GitWorktreeResult> {
   const runner = deps.runner ?? DEFAULT_GIT_RUNNER;
   const pathExists = deps.pathExists ?? existsSync;
+  const sourcePathExists = deps.sourcePathExists ?? existsSync;
   const realpath = deps.realpath ?? realpathSync;
-  const resolvedRepoRoot = await resolveGitRoot(options.sourceCwd, runner);
+  const resolvedRepoRoot = await resolveGitRoot(options.sourceCwd, runner, sourcePathExists);
   const repoRoot = canonicalizeExistingPath(resolvedRepoRoot, "repository root", realpath);
   const branchName = options.branchName?.trim() || generatedBranchName();
 
