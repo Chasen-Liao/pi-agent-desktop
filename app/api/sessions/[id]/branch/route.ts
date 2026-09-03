@@ -22,11 +22,14 @@ export async function POST(
       );
     }
 
-    let body: unknown;
+    let body: unknown = {};
     try {
       body = await req.json();
     } catch {
-      body = {};
+      return NextResponse.json(
+        { error: "Invalid JSON payload", errorCode: "INVALID_JSON_PAYLOAD" },
+        { status: 400, headers: { "x-request-id": requestId } }
+      );
     }
 
     const validation = validateBranchPayload(body);
@@ -76,7 +79,7 @@ export async function POST(
   } catch (error) {
     logApiError({ route: `/api/sessions/${id}/branch`, method: "POST", requestId, error });
     return NextResponse.json(
-      { error: errorMessage(error) },
+      { error: errorMessage(error), errorCode: "BRANCH_OPERATION_FAILED" },
       { status: 500, headers: { "x-request-id": requestId } }
     );
   }

@@ -25,6 +25,10 @@ const CLONE_ERROR_TRANSLATIONS: Partial<Record<string, TranslationKey>> = {
   INVALID_TARGET_ENTRY_ID: "branch.invalidTargetEntryId",
   TARGET_ENTRY_NOT_FOUND: "branch.targetEntryNotFound",
   BRANCH_CREATE_FAILED: "branch.createFailed",
+  INVALID_JSON_PAYLOAD: "branch.invalidJsonPayload",
+  CLONE_CREATE_FAILED: "branch.cloneFailed",
+  CLONE_OPERATION_FAILED: "branch.failed",
+  BRANCH_OPERATION_FAILED: "branch.failed",
 };
 
 function getCloneErrorMessage(

@@ -50,6 +50,7 @@ test("POST /api/sessions/[id]/branch returns 404 for non-existent session", asyn
   assert.equal(res.status, 404);
   const data = await res.json();
   assert.equal(data.error, "Session not found");
+  assert.equal(data.errorCode, "SESSION_NOT_FOUND");
 });
 
 test("POST /api/sessions/[id]/branch returns 400 for invalid payload", async () => {
@@ -65,6 +66,7 @@ test("POST /api/sessions/[id]/branch returns 400 for invalid payload", async () 
     assert.equal(res.status, 400);
     const data = await res.json();
     assert.ok(data.error.includes("targetEntryId"));
+    assert.equal(data.errorCode, "INVALID_TARGET_ENTRY_ID");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -83,6 +85,7 @@ test("POST /api/sessions/[id]/branch returns 400 for missing targetEntryId in se
     assert.equal(res.status, 400);
     const data = await res.json();
     assert.equal(data.error, "Target entry not found");
+    assert.equal(data.errorCode, "TARGET_ENTRY_NOT_FOUND");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -117,6 +120,44 @@ test("POST /api/sessions/[id]/clone returns 404 for non-existent session", async
   });
   const res = await cloneSession(req, { params: Promise.resolve({ id: "non-existent" }) });
   assert.equal(res.status, 404);
+  const data = await res.json();
+  assert.equal(data.errorCode, "SESSION_NOT_FOUND");
+});
+
+test("POST /api/sessions/[id]/branch returns 400 for malformed JSON", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-branch-test-"));
+  try {
+    const { id } = createTestSession(dir);
+    const req = new Request(`http://localhost/api/sessions/${id}/branch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{",
+    });
+    const res = await branchSession(req, { params: Promise.resolve({ id }) });
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.equal(data.errorCode, "INVALID_JSON_PAYLOAD");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("POST /api/sessions/[id]/clone returns 400 for malformed JSON", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-clone-test-"));
+  try {
+    const { id } = createTestSession(dir);
+    const req = new Request(`http://localhost/api/sessions/${id}/clone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{",
+    });
+    const res = await cloneSession(req, { params: Promise.resolve({ id }) });
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.equal(data.errorCode, "INVALID_JSON_PAYLOAD");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("POST /api/sessions/[id]/clone creates cloned session", async () => {

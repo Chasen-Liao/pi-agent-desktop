@@ -21,7 +21,7 @@ export async function POST(
     const sessionFile = await resolveSessionPath(id);
     if (!sessionFile || !existsSync(sessionFile)) {
       return NextResponse.json(
-        { error: "Session not found" },
+        { error: "Session not found", errorCode: "SESSION_NOT_FOUND" },
         { status: 404, headers: { "x-request-id": requestId } }
       );
     }
@@ -34,7 +34,7 @@ export async function POST(
       }
     } catch {
       return NextResponse.json(
-        { error: "Invalid JSON payload" },
+        { error: "Invalid JSON payload", errorCode: "INVALID_JSON_PAYLOAD" },
         { status: 400, headers: { "x-request-id": requestId } }
       );
     }
@@ -82,7 +82,7 @@ export async function POST(
     const newSessionFile = forkedSm.getSessionFile();
     if (!newSessionFile) {
       return NextResponse.json(
-        { error: "Failed to clone session" },
+        { error: "Failed to clone session", errorCode: "CLONE_CREATE_FAILED" },
         { status: 500, headers: { "x-request-id": requestId } }
       );
     }
@@ -111,7 +111,8 @@ export async function POST(
     return NextResponse.json(
       {
         error: errorMessage(error),
-        ...(error instanceof GitWorktreeError ? { errorCode: error.code } : {}),
+        errorCode:
+          error instanceof GitWorktreeError ? error.code : "CLONE_OPERATION_FAILED",
       },
       { status, headers: { "x-request-id": requestId } }
     );
