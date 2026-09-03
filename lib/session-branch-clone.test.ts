@@ -78,6 +78,23 @@ test("validateClonePayload rejects invalid payloads", () => {
   );
 });
 
+test("validateClonePayload returns stable error codes", () => {
+  const cases: Array<[unknown, string]> = [
+    ["invalid", "INVALID_CLONE_PAYLOAD"],
+    [{ targetCwd: 123 }, "INVALID_TARGET_CWD"],
+    [{ name: true }, "INVALID_CLONE_NAME"],
+    [{ workspaceMode: "sandbox" }, "INVALID_WORKSPACE_MODE"],
+    [{ branchName: 42 }, "INVALID_BRANCH_NAME"],
+    [{ branchName: "pi-agent/test" }, "BRANCH_NAME_REQUIRES_WORKTREE"],
+  ];
+
+  for (const [payload, code] of cases) {
+    const result = validateClonePayload(payload);
+    assert.equal(result.valid, false);
+    if (!result.valid) assert.equal(result.code, code);
+  }
+});
+
 test("extractAncestryPath returns array from root to target entry", () => {
   const e1: SessionEntry = {
     type: "message",

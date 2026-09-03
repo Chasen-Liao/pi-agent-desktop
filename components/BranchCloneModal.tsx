@@ -1,10 +1,37 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import type { TranslationKey } from "@/lib/i18n";
 import { useI18n } from "./I18nProvider";
 
 export type BranchCloneMode = "branch" | "clone";
 type CloneWorkspaceMode = "directory" | "worktree";
+
+const CLONE_ERROR_TRANSLATIONS: Partial<Record<string, TranslationKey>> = {
+  INVALID_CLONE_PAYLOAD: "branch.invalidClonePayload",
+  INVALID_TARGET_CWD: "branch.invalidTargetDirectory",
+  INVALID_CLONE_NAME: "branch.invalidCloneName",
+  INVALID_WORKSPACE_MODE: "branch.invalidWorkspaceMode",
+  INVALID_BRANCH_NAME: "branch.invalidBranchName",
+  BRANCH_NAME_REQUIRES_WORKTREE: "branch.branchNameRequiresWorktree",
+  GIT_UNAVAILABLE: "branch.gitUnavailable",
+  NOT_GIT_REPOSITORY: "branch.notGitRepository",
+  INVALID_BRANCH: "branch.invalidBranch",
+  TARGET_INSIDE_REPOSITORY: "branch.targetInsideRepository",
+  TARGET_EXISTS: "branch.targetExists",
+  WORKTREE_CREATE_FAILED: "branch.worktreeCreateFailed",
+};
+
+function getCloneErrorMessage(
+  errorCode: unknown,
+  t: (key: TranslationKey) => string,
+): string {
+  if (typeof errorCode === "string") {
+    const key = CLONE_ERROR_TRANSLATIONS[errorCode];
+    if (key) return t(key);
+  }
+  return t("branch.failed");
+}
 
 export interface BranchCloneModalProps {
   isOpen: boolean;
@@ -85,17 +112,27 @@ export function BranchCloneModal({
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as {
+        success?: boolean;
+        sessionId?: unknown;
+        sessionFile?: unknown;
+        errorCode?: unknown;
+      };
       if (!res.ok || !data.success) {
-        throw new Error(data.error || `HTTP ${res.status}`);
+        setError(getCloneErrorMessage(data.errorCode, t));
+        return;
+      }
+      if (typeof data.sessionId !== "string" || typeof data.sessionFile !== "string") {
+        setError(t("branch.failed"));
+        return;
       }
 
       if (onSuccess) {
         onSuccess(data.sessionId, data.sessionFile);
       }
       onClose();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t("branch.failed"));
+    } catch {
+      setError(t("branch.failed"));
     } finally {
       setSubmitting(false);
     }

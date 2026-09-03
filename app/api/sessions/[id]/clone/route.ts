@@ -42,7 +42,10 @@ export async function POST(
     const validation = validateClonePayload(body);
     if (!validation.valid) {
       return NextResponse.json(
-        { error: validation.error },
+        {
+          error: validation.error,
+          ...(validation.code ? { errorCode: validation.code } : {}),
+        },
         { status: 400, headers: { "x-request-id": requestId } }
       );
     }
@@ -106,7 +109,10 @@ export async function POST(
     const status =
       error instanceof GitWorktreeError && error.code !== "GIT_UNAVAILABLE" ? 400 : 500;
     return NextResponse.json(
-      { error: errorMessage(error) },
+      {
+        error: errorMessage(error),
+        ...(error instanceof GitWorktreeError ? { errorCode: error.code } : {}),
+      },
       { status, headers: { "x-request-id": requestId } }
     );
   }
