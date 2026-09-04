@@ -44,6 +44,23 @@ test("validateClonePayload accepts valid or empty payloads", () => {
   if (res2.valid) {
     assert.equal(res2.data.targetCwd, "/path/to/project");
     assert.equal(res2.data.name, "Fork");
+    assert.equal(res2.data.workspaceMode, undefined);
+  }
+
+  const res3 = validateClonePayload({
+    targetCwd: "  /path/to/worktree  ",
+    name: "  Isolated Fork  ",
+    workspaceMode: "worktree",
+    branchName: "  pi-agent/refactor-ui  ",
+  });
+  assert.equal(res3.valid, true);
+  if (res3.valid) {
+    assert.deepEqual(res3.data, {
+      targetCwd: "/path/to/worktree",
+      name: "Isolated Fork",
+      workspaceMode: "worktree",
+      branchName: "pi-agent/refactor-ui",
+    });
   }
 });
 
@@ -52,6 +69,44 @@ test("validateClonePayload rejects invalid payloads", () => {
   assert.equal(validateClonePayload([1, 2]).valid, false);
   assert.equal(validateClonePayload({ targetCwd: 123 }).valid, false);
   assert.equal(validateClonePayload({ name: true }).valid, false);
+  assert.equal(validateClonePayload({ workspaceMode: "sandbox" }).valid, false);
+  assert.equal(validateClonePayload({ branchName: 42 }).valid, false);
+  assert.equal(validateClonePayload({ branchName: "pi-agent/test" }).valid, false);
+  assert.equal(
+    validateClonePayload({ workspaceMode: "directory", branchName: "pi-agent/test" }).valid,
+    false
+  );
+});
+
+test("validateClonePayload returns stable error codes", () => {
+  const cases: Array<[unknown, string]> = [
+    ["invalid", "INVALID_CLONE_PAYLOAD"],
+    [{ targetCwd: 123 }, "INVALID_TARGET_CWD"],
+    [{ name: true }, "INVALID_CLONE_NAME"],
+    [{ workspaceMode: "sandbox" }, "INVALID_WORKSPACE_MODE"],
+    [{ branchName: 42 }, "INVALID_BRANCH_NAME"],
+    [{ branchName: "pi-agent/test" }, "BRANCH_NAME_REQUIRES_WORKTREE"],
+  ];
+
+  for (const [payload, code] of cases) {
+    const result = validateClonePayload(payload);
+    assert.equal(result.valid, false);
+    if (!result.valid) assert.equal(result.code, code);
+  }
+});
+
+test("validateBranchPayload returns stable error codes", () => {
+  const cases: Array<[unknown, string]> = [
+    ["invalid", "INVALID_BRANCH_PAYLOAD"],
+    [{}, "INVALID_TARGET_ENTRY_ID"],
+    [{ targetEntryId: "e1", name: 42 }, "INVALID_BRANCH_NAME"],
+  ];
+
+  for (const [payload, code] of cases) {
+    const result = validateBranchPayload(payload);
+    assert.equal(result.valid, false);
+    if (!result.valid) assert.equal(result.code, code);
+  }
 });
 
 test("extractAncestryPath returns array from root to target entry", () => {
