@@ -1,6 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { execFile, execFileSync } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   createGitWorktree,
   GitWorktreeError,
@@ -16,19 +27,58 @@ const identityRealpath = (path: string) => path;
 const fakeWorktreeIdentity = {
   gitDir: fixturePath("/workspace/project/.git/worktrees/test"),
   head: "deadbeef",
+  branchOwnerToken: "owner-token",
 };
+
+const realGitRunner: GitRunner = (args, { cwd }) =>
+  new Promise((resolvePromise) => {
+    execFile(
+      "git",
+      args,
+      {
+        cwd,
+        encoding: "utf8",
+        windowsHide: true,
+        env: { ...process.env, LC_ALL: "C", LANG: "C" },
+      },
+      (error, stdout, stderr) => {
+        resolvePromise({
+          code: typeof error?.code === "number" ? error.code : error ? 1 : 0,
+          stdout,
+          stderr,
+        });
+      }
+    );
+  });
+
+function runTestGit(args: string[], cwd: string): void {
+  execFileSync("git", args, {
+    cwd,
+    stdio: "ignore",
+    windowsHide: true,
+    env: { ...process.env, LC_ALL: "C", LANG: "C" },
+  });
+}
 
 function scriptedRunner(
   handler: (args: string[], cwd: string) => { code?: number; stdout?: string; stderr?: string }
 ): GitRunner {
+  let ownerMessage = "pi-agent-desktop worktree owner owner-token";
   return async (args, { cwd }) => {
     const result = handler(args, cwd);
+    if (args[0] === "update-ref" && args[1] === "-m" && args[2]) {
+      ownerMessage = args[2];
+    }
     const defaultIdentity =
       args[0] === "rev-parse" && args[1] === "--git-dir"
         ? "/workspace/project/.git/worktrees/test\n"
         : args[0] === "rev-parse" && args[1] === "HEAD"
           ? "deadbeef\n"
-          : "";
+          : args.includes("commit-tree")
+            ? `${"a".repeat(40)}\n`
+            : args[0] === "reflog" && args[1] === "show"
+              ? `deadbeef\0${ownerMessage}\n`
+              : "";
     return {
       code: result.code ?? 0,
       stdout: result.stdout ?? defaultIdentity,
@@ -69,8 +119,11 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
     cwd: fixturePath("/workspace/project-pi-agent-refactor-ui"),
     branchName: "pi-agent/refactor-ui",
     repoRoot: fixturePath("/workspace/project"),
-    ...fakeWorktreeIdentity,
+    branchOwnerToken: result.branchOwnerToken,
+    gitDir: fixturePath("/workspace/project/.git/worktrees/test"),
+    head: "deadbeef",
   });
+  assert.match(result.branchOwnerToken, /^[0-9a-f-]{36}$/);
   assert.deepEqual(calls[0]?.args, ["rev-parse", "--show-toplevel"]);
   assert.deepEqual(calls[1]?.args, [
     "check-ref-format",
@@ -94,9 +147,154 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
   ]);
   assert.deepEqual(calls[4]?.args, ["rev-parse", "--git-dir"]);
   assert.deepEqual(calls[5]?.args, ["rev-parse", "HEAD"]);
-  assert.deepEqual(calls[6]?.args, ["rev-parse", "--git-dir"]);
-  assert.deepEqual(calls[7]?.args, ["rev-parse", "HEAD"]);
-  assert.deepEqual(calls[8]?.args, ["checkout", "--force", "HEAD"]);
+  assert.equal(calls[6]?.args.includes("commit-tree"), true);
+  assert.deepEqual(calls[7]?.args.slice(0, 2), ["update-ref", "-m"]);
+  assert.deepEqual(calls[8]?.args.slice(0, 2), ["update-ref", "-m"]);
+  assert.deepEqual(calls[9]?.args.slice(0, 2), ["reflog", "show"]);
+  assert.deepEqual(calls[10]?.args, ["rev-parse", "--git-dir"]);
+  assert.deepEqual(calls[11]?.args, ["rev-parse", "HEAD"]);
+  assert.deepEqual(calls[12]?.args, ["checkout", "--force", "HEAD"]);
+  assert.deepEqual(calls[13]?.args, ["rev-parse", "--git-dir"]);
+  assert.deepEqual(calls[14]?.args, ["rev-parse", "HEAD"]);
+});
+
+test("createGitWorktree records ownership that real Git can verify", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pi-worktree-owner-test-"));
+  const repoRoot = join(root, "repo");
+  const targetCwd = join(root, "worktree");
+  const branchName = "pi-agent/real-owner";
+  mkdirSync(repoRoot);
+  let worktree: Awaited<ReturnType<typeof createGitWorktree>> | undefined;
+  try {
+    runTestGit(["init", "-q"], repoRoot);
+    runTestGit(
+      [
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "init",
+        "-q",
+      ],
+      repoRoot
+    );
+    worktree = await createGitWorktree(
+      { sourceCwd: repoRoot, targetCwd, branchName },
+      { runner: realGitRunner }
+    );
+    assert.match(worktree.branchOwnerToken, /^[0-9a-f-]{36}$/);
+    assert.equal(existsSync(targetCwd), true);
+    runTestGit(["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`], repoRoot);
+
+    await removeGitWorktree(worktree, realGitRunner);
+    assert.equal(existsSync(targetCwd), false);
+    assert.throws(() =>
+      execFileSync("git", ["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`], {
+        cwd: repoRoot,
+        stdio: "ignore",
+        windowsHide: true,
+      })
+    );
+    worktree = undefined;
+  } finally {
+    if (worktree && existsSync(targetCwd)) {
+      try {
+        await removeGitWorktree(worktree, realGitRunner);
+      } catch {
+        // Best-effort fixture cleanup below.
+      }
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("createGitWorktree rejects an identity change after checkout", async () => {
+  let headReads = 0;
+  let operationCalled = false;
+  const runner = scriptedRunner((args) => {
+    if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+      return { stdout: "/workspace/project\n" };
+    }
+    if (args[0] === "rev-parse" && args[1] === "HEAD") {
+      headReads += 1;
+      return { stdout: `${headReads >= 3 ? "changed" : "deadbeef"}\n` };
+    }
+    return {};
+  });
+
+  await assert.rejects(
+    withGitWorktree(
+      { sourceCwd: "/workspace/project", branchName: "pi-agent/post-checkout-race" },
+      async () => {
+        operationCalled = true;
+      },
+      { runner, pathExists: () => false, realpath: identityRealpath }
+    ),
+    (error: unknown) =>
+      error instanceof GitWorktreeError &&
+      error.code === "WORKTREE_CREATE_FAILED" &&
+      /identity changed/.test(error.message)
+  );
+  assert.equal(operationCalled, false);
+  assert.equal(headReads, 3);
+});
+
+test("createGitWorktree rejects an ownership marker change after checkout", async () => {
+  const ownerGitDir = fixturePath(`/workspace/marker-race-${randomUUID()}`);
+  const ownerMarkerPath = join(ownerGitDir, "pi-agent-desktop-worktree-owner");
+  mkdirSync(ownerGitDir, { recursive: true });
+  let operationCalled = false;
+  let listCalls = 0;
+  const runner = scriptedRunner((args) => {
+    if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+      return { stdout: "/workspace/project\n" };
+    }
+    if (args[0] === "rev-parse" && args[1] === "--git-dir") {
+      return { stdout: `${ownerGitDir}\n` };
+    }
+    if (args[0] === "worktree" && args[1] === "list") {
+      listCalls += 1;
+      return listCalls === 1
+        ? {}
+        : {
+            stdout:
+              `worktree ${fixturePath("/workspace/marker-race-target")}\0` +
+              "HEAD deadbeef\0" +
+              "branch refs/heads/pi-agent/marker-race\0",
+          };
+    }
+    if (args[0] === "checkout") {
+      writeFileSync(ownerMarkerPath, "foreign-token");
+    }
+    return {};
+  });
+
+  try {
+    await assert.rejects(
+      withGitWorktree(
+        {
+          sourceCwd: "/workspace/project",
+          targetCwd: "/workspace/marker-race-target",
+          branchName: "pi-agent/marker-race",
+        },
+        async () => {
+          operationCalled = true;
+        },
+        { runner, pathExists: () => false, realpath: identityRealpath }
+      ),
+      (error: unknown) =>
+        error instanceof GitWorktreeError &&
+        error.code === "WORKTREE_CREATE_FAILED" &&
+        /ownership marker changed after checkout/.test(error.message)
+    );
+    assert.equal(operationCalled, false);
+    assert.equal(listCalls >= 1, true);
+  } finally {
+    rmSync(ownerGitDir, { recursive: true, force: true });
+  }
 });
 
 test("removeGitWorktree removes the worktree and its branch", async () => {
@@ -148,6 +346,16 @@ test("removeGitWorktree removes the worktree and its branch", async () => {
     },
     {
       args: [
+        "reflog",
+        "show",
+        "--format=%H%x00%gs",
+        "-1",
+        `refs/heads/${worktree.branchName}`,
+      ],
+      cwd: worktree.repoRoot,
+    },
+    {
+      args: [
         "update-ref",
         "--no-deref",
         "-d",
@@ -190,6 +398,61 @@ test("createGitWorktree does not clean up unowned resources after add fails", as
   ]);
   assert.equal(calls.some((args) => args[1] === "remove"), false);
   assert.equal(calls.some((args) => args[0] === "branch"), false);
+});
+
+test("createGitWorktree leaves the branch after unidentified cleanup", async () => {
+  const repoRoot = fixturePath(`/workspace/unidentified-cleanup-${randomUUID()}`);
+  const targetCwd = fixturePath(`/workspace/unidentified-target-${randomUUID()}`);
+  const ownerGitDir = fixturePath(`/workspace/unidentified-gitdir-${randomUUID()}`);
+  mkdirSync(ownerGitDir, { recursive: true });
+  const calls: string[][] = [];
+  let listCalls = 0;
+  const runner = scriptedRunner((args) => {
+    calls.push(args);
+    if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+      return { stdout: `${repoRoot}\n` };
+    }
+    if (args[0] === "rev-parse" && args[1] === "--git-dir") {
+      return { stdout: `${ownerGitDir}\n` };
+    }
+    if (args[0] === "rev-parse" && args[1] === "HEAD") {
+      return { stdout: "deadbeef\n" };
+    }
+    if (args.includes("commit-tree")) {
+      return { code: 1, stderr: "fatal: marker unavailable" };
+    }
+    if (args[0] === "worktree" && args[1] === "list") {
+      listCalls += 1;
+      return listCalls === 2
+        ? {
+            stdout:
+              `worktree ${targetCwd}\0` +
+              "HEAD deadbeef\0" +
+              "branch refs/heads/pi-agent/unidentified-cleanup\0",
+          }
+        : {};
+    }
+    return {};
+  });
+
+  try {
+    await assert.rejects(
+      createGitWorktree(
+        {
+          sourceCwd: repoRoot,
+          targetCwd,
+          branchName: "pi-agent/unidentified-cleanup",
+        },
+        { runner, pathExists: () => false, realpath: identityRealpath }
+      ),
+      (error: unknown) =>
+        error instanceof GitWorktreeError && error.code === "WORKTREE_CREATE_FAILED"
+    );
+    assert.equal(calls.some((args) => args[0] === "worktree" && args[1] === "remove"), true);
+    assert.equal(calls.some((args) => args[0] === "update-ref"), false);
+  } finally {
+    rmSync(ownerGitDir, { recursive: true, force: true });
+  }
 });
 
 test("withGitWorktree retries failed cleanup and exposes its target", async () => {
@@ -273,7 +536,7 @@ test("withGitWorktree treats completed cleanup as idempotent", async () => {
           }
         : { code: 0, stdout: "" };
     }
-    if (args[0] === "update-ref") {
+    if (args[0] === "update-ref" && args.includes("-d")) {
       branchAttempts += 1;
       return branchAttempts === 1 ? { code: 1, stderr: "error: temporary failure" } : {};
     }
@@ -429,7 +692,17 @@ test("createGitWorktree serializes target allocation per repository", async () =
   let targetExists = false;
   let activeAdds = 0;
   let maxActiveAdds = 0;
+  let ownerMessage = "";
   const runner: GitRunner = async (args) => {
+    if (args[0] === "update-ref" && args[1] === "-m" && args[2]) {
+      ownerMessage = args[2];
+    }
+    if (args.includes("commit-tree")) {
+      return { code: 0, stdout: `${"a".repeat(40)}\n`, stderr: "" };
+    }
+    if (args[0] === "reflog" && args[1] === "show") {
+      return { code: 0, stdout: `deadbeef\0${ownerMessage}\n`, stderr: "" };
+    }
     if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
       return { code: 0, stdout: "/workspace/project\n", stderr: "" };
     }
@@ -473,6 +746,43 @@ test("createGitWorktree serializes target allocation per repository", async () =
   assert.equal(maxActiveAdds, 1);
 });
 
+test("createGitWorktree reclaims a stale lock from a reused PID", async () => {
+  const repoRoot = fixturePath(`/workspace/stale-lock-${randomUUID()}`);
+  const lockKey = process.platform === "win32" || process.platform === "darwin"
+    ? repoRoot.toLowerCase()
+    : repoRoot;
+  const lockPath = join(
+    tmpdir(),
+    "pi-agent-desktop-worktree-locks",
+    createHash("sha256").update(lockKey).digest("hex")
+  );
+  mkdirSync(lockPath, { recursive: true });
+  writeFileSync(
+    join(lockPath, "owner"),
+    JSON.stringify({ pid: process.pid, startedAt: 0, token: "stale-token" })
+  );
+  const staleTime = new Date(Date.now() - 60_000);
+  utimesSync(lockPath, staleTime, staleTime);
+
+  try {
+    const result = await createGitWorktree(
+      { sourceCwd: repoRoot, branchName: "pi-agent/stale-lock" },
+      {
+        runner: scriptedRunner((args) =>
+          args[0] === "rev-parse" && args[1] === "--show-toplevel"
+            ? { stdout: `${repoRoot}\n` }
+            : {}
+        ),
+        pathExists: () => false,
+        realpath: identityRealpath,
+      }
+    );
+    assert.equal(result.repoRoot, repoRoot);
+  } finally {
+    rmSync(lockPath, { recursive: true, force: true });
+  }
+});
+
 test("removeGitWorktree does not delete a branch when worktree removal fails", async () => {
   const calls: string[][] = [];
   const runner = scriptedRunner((args) => {
@@ -514,6 +824,92 @@ test("removeGitWorktree does not delete a branch when worktree removal fails", a
     ["rev-parse", "HEAD"],
     ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
   ]);
+});
+
+test("removeGitWorktree does not delete a branch when the target is replaced", async () => {
+  const calls: string[][] = [];
+  let listCalls = 0;
+  const runner = scriptedRunner((args) => {
+    calls.push(args);
+    if (args[0] === "worktree" && args[1] === "list") {
+      listCalls += 1;
+      return listCalls === 1
+        ? {
+            stdout:
+              `worktree ${fixturePath("/workspace/project-copy")}\0` +
+              "HEAD deadbeef\0" +
+              "branch refs/heads/pi-agent/project-copy\0",
+          }
+        : {
+            stdout:
+              `worktree ${fixturePath("/workspace/project-copy")}\0` +
+              "HEAD foreignhead\0" +
+              "branch refs/heads/foreign/worktree\0",
+          };
+    }
+    return {};
+  });
+
+  await assert.rejects(
+    removeGitWorktree(
+      {
+        cwd: fixturePath("/workspace/project-copy"),
+        branchName: "pi-agent/project-copy",
+        repoRoot: fixturePath("/workspace/project"),
+        ...fakeWorktreeIdentity,
+      },
+      runner
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof GitWorktreeError);
+      assert.equal(error.code, "WORKTREE_CLEANUP_FAILED");
+      assert.match(error.message, /still registered/);
+      return true;
+    }
+  );
+  assert.equal(calls.some((args) => args[0] === "update-ref"), false);
+});
+
+test("removeGitWorktree keeps a branch when its ownership marker changed", async () => {
+  const calls: string[][] = [];
+  let listCalls = 0;
+  const runner = scriptedRunner((args) => {
+    calls.push(args);
+    if (args[0] === "worktree" && args[1] === "list") {
+      listCalls += 1;
+      return listCalls === 1
+        ? {
+            stdout:
+              `worktree ${fixturePath("/workspace/project-copy")}\0` +
+              "HEAD deadbeef\0" +
+              "branch refs/heads/pi-agent/project-copy\0",
+          }
+        : {};
+    }
+    if (args[0] === "reflog" && args[1] === "show") {
+      return { stdout: "deadbeef\0pi-agent-desktop worktree owner foreign-token\n" };
+    }
+    return {};
+  });
+
+  await assert.rejects(
+    removeGitWorktree(
+      {
+        cwd: fixturePath("/workspace/project-copy"),
+        branchName: "pi-agent/project-copy",
+        repoRoot: fixturePath("/workspace/project"),
+        ...fakeWorktreeIdentity,
+      },
+      runner
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof GitWorktreeError);
+      assert.equal(error.code, "WORKTREE_CLEANUP_FAILED");
+      assert.match(error.message, /branch ownership marker/);
+      return true;
+    }
+  );
+  assert.equal(calls.some((args) => args[0] === "update-ref"), false);
 });
 
 test("removeGitWorktree reports a branch cleanup failure", async () => {
@@ -562,6 +958,13 @@ test("removeGitWorktree reports a branch cleanup failure", async () => {
     ["rev-parse", "HEAD"],
     ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
     ["worktree", "list", "--porcelain", "-z"],
+    [
+      "reflog",
+      "show",
+      "--format=%H%x00%gs",
+      "-1",
+      "refs/heads/pi-agent/project-copy",
+    ],
     [
       "update-ref",
       "--no-deref",
