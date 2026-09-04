@@ -104,22 +104,63 @@ function conciseGitError(stderr: string): string {
   return message ? `: ${message.slice(0, 300)}` : "";
 }
 
-function worktreeListPathForBranch(
-  stdout: string,
-  branchName: string
-): string | undefined {
-  const branchRef = `branch refs/heads/${branchName}`;
-  let worktreePath: string | undefined;
+type GitWorktreeListRecord = {
+  cwd: string;
+  branchName?: string;
+};
+
+function parseGitWorktreeList(stdout: string): GitWorktreeListRecord[] {
+  const records: GitWorktreeListRecord[] = [];
+  let current: GitWorktreeListRecord | undefined;
+  const addCurrent = () => {
+    if (current) records.push(current);
+    current = undefined;
+  };
+
   for (const line of stdout.split(/\r?\n/)) {
     if (line === "") {
-      worktreePath = undefined;
+      addCurrent();
     } else if (line.startsWith("worktree ")) {
-      worktreePath = line.slice(9);
-    } else if (line === branchRef) {
-      return worktreePath;
+      addCurrent();
+      current = { cwd: line.slice(9) };
+    } else if (line.startsWith("branch refs/heads/") && current) {
+      current.branchName = line.slice("branch refs/heads/".length);
     }
   }
-  return undefined;
+  addCurrent();
+  return records;
+}
+
+function pathsMatch(left: string, right: string): boolean | undefined {
+  const leftPath = resolve(left);
+  const rightPath = resolve(right);
+  if (leftPath === rightPath) return true;
+  try {
+    return realpathSync.native(leftPath) === realpathSync.native(rightPath);
+  } catch {
+    // A removed or inaccessible path cannot be compared safely.
+    return undefined;
+  }
+}
+
+function findRegisteredWorktree(
+  stdout: string,
+  targetCwd: string,
+  branchName?: string
+): { cwd?: string; uncertain: boolean } {
+  const records = parseGitWorktreeList(stdout);
+  if (branchName) {
+    const branchRecord = records.find((record) => record.branchName === branchName);
+    if (branchRecord) return { cwd: branchRecord.cwd, uncertain: false };
+  }
+
+  let uncertain = false;
+  for (const record of records) {
+    const match = pathsMatch(record.cwd, targetCwd);
+    if (match === true) return { cwd: record.cwd, uncertain: false };
+    if (match === undefined) uncertain = true;
+  }
+  return { uncertain };
 }
 
 type WorktreeLockMap = Map<string, Promise<void>>;
@@ -488,7 +529,9 @@ async function withCreatedGitWorktree<T>(
         worktree: { cwd: targetPath, branchName, repoRoot },
         removeBranch: !branchExisted,
       };
-      const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner);
+      const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner, {
+        allowBranchLookup: false,
+      });
       if (cleanupError) deps.onCleanupError?.(cleanupError, cleanupTarget);
       throw new GitWorktreeError(
         "WORKTREE_CREATE_FAILED",
@@ -503,7 +546,9 @@ async function withCreatedGitWorktree<T>(
       return await operation(worktree);
     } catch (error) {
       const cleanupTarget = { worktree, removeBranch: true };
-      const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner);
+      const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner, {
+        allowBranchLookup: true,
+      });
       if (cleanupError) deps.onCleanupError?.(cleanupError, cleanupTarget);
       throw error;
     }
@@ -527,7 +572,8 @@ export async function withGitWorktree<T>(
 
 async function cleanupWorktreeWithRetry(
   cleanupTarget: GitWorktreeCleanupTarget,
-  runner: GitRunner
+  runner: GitRunner,
+  options: { allowBranchLookup?: boolean } = {}
 ): Promise<unknown> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -535,7 +581,10 @@ async function cleanupWorktreeWithRetry(
       await removeGitWorktreeUnlocked(
         cleanupTarget.worktree,
         runner,
-        { removeBranch: cleanupTarget.removeBranch }
+        {
+          removeBranch: cleanupTarget.removeBranch,
+          allowBranchLookup: options.allowBranchLookup,
+        }
       );
       return undefined;
     } catch (error) {
@@ -548,7 +597,7 @@ async function cleanupWorktreeWithRetry(
 async function removeGitWorktreeUnlocked(
   worktree: GitWorktreeResult,
   runner: GitRunner,
-  options: { removeBranch?: boolean } = {}
+  options: { removeBranch?: boolean; allowBranchLookup?: boolean } = {}
 ): Promise<void> {
   const errors: unknown[] = [];
 
@@ -568,13 +617,17 @@ async function removeGitWorktreeUnlocked(
           worktree.repoRoot
         );
         if (listed.code === 0) {
-          const listedCwd = worktreeListPathForBranch(listed.stdout, worktree.branchName);
-          if (!listedCwd) {
+          const registered = findRegisteredWorktree(
+            listed.stdout,
+            worktree.cwd,
+            options.allowBranchLookup ? worktree.branchName : undefined
+          );
+          if (!registered.uncertain && !registered.cwd) {
             stillPresent = false;
-          } else {
+          } else if (registered.cwd) {
             const retried = await runGit(
               runner,
-              ["worktree", "remove", "--force", listedCwd],
+              ["worktree", "remove", "--force", registered.cwd],
               worktree.repoRoot
             );
             stillPresent = retried.code !== 0;
@@ -648,6 +701,9 @@ export async function removeGitWorktree(
   options: { removeBranch?: boolean } = {}
 ): Promise<void> {
   return withWorktreeLocks([worktree.repoRoot, worktree.cwd], () =>
-    removeGitWorktreeUnlocked(worktree, runner, options)
+    removeGitWorktreeUnlocked(worktree, runner, {
+      ...options,
+      allowBranchLookup: true,
+    })
   );
 }

@@ -156,7 +156,7 @@ test("createGitWorktree retries failed cleanup and exposes its target", async ()
     if (args[0] === "worktree" && args[1] === "list") {
       return {
         code: 0,
-        stdout: "worktree /workspace/project-copy\nbranch refs/heads/pi-agent/retry-cleanup\n",
+        stdout: "worktree /workspace/project-pi-agent-retry-cleanup\n",
       };
     }
     if (args[0] === "branch") {
@@ -254,6 +254,43 @@ test("createGitWorktree preserves a pre-existing branch after creation fails", a
     fixturePath("/workspace/project-pi-agent-existing"),
   ]);
   assert.equal(calls.some((args) => args[0] === "branch"), false);
+});
+
+test("createGitWorktree does not remove a pre-existing branch worktree", async () => {
+  const calls: string[][] = [];
+  const runner = scriptedRunner((args) => {
+    calls.push(args);
+    if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
+    if (args[0] === "show-ref") return { code: 0 };
+    if (args[0] === "worktree" && args[1] === "add") {
+      return { code: 128, stderr: "fatal: branch is already checked out" };
+    }
+    if (args[0] === "worktree" && args[1] === "remove") {
+      return { code: 128, stderr: "fatal: worktree is locked" };
+    }
+    if (args[0] === "worktree" && args[1] === "list") {
+      return {
+        stdout:
+          "worktree /workspace/existing-worktree\n" +
+          "branch refs/heads/pi-agent/existing\n",
+      };
+    }
+    return {};
+  });
+
+  await assert.rejects(
+    createGitWorktree(
+      { sourceCwd: "/workspace/project", branchName: "pi-agent/existing" },
+      { runner, pathExists: () => false, realpath: identityRealpath }
+    ),
+    (error: unknown) =>
+      error instanceof GitWorktreeError && error.code === "WORKTREE_CREATE_FAILED"
+  );
+  assert.equal(calls.some((args) => args[0] === "branch"), false);
+  assert.equal(
+    calls.some((args) => args[0] === "worktree" && args[3] === "/workspace/existing-worktree"),
+    false
+  );
 });
 
 test("createGitWorktree serializes target allocation per repository", async () => {
@@ -368,6 +405,39 @@ test("removeGitWorktree reports a branch cleanup failure", async () => {
     ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
     ["branch", "-D", "pi-agent/project-copy"],
     ["show-ref", "--verify", "--quiet", "refs/heads/pi-agent/project-copy"],
+  ]);
+});
+
+test("removeGitWorktree retries a detached registered worktree by path", async () => {
+  const calls: string[][] = [];
+  const targetCwd = fixturePath("/workspace/project-copy");
+  let removeAttempts = 0;
+  const runner = scriptedRunner((args) => {
+    calls.push(args);
+    if (args[0] === "worktree" && args[1] === "remove") {
+      removeAttempts += 1;
+      return removeAttempts === 1 ? { code: 128, stderr: "fatal: already removed" } : {};
+    }
+    if (args[0] === "worktree" && args[1] === "list") {
+      return { stdout: `worktree ${targetCwd}\nHEAD deadbeef\ndetached\n` };
+    }
+    return {};
+  });
+
+  await removeGitWorktree(
+    {
+      cwd: targetCwd,
+      branchName: "pi-agent/detached",
+      repoRoot: fixturePath("/workspace/project"),
+    },
+    runner
+  );
+
+  assert.deepEqual(calls, [
+    ["worktree", "remove", "--force", targetCwd],
+    ["worktree", "list", "--porcelain"],
+    ["worktree", "remove", "--force", targetCwd],
+    ["branch", "-D", "pi-agent/detached"],
   ]);
 });
 
