@@ -371,9 +371,10 @@ test("removeGitWorktree reports a branch cleanup failure", async () => {
 
 test("removeGitWorktree compares worktree paths according to the filesystem", async () => {
   const root = mkdtempSync(join(tmpdir(), "pi-worktree-case-"));
-  const targetCwd = join(root, "Foo");
-  const alternateCwd = join(root, "foo");
-  mkdirSync(targetCwd);
+  const numericAncestor = join(root, "123");
+  const targetCwd = join(numericAncestor, "Foo");
+  const alternateCwd = join(numericAncestor, "foo");
+  mkdirSync(targetCwd, { recursive: true });
   let caseInsensitive = false;
   try {
     caseInsensitive = realpathSync.native(targetCwd) === realpathSync.native(alternateCwd);

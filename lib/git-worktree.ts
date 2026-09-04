@@ -2,7 +2,9 @@ import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   realpathSync,
   renameSync,
@@ -124,23 +126,55 @@ function existingAncestor(path: string): string | undefined {
   }
 }
 
+function caseVariantResolvesToSamePath(current: string, alternate: string): boolean | undefined {
+  try {
+    const currentStat = lstatSync(current);
+    const alternateStat = lstatSync(alternate);
+    if (currentStat.isSymbolicLink() || alternateStat.isSymbolicLink()) return false;
+    return realpathSync.native(current) === realpathSync.native(alternate);
+  } catch {
+    return false;
+  }
+}
+
+function probeFilesystemCaseSensitivity(directory: string): boolean | undefined {
+  let probePath: string | undefined;
+  try {
+    probePath = mkdtempSync(join(directory, ".pi-agent-case-probe-"));
+    const alternatePath = join(dirname(probePath), swapAsciiCase(basename(probePath)));
+    const samePath = caseVariantResolvesToSamePath(probePath, alternatePath);
+    return samePath === true;
+  } catch {
+    return undefined;
+  } finally {
+    if (probePath) {
+      try {
+        rmSync(probePath, { recursive: true, force: true });
+      } catch {
+        // Best-effort cleanup for the temporary sensitivity probe.
+      }
+    }
+  }
+}
+
 function filesystemIsCaseInsensitive(path: string): boolean | undefined {
   let current = existingAncestor(path);
   while (current) {
     const name = basename(current);
     const alternateName = swapAsciiCase(name);
     if (alternateName !== name) {
-      try {
-        const currentRealpath = realpathSync.native(current);
-        const alternateRealpath = realpathSync.native(join(dirname(current), alternateName));
-        return currentRealpath === alternateRealpath;
-      } catch {
-        return false;
-      }
+      const samePath = caseVariantResolvesToSamePath(
+        current,
+        join(dirname(current), alternateName)
+      );
+      if (samePath !== undefined) return samePath;
+    } else {
+      const probe = probeFilesystemCaseSensitivity(current);
+      if (probe !== undefined) return probe;
     }
     const parent = dirname(current);
     if (parent === current) break;
-    current = existingAncestor(parent);
+    current = parent;
   }
   return undefined;
 }
