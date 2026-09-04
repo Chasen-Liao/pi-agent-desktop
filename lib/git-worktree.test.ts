@@ -13,15 +13,25 @@ import {
 
 const fixturePath = (path: string) => resolve(path);
 const identityRealpath = (path: string) => path;
+const fakeWorktreeIdentity = {
+  gitDir: fixturePath("/workspace/project/.git/worktrees/test"),
+  head: "deadbeef",
+};
 
 function scriptedRunner(
   handler: (args: string[], cwd: string) => { code?: number; stdout?: string; stderr?: string }
 ): GitRunner {
   return async (args, { cwd }) => {
     const result = handler(args, cwd);
+    const defaultIdentity =
+      args[0] === "rev-parse" && args[1] === "--git-dir"
+        ? "/workspace/project/.git/worktrees/test\n"
+        : args[0] === "rev-parse" && args[1] === "HEAD"
+          ? "deadbeef\n"
+          : "";
     return {
       code: result.code ?? 0,
-      stdout: result.stdout ?? "",
+      stdout: result.stdout ?? defaultIdentity,
       stderr: result.stderr ?? "",
     };
   };
@@ -41,7 +51,7 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
   const calls: Array<{ args: string[]; cwd: string }> = [];
   const runner = scriptedRunner((args, cwd) => {
     calls.push({ args, cwd });
-    if (args[0] === "rev-parse") {
+    if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
       return { stdout: "/workspace/project\n" };
     }
     return {};
@@ -59,6 +69,7 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
     cwd: fixturePath("/workspace/project-pi-agent-refactor-ui"),
     branchName: "pi-agent/refactor-ui",
     repoRoot: fixturePath("/workspace/project"),
+    ...fakeWorktreeIdentity,
   });
   assert.deepEqual(calls[0]?.args, ["rev-parse", "--show-toplevel"]);
   assert.deepEqual(calls[1]?.args, [
@@ -93,6 +104,7 @@ test("removeGitWorktree removes the worktree and its branch", async () => {
       return {
         stdout:
           `worktree ${fixturePath("/workspace/project-copy")}\0` +
+          "HEAD deadbeef\0" +
           "branch refs/heads/pi-agent/project-copy\0",
       };
     }
@@ -102,6 +114,7 @@ test("removeGitWorktree removes the worktree and its branch", async () => {
     cwd: fixturePath("/workspace/project-copy"),
     branchName: "pi-agent/project-copy",
     repoRoot: fixturePath("/workspace/project"),
+    ...fakeWorktreeIdentity,
   };
 
   await removeGitWorktree(worktree, runner);
@@ -112,6 +125,14 @@ test("removeGitWorktree removes the worktree and its branch", async () => {
       cwd: worktree.repoRoot,
     },
     {
+      args: ["rev-parse", "--git-dir"],
+      cwd: worktree.cwd,
+    },
+    {
+      args: ["rev-parse", "HEAD"],
+      cwd: worktree.cwd,
+    },
+    {
       args: ["worktree", "remove", "--force", worktree.cwd],
       cwd: worktree.repoRoot,
     },
@@ -120,7 +141,12 @@ test("removeGitWorktree removes the worktree and its branch", async () => {
       cwd: worktree.repoRoot,
     },
     {
-      args: ["branch", "-D", worktree.branchName],
+      args: [
+        "update-ref",
+        "-d",
+        `refs/heads/${worktree.branchName}`,
+        worktree.head,
+      ],
       cwd: worktree.repoRoot,
     },
   ]);
@@ -164,7 +190,9 @@ test("withGitWorktree retries failed cleanup and exposes its target", async () =
   let listCalls = 0;
   let cleanupTarget: GitWorktreeCleanupTarget | undefined;
   const runner = scriptedRunner((args) => {
-    if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
+    if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+      return { stdout: "/workspace/project\n" };
+    }
     if (args[0] === "worktree" && args[1] === "add") return {};
     if (args[0] === "worktree" && args[1] === "remove") {
       removeAttempts += 1;
@@ -178,6 +206,7 @@ test("withGitWorktree retries failed cleanup and exposes its target", async () =
             code: 0,
             stdout:
               "worktree /workspace/project-pi-agent-retry-cleanup\0" +
+              "HEAD deadbeef\0" +
               "branch refs/heads/pi-agent/retry-cleanup\0",
           };
     }
@@ -216,7 +245,9 @@ test("withGitWorktree treats completed cleanup as idempotent", async () => {
   let branchAttempts = 0;
   let listCalls = 0;
   const runner = scriptedRunner((args) => {
-    if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
+    if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+      return { stdout: "/workspace/project\n" };
+    }
     if (args[0] === "worktree" && args[1] === "add") return {};
     if (args[0] === "worktree" && args[1] === "remove") {
       removeAttempts += 1;
@@ -229,11 +260,12 @@ test("withGitWorktree treats completed cleanup as idempotent", async () => {
             code: 0,
             stdout:
               "worktree /workspace/project-pi-agent-idempotent-cleanup\0" +
+              "HEAD deadbeef\0" +
               "branch refs/heads/pi-agent/idempotent-cleanup\0",
           }
         : { code: 0, stdout: "" };
     }
-    if (args[0] === "branch") {
+    if (args[0] === "update-ref") {
       branchAttempts += 1;
       return branchAttempts === 1 ? { code: 1, stderr: "error: temporary failure" } : {};
     }
@@ -389,8 +421,14 @@ test("createGitWorktree serializes target allocation per repository", async () =
   let activeAdds = 0;
   let maxActiveAdds = 0;
   const runner: GitRunner = async (args) => {
-    if (args[0] === "rev-parse") {
+    if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
       return { code: 0, stdout: "/workspace/project\n", stderr: "" };
+    }
+    if (args[0] === "rev-parse" && args[1] === "--git-dir") {
+      return { code: 0, stdout: "/workspace/project/.git/worktrees/test\n", stderr: "" };
+    }
+    if (args[0] === "rev-parse" && args[1] === "HEAD") {
+      return { code: 0, stdout: "deadbeef\n", stderr: "" };
     }
     if (args[0] === "worktree" && args[1] === "add") {
       activeAdds += 1;
@@ -435,7 +473,10 @@ test("removeGitWorktree does not delete a branch when worktree removal fails", a
     }
     if (args[0] === "worktree" && args[1] === "list") {
       return {
-        stdout: `worktree ${fixturePath("/workspace/project-copy")}\0branch refs/heads/pi-agent/project-copy\0`,
+        stdout:
+          `worktree ${fixturePath("/workspace/project-copy")}\0` +
+          "HEAD deadbeef\0" +
+          "branch refs/heads/pi-agent/project-copy\0",
       };
     }
     return {};
@@ -447,6 +488,7 @@ test("removeGitWorktree does not delete a branch when worktree removal fails", a
         cwd: fixturePath("/workspace/project-copy"),
         branchName: "pi-agent/project-copy",
         repoRoot: fixturePath("/workspace/project"),
+        ...fakeWorktreeIdentity,
       },
       runner
     ),
@@ -459,15 +501,29 @@ test("removeGitWorktree does not delete a branch when worktree removal fails", a
   );
   assert.deepEqual(calls, [
     ["worktree", "list", "--porcelain", "-z"],
+    ["rev-parse", "--git-dir"],
+    ["rev-parse", "HEAD"],
     ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
   ]);
 });
 
 test("removeGitWorktree reports a branch cleanup failure", async () => {
   const calls: string[][] = [];
+  let listCalls = 0;
   const runner = scriptedRunner((args) => {
     calls.push(args);
-    if (args[0] === "branch") {
+    if (args[0] === "worktree" && args[1] === "list") {
+      listCalls += 1;
+      return listCalls === 1
+        ? {
+            stdout:
+              `worktree ${fixturePath("/workspace/project-copy")}\0` +
+              "HEAD deadbeef\0" +
+              "branch refs/heads/pi-agent/project-copy\0",
+          }
+        : {};
+    }
+    if (args[0] === "update-ref") {
       return { code: 1, stderr: "error: branch is still in use" };
     }
     if (args[0] === "show-ref") return { code: 0 };
@@ -480,6 +536,7 @@ test("removeGitWorktree reports a branch cleanup failure", async () => {
         cwd: fixturePath("/workspace/project-copy"),
         branchName: "pi-agent/project-copy",
         repoRoot: fixturePath("/workspace/project"),
+        ...fakeWorktreeIdentity,
       },
       runner
     ),
@@ -492,8 +549,11 @@ test("removeGitWorktree reports a branch cleanup failure", async () => {
   );
   assert.deepEqual(calls, [
     ["worktree", "list", "--porcelain", "-z"],
+    ["rev-parse", "--git-dir"],
+    ["rev-parse", "HEAD"],
+    ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
     ["worktree", "list", "--porcelain", "-z"],
-    ["branch", "-D", "pi-agent/project-copy"],
+    ["update-ref", "-d", "refs/heads/pi-agent/project-copy", "deadbeef"],
     ["show-ref", "--verify", "--quiet", "refs/heads/pi-agent/project-copy"],
   ]);
 });
@@ -520,6 +580,7 @@ test("removeGitWorktree rejects a detached registered worktree", async () => {
         cwd: targetCwd,
         branchName: "pi-agent/detached",
         repoRoot: fixturePath("/workspace/project"),
+        ...fakeWorktreeIdentity,
       },
       runner
     ),
@@ -549,28 +610,24 @@ test("removeGitWorktree does not remove a different registered worktree", async 
     return {};
   });
 
-  await assert.rejects(
-    removeGitWorktree(
-      {
-        cwd: fixturePath("/workspace/project-copy"),
-        branchName: "pi-agent/case",
-        repoRoot: fixturePath("/workspace/project"),
-      },
-      runner
-    ),
-    (error: unknown) =>
-      error instanceof GitWorktreeError && error.code === "WORKTREE_CLEANUP_FAILED"
+  await removeGitWorktree(
+    {
+      cwd: fixturePath("/workspace/project-copy"),
+      branchName: "pi-agent/case",
+      repoRoot: fixturePath("/workspace/project"),
+      ...fakeWorktreeIdentity,
+    },
+    runner
   );
 
-  assert.deepEqual(calls, [
-    ["worktree", "list", "--porcelain", "-z"],
-    ["worktree", "list", "--porcelain", "-z"],
-  ]);
+  assert.deepEqual(calls, [["worktree", "list", "--porcelain", "-z"]]);
 });
 
 test("createGitWorktree resolves a relative target beside the repository", async () => {
   const runner = scriptedRunner((args) =>
-    args[0] === "rev-parse" ? { stdout: "/workspace/project\n" } : {}
+    args[0] === "rev-parse" && args[1] === "--show-toplevel"
+      ? { stdout: "/workspace/project\n" }
+      : {}
   );
 
   const result = await createGitWorktree(

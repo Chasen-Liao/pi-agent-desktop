@@ -35,6 +35,8 @@ export interface GitWorktreeResult {
   cwd: string;
   branchName: string;
   repoRoot: string;
+  gitDir: string;
+  head: string;
 }
 
 export interface GitWorktreeCleanupTarget {
@@ -107,6 +109,7 @@ function conciseGitError(stderr: string): string {
 type GitWorktreeListRecord = {
   cwd: string;
   branchName?: string;
+  head?: string;
 };
 
 function parseGitWorktreeList(stdout: string): GitWorktreeListRecord[] {
@@ -123,6 +126,8 @@ function parseGitWorktreeList(stdout: string): GitWorktreeListRecord[] {
     } else if (field.startsWith("worktree ")) {
       addCurrent();
       current = { cwd: field.slice(9) };
+    } else if (field.startsWith("HEAD ") && current) {
+      current.head = field.slice(5);
     } else if (field.startsWith("branch refs/heads/") && current) {
       current.branchName = field.slice("branch refs/heads/".length);
     }
@@ -167,6 +172,23 @@ function pathsMatch(left: string, right: string): boolean | undefined {
     if (leftPath.path.toLowerCase() === rightPath.path.toLowerCase()) return undefined;
   }
   return false;
+}
+
+async function readWorktreeIdentity(
+  runner: GitRunner,
+  cwd: string
+): Promise<{ gitDir: string; head: string }> {
+  const gitDirResult = await runGit(runner, ["rev-parse", "--git-dir"], cwd);
+  const headResult = await runGit(runner, ["rev-parse", "HEAD"], cwd);
+  const gitDir = gitDirResult.stdout.trim();
+  const head = headResult.stdout.trim();
+  if (gitDirResult.code !== 0 || !gitDir || headResult.code !== 0 || !head) {
+    throw new GitWorktreeError(
+      "WORKTREE_CREATE_FAILED",
+      "Unable to record Git worktree identity"
+    );
+  }
+  return { gitDir: resolve(cwd, gitDir), head };
 }
 
 function findRegisteredWorktree(
@@ -573,7 +595,8 @@ async function withCreatedGitWorktree<T>(
       );
     }
 
-    const worktree = { cwd: targetPath, branchName, repoRoot };
+    const identity = await readWorktreeIdentity(runner, targetPath);
+    const worktree = { cwd: targetPath, branchName, repoRoot, ...identity };
     try {
       return await operation(worktree);
     } catch (error) {
@@ -600,17 +623,26 @@ export async function withGitWorktree<T>(
   return withCreatedGitWorktree(options, operation, deps);
 }
 
+type CleanupProgress = {
+  worktreeRemoved: boolean;
+};
+
 async function cleanupWorktreeWithRetry(
   cleanupTarget: GitWorktreeCleanupTarget,
   runner: GitRunner
 ): Promise<unknown> {
+  const progress: CleanupProgress = { worktreeRemoved: false };
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       await removeGitWorktreeUnlocked(
         cleanupTarget.worktree,
         runner,
-        { removeBranch: cleanupTarget.removeBranch }
+        {
+          removeBranch: cleanupTarget.removeBranch,
+          worktreeAlreadyRemoved: progress.worktreeRemoved,
+        },
+        progress
       );
       return undefined;
     } catch (error) {
@@ -623,68 +655,101 @@ async function cleanupWorktreeWithRetry(
 async function removeGitWorktreeUnlocked(
   worktree: GitWorktreeResult,
   runner: GitRunner,
-  options: { removeBranch?: boolean } = {}
+  options: { removeBranch?: boolean; worktreeAlreadyRemoved?: boolean } = {},
+  progress: CleanupProgress = { worktreeRemoved: false }
 ): Promise<void> {
   const errors: unknown[] = [];
-  let worktreeReadyForBranchDeletion = options.removeBranch !== false;
+  let worktreeReadyForBranchDeletion = options.worktreeAlreadyRemoved === true;
 
-  try {
-    const listed = await runGit(
-      runner,
-      ["worktree", "list", "--porcelain", "-z"],
-      worktree.repoRoot
-    );
-    if (listed.code !== 0) {
-      worktreeReadyForBranchDeletion = false;
-      errors.push(
-        new GitWorktreeError(
-          "WORKTREE_CLEANUP_FAILED",
-          `Unable to inspect Git worktrees${conciseGitError(listed.stderr)}`
-        )
+  if (!options.worktreeAlreadyRemoved) {
+    try {
+      const listed = await runGit(
+        runner,
+        ["worktree", "list", "--porcelain", "-z"],
+        worktree.repoRoot
       );
-    } else {
-      const registered = findRegisteredWorktree(listed.stdout, worktree.cwd);
-      if (registered.uncertain) {
-        worktreeReadyForBranchDeletion = false;
+      if (listed.code !== 0) {
         errors.push(
           new GitWorktreeError(
             "WORKTREE_CLEANUP_FAILED",
-            "Unable to verify whether the Git worktree still exists"
+            `Unable to inspect Git worktrees${conciseGitError(listed.stderr)}`
           )
         );
-      } else if (registered.record) {
-        if (registered.record.branchName !== worktree.branchName) {
-          worktreeReadyForBranchDeletion = false;
+      } else {
+        const registered = findRegisteredWorktree(listed.stdout, worktree.cwd);
+        if (registered.uncertain) {
           errors.push(
             new GitWorktreeError(
               "WORKTREE_CLEANUP_FAILED",
-              "The registered Git worktree is not owned by this operation"
+              "Unable to verify whether the Git worktree still exists"
             )
           );
-        } else {
-          const removed = await runGit(
-            runner,
-            ["worktree", "remove", "--force", registered.record.cwd],
-            worktree.repoRoot
-          );
-          if (removed.code !== 0) {
-            worktreeReadyForBranchDeletion = false;
+        } else if (registered.record) {
+          if (
+            registered.record.branchName !== worktree.branchName ||
+            registered.record.head !== worktree.head
+          ) {
             errors.push(
               new GitWorktreeError(
                 "WORKTREE_CLEANUP_FAILED",
-                `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+                "The registered Git worktree is not owned by this operation"
               )
             );
+          } else {
+            let identity: { gitDir: string; head: string } | undefined;
+            try {
+              identity = await readWorktreeIdentity(runner, registered.record.cwd);
+            } catch (error) {
+              errors.push(
+                new GitWorktreeError(
+                  "WORKTREE_CLEANUP_FAILED",
+                  "Unable to verify Git worktree identity",
+                  error
+                )
+              );
+            }
+            if (
+              identity &&
+              identity.head === worktree.head &&
+              pathsMatch(identity.gitDir, worktree.gitDir) === true
+            ) {
+              const removed = await runGit(
+                runner,
+                ["worktree", "remove", "--force", registered.record.cwd],
+                worktree.repoRoot
+              );
+              if (removed.code !== 0) {
+                errors.push(
+                  new GitWorktreeError(
+                    "WORKTREE_CLEANUP_FAILED",
+                    `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+                  )
+                );
+              } else {
+                worktreeReadyForBranchDeletion = true;
+                progress.worktreeRemoved = true;
+              }
+            } else if (identity) {
+              errors.push(
+                new GitWorktreeError(
+                  "WORKTREE_CLEANUP_FAILED",
+                  "The Git worktree identity changed before cleanup"
+                )
+              );
+            }
           }
         }
       }
+    } catch (error) {
+      errors.push(error);
     }
-  } catch (error) {
-    worktreeReadyForBranchDeletion = false;
-    errors.push(error);
   }
 
-  if (options.removeBranch !== false && worktreeReadyForBranchDeletion) {
+  if (
+    options.removeBranch !== false &&
+    worktreeReadyForBranchDeletion &&
+    errors.length === 0
+  ) {
     try {
       const listedAfterRemoval = await runGit(
         runner,
@@ -708,7 +773,12 @@ async function removeGitWorktreeUnlocked(
       } else {
         const branch = await runGit(
           runner,
-          ["branch", "-D", worktree.branchName],
+          [
+            "update-ref",
+            "-d",
+            `refs/heads/${worktree.branchName}`,
+            worktree.head,
+          ],
           worktree.repoRoot
         );
         if (branch.code !== 0) {
