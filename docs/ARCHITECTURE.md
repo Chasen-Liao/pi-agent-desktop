@@ -398,7 +398,7 @@ Pi 有两种独立的分支机制，**不要混淆**：
 
 `POST /api/sessions/[id]/clone` 默认创建普通目录 Clone；传入 `workspaceMode: "worktree"` 时，要求源 `cwd` 位于 Git 仓库中，并在仓库外的不存在目标路径创建一个新的 Git worktree。可选 `branchName` 指定分支名；未指定时由服务端生成。成功响应的 `workspace` 会返回 `mode`、`cwd`，Worktree 还会返回 `branchName`。
 
-Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并记录 worktree 的 `gitDir`、`HEAD` 与分支身份。目标路径、分支和身份校验失败时会拒绝操作；Clone/fork 失败时只清理已证明属于本次创建的资源。
+Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并记录 worktree 的 `gitDir`、`HEAD` 与分支身份；同时在 branch reflog 写入一次随机 ownership marker，用于识别同 OID 的删除/重建。目标路径、分支和身份校验失败时会拒绝操作；Clone/fork 失败时只清理已证明属于本次创建的资源，无法证明 branch ownership 时保留 branch。
 
 ### 会话内分支（同文件分支）
 
@@ -711,7 +711,7 @@ Pi SDK 存储格式 `{ id, name, arguments }` 与前端类型 `{ toolCallId, too
 
 ### 14.4 两种分支机制不要混淆
 
-见 §8。**Fork / Branch = 跨文件**，**会话内分支 = 同文件**，**Git Worktree Clone = Git 仓库外的新工作区和分支**，分别由不同 UI 入口和不同 API 触发。Worktree 清理必须先确认目标路径、分支、HEAD 与 linked worktree 的 `gitDir` 身份一致；身份无法证明时应 fail closed，避免删除外部资源。
+见 §8。**Fork / Branch = 跨文件**，**会话内分支 = 同文件**，**Git Worktree Clone = Git 仓库外的新工作区和分支**，分别由不同 UI 入口和不同 API 触发。Worktree 清理必须先确认目标路径、分支、HEAD、linked worktree 的 `gitDir` 身份和 branch reflog ownership marker 一致；身份无法证明时应 fail closed，避免删除外部资源。Git 本身没有按 worktree identity 原子 remove 的接口，因此仍需防范非协作外部 Git 进程的极窄 TOCTOU 窗口。
 
 ### 14.5 SSE 而非 WebSocket
 

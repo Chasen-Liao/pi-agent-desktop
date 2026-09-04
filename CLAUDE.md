@@ -96,7 +96,7 @@ npm run dist:mac
 - **Electron 打包 + 原生运行时**：`build:standalone` 在 `next build` 后补齐 Next turbo runtime、Pi 运行时依赖和 macOS 双架构 Sharp。不要删除这些 ensure 脚本，也不要删除 `electron-builder.yml` 的 `mac.x64ArchFiles`，否则桌面端会卡在启动页、Universal 合并失败或 Intel 端加载原生模块失败。
 - **macOS 后台服务不能直接执行 App 主程序**：packaged macOS 必须用 `utilityProcess.fork(server.js)`；若改回 `spawn(process.execPath)` + `ELECTRON_RUN_AS_NODE`，Dock 会出现持续弹跳的黑色 `exec` 图标。
 - **用户可见文案走 `lib/i18n`**：`en` / `zh-CN`，偏好可 `system`；新增字符串同步改 `dictionaries.ts` 两边。
-- **三种分支/工作区不要混淆**：**Fork / Branch** = 跨文件新 `.jsonl`（`POST /api/sessions/[id]/branch` 或 `POST /api/agent/[id]` with `{type:"fork"}`）；**会话内分支** = 同文件 `navigate_tree` + `GET /api/sessions/[id]/context?leafId=`；**Git Worktree Clone** = 在源 Git 仓库外创建新 worktree 和分支后再 Clone 会话。
+- **三种分支/工作区不要混淆**：**Fork / Branch** = 跨文件新 `.jsonl`（`POST /api/sessions/[id]/branch` 或 `POST /api/agent/[id]` with `{type:"fork"}`）；**会话内分支** = 同文件 `navigate_tree` + `GET /api/sessions/[id]/context?leafId=`；**Git Worktree Clone** = 在源 Git 仓库外创建新 worktree 和分支后再 Clone 会话，清理需同时核对路径、`gitDir`、`HEAD` 与 branch ownership marker。
 - **Fork 后必须立即销毁旧 wrapper**：Fork 在文件层通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）创建新 `.jsonl`，再用 `startRpcSession()` 构造全新 AgentSession 实例；旧 wrapper 不再会被请求到，立即 `destroy()` 可及时释放资源（而非等 10 分钟 idle 超时）。详见 [docs/ARCHITECTURE.md §14.2](docs/ARCHITECTURE.md#142-fork-的执行顺序预注册--销毁旧-wrapper)。
 
 > 更完整的设计决策与陷阱清单（ToolCall 归一化、SSE 重连、electron-builder extraResources、Windows 兼容层等）见 [docs/ARCHITECTURE.md §14](docs/ARCHITECTURE.md#14-关键设计决策与陷阱)。

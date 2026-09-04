@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -37,6 +37,7 @@ export interface GitWorktreeResult {
   repoRoot: string;
   gitDir: string;
   head: string;
+  branchOwnerToken: string;
   ownerMarkerPath?: string;
   ownerToken?: string;
 }
@@ -220,6 +221,124 @@ async function readWorktreeIdentity(
   };
 }
 
+// Git's ref CAS only compares the target OID, so a deleted and recreated
+// branch at the same OID would otherwise look owned. The temporary commit
+// creates a unique reflog transition that cleanup can verify before deletion.
+const BRANCH_OWNER_MESSAGE_PREFIX = "pi-agent-desktop worktree owner";
+
+function branchOwnerMessage(ownerToken: string): string {
+  return `${BRANCH_OWNER_MESSAGE_PREFIX} ${ownerToken}`;
+}
+
+function isGitObjectId(value: string): boolean {
+  return /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(value);
+}
+
+function branchOwnerReflogMatches(
+  stdout: string,
+  head: string,
+  ownerToken: string
+): boolean {
+  const [reflogHead, message] = stdout.trimEnd().split("\0");
+  return reflogHead === head && message === branchOwnerMessage(ownerToken);
+}
+
+async function recordBranchOwnership(
+  runner: GitRunner,
+  repoRoot: string,
+  branchName: string,
+  head: string,
+  ownerToken: string
+): Promise<void> {
+  const refName = `refs/heads/${branchName}`;
+  const message = branchOwnerMessage(ownerToken);
+  const markerCommit = await runGit(
+    runner,
+    [
+      "-c",
+      "user.name=pi-agent-desktop",
+      "-c",
+      "user.email=pi-agent-desktop@invalid",
+      "-c",
+      "commit.gpgSign=false",
+      "commit-tree",
+      `${head}^{tree}`,
+      "-p",
+      head,
+      "-m",
+      message,
+    ],
+    repoRoot
+  );
+  const markerHead = markerCommit.stdout.trim();
+  if (markerCommit.code !== 0 || !isGitObjectId(markerHead)) {
+    throw new GitWorktreeError(
+      "WORKTREE_CREATE_FAILED",
+      "Unable to record Git branch ownership"
+    );
+  }
+
+  const moved = await runGit(
+    runner,
+    ["update-ref", "-m", message, refName, markerHead, head],
+    repoRoot
+  );
+  if (moved.code !== 0) {
+    throw new GitWorktreeError(
+      "WORKTREE_CREATE_FAILED",
+      "The Git worktree branch changed before ownership was recorded"
+    );
+  }
+
+  const restored = await runGit(
+    runner,
+    ["update-ref", "-m", message, refName, head, markerHead],
+    repoRoot
+  );
+  if (restored.code !== 0) {
+    // Restore the original branch tip when the marker transaction is only
+    // partially applied. The expected markerHead makes this rollback safe.
+    await runGit(runner, ["update-ref", refName, head, markerHead], repoRoot).catch(() => {});
+    throw new GitWorktreeError(
+      "WORKTREE_CREATE_FAILED",
+      "Unable to finish recording Git branch ownership"
+    );
+  }
+
+  const reflog = await runGit(
+    runner,
+    ["reflog", "show", "--format=%H%x00%gs", "-1", refName],
+    repoRoot
+  );
+  if (reflog.code !== 0 || !branchOwnerReflogMatches(reflog.stdout, head, ownerToken)) {
+    throw new GitWorktreeError(
+      "WORKTREE_CREATE_FAILED",
+      "Git branch ownership cannot be proved"
+    );
+  }
+}
+
+async function assertBranchOwnership(
+  runner: GitRunner,
+  repoRoot: string,
+  branchName: string,
+  head: string,
+  ownerToken: string
+): Promise<void> {
+  const refName = `refs/heads/${branchName}`;
+  const reflog = await runGit(
+    runner,
+    ["reflog", "show", "--format=%H%x00%gs", "-1", refName],
+    repoRoot
+  );
+  if (reflog.code !== 0 || !branchOwnerReflogMatches(reflog.stdout, head, ownerToken)) {
+    throw new GitWorktreeError(
+      "WORKTREE_CLEANUP_FAILED",
+      "The Git branch ownership marker changed"
+    );
+  }
+}
+
 function findRegisteredWorktree(
   stdout: string,
   targetCwd: string
@@ -280,6 +399,63 @@ function processIsAlive(pid: number): boolean {
   }
 }
 
+function processStartTime(pid: number): number | undefined {
+  try {
+    if (pid === process.pid) {
+      return Date.now() - process.uptime() * 1_000;
+    }
+    if (process.platform === "win32") {
+      const output = execFileSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          `(Get-Process -Id ${pid}).StartTime.ToFileTimeUtc()`,
+        ],
+        { encoding: "utf8", windowsHide: true, timeout: 2_000 }
+      );
+      const fileTime = Number(output.trim());
+      return Number.isFinite(fileTime) ? fileTime / 10_000 - 11_644_473_600_000 : undefined;
+    }
+
+    if (process.platform === "linux") {
+      const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+      const fields = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\s+/);
+      const startTicks = Number(fields[19]);
+      const bootTime = Number(
+        readFileSync("/proc/stat", "utf8").match(/^btime (\d+)$/m)?.[1]
+      );
+      const clockTicks = Number(
+        execFileSync("getconf", ["CLK_TCK"], { encoding: "utf8", timeout: 2_000 }).trim()
+      );
+      if (!Number.isFinite(startTicks) || !Number.isFinite(bootTime) || !Number.isFinite(clockTicks)) {
+        return undefined;
+      }
+      return bootTime * 1_000 + (startTicks * 1_000) / clockTicks;
+    }
+
+    if (process.platform === "darwin") {
+      const output = execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
+        encoding: "utf8",
+        env: { ...process.env, LC_ALL: "C", LANG: "C" },
+        timeout: 2_000,
+      });
+      const startedAt = Date.parse(output.trim());
+      return Number.isFinite(startedAt) ? startedAt : undefined;
+    }
+  } catch {
+    // A process start time that cannot be verified must not be treated as safe.
+  }
+  return undefined;
+}
+
+function processInstanceMatches(pid: number, startedAt: number): boolean | undefined {
+  const actualStartedAt = processStartTime(pid);
+  if (actualStartedAt === undefined) return undefined;
+  return Math.abs(actualStartedAt - startedAt) <= 2_000;
+}
+
 function removeStaleInterprocessLock(lockPath: string): boolean {
   let lockAgeMs = 0;
   try {
@@ -292,9 +468,22 @@ function removeStaleInterprocessLock(lockPath: string): boolean {
   try {
     const owner = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8")) as {
       pid?: unknown;
+      startedAt?: unknown;
     };
-    if (typeof owner.pid === "number" && processIsAlive(owner.pid)) {
-      return false;
+    if (
+      typeof owner.pid === "number" &&
+      Number.isSafeInteger(owner.pid) &&
+      owner.pid > 0 &&
+      processIsAlive(owner.pid)
+    ) {
+      if (typeof owner.startedAt !== "number" || !Number.isFinite(owner.startedAt)) {
+        return false;
+      }
+      // A live PID is not enough: the OS may have reused it. Reclaim only
+      // when the recorded process start time is provably different.
+      if (processInstanceMatches(owner.pid, owner.startedAt) !== false) {
+        return false;
+      }
     }
   } catch (error) {
     if (!isErrorCode(error, "ENOENT")) {
@@ -526,7 +715,8 @@ async function cleanupUnidentifiedWorktree(
   cwd: string,
   branchName: string,
   ownerMarkerPath?: string,
-  ownerToken?: string
+  ownerToken?: string,
+  expectedHead?: string
 ): Promise<unknown> {
   if (!ownerMarkerPath || !ownerToken) {
     return new GitWorktreeError(
@@ -537,7 +727,6 @@ async function cleanupUnidentifiedWorktree(
 
   let lastError: unknown;
   let worktreeRemoved = false;
-  let branchHead: string | undefined;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       if (!worktreeRemoved) {
@@ -563,7 +752,8 @@ async function cleanupUnidentifiedWorktree(
         }
         if (
           registered.record.branchName !== branchName ||
-          !registered.record.head
+          !registered.record.head ||
+          (expectedHead !== undefined && registered.record.head !== expectedHead)
         ) {
           return new GitWorktreeError(
             "WORKTREE_CLEANUP_FAILED",
@@ -584,7 +774,6 @@ async function cleanupUnidentifiedWorktree(
             error
           );
         }
-        branchHead = registered.record.head;
         const removed = await runGit(
           runner,
           ["worktree", "remove", "--force", registered.record.cwd],
@@ -612,6 +801,18 @@ async function cleanupUnidentifiedWorktree(
         );
         continue;
       }
+      const remaining = findRegisteredWorktree(listedAfterRemoval.stdout, cwd);
+      if (remaining.uncertain || remaining.record || existsSync(cwd)) {
+        lastError = new GitWorktreeError(
+          "WORKTREE_CLEANUP_FAILED",
+          remaining.uncertain
+            ? "Unable to verify whether the Git worktree was removed"
+            : remaining.record
+              ? "The Git worktree is still registered after cleanup"
+              : "The Git worktree path still exists after cleanup"
+        );
+        continue;
+      }
       if (hasRegisteredBranch(listedAfterRemoval.stdout, branchName)) {
         lastError = new GitWorktreeError(
           "WORKTREE_CLEANUP_FAILED",
@@ -619,29 +820,9 @@ async function cleanupUnidentifiedWorktree(
         );
         continue;
       }
-      if (!branchHead) return lastError;
-      const branch = await runGit(
-        runner,
-        [
-          "update-ref",
-          "--no-deref",
-          "-d",
-          `refs/heads/${branchName}`,
-          branchHead,
-        ],
-        repoRoot
-      );
-      if (branch.code === 0) return undefined;
-      const state = await runGit(
-        runner,
-        ["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`],
-        repoRoot
-      );
-      if (state.code === 1) return undefined;
-      lastError = new GitWorktreeError(
-        "WORKTREE_CLEANUP_FAILED",
-        `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
-      );
+      // The branch intentionally remains after an unidentified cleanup. Its
+      // ownership cannot be proved without the result captured after add.
+      return undefined;
     } catch (error) {
       lastError = error;
     }
@@ -755,6 +936,7 @@ async function withCreatedGitWorktree<T>(
 
     const ownerToken = randomUUID();
     let ownerMarkerPath: string | undefined;
+    let createdHead: string | undefined;
     let worktree: GitWorktreeResult | undefined;
     try {
       const gitDir = await readWorktreeGitDir(runner, targetPath);
@@ -765,12 +947,15 @@ async function withCreatedGitWorktree<T>(
         ownerMarkerPath = undefined;
       }
       const head = await readWorktreeHead(runner, targetPath);
+      createdHead = head;
+      await recordBranchOwnership(runner, repoRoot, branchName, head, ownerToken);
       worktree = {
         cwd: targetPath,
         branchName,
         repoRoot,
         gitDir,
         head,
+        branchOwnerToken: ownerToken,
         ...(ownerMarkerPath ? { ownerMarkerPath, ownerToken } : {}),
       };
       const checkoutIdentity = await readWorktreeIdentity(runner, targetPath);
@@ -794,6 +979,33 @@ async function withCreatedGitWorktree<T>(
           `Failed to check out Git worktree${conciseGitError(checkedOut.stderr)}`
         );
       }
+      const finalIdentity = await readWorktreeIdentity(runner, targetPath);
+      if (
+        finalIdentity.head !== worktree.head ||
+        pathsMatch(finalIdentity.gitDir, worktree.gitDir) !== true
+      ) {
+        throw new GitWorktreeError(
+          "WORKTREE_CREATE_FAILED",
+          "The Git worktree identity changed after checkout"
+        );
+      }
+      if (ownerMarkerPath && ownerToken) {
+        try {
+          if (readFileSync(ownerMarkerPath, "utf8") !== ownerToken) {
+            throw new GitWorktreeError(
+              "WORKTREE_CREATE_FAILED",
+              "The Git worktree ownership marker changed after checkout"
+            );
+          }
+        } catch (error) {
+          if (error instanceof GitWorktreeError) throw error;
+          throw new GitWorktreeError(
+            "WORKTREE_CREATE_FAILED",
+            "Unable to verify Git worktree ownership marker after checkout",
+            error
+          );
+        }
+      }
       return await operation(worktree);
     } catch (error) {
       if (worktree) {
@@ -807,9 +1019,9 @@ async function withCreatedGitWorktree<T>(
           targetPath,
           branchName,
           ownerMarkerPath,
-          ownerToken
-        );
-        if (cleanupError) {
+          ownerToken,
+          createdHead
+        );        if (cleanupError) {
           const cleanupMessage =
             cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
           throw new GitWorktreeError(
@@ -956,6 +1168,9 @@ async function removeGitWorktreeUnlocked(
               identity.head === worktree.head &&
               pathsMatch(identity.gitDir, worktree.gitDir) === true
             ) {
+              // Git only accepts a path here, not the linked worktree's admin
+              // directory. The identity check above plus the post-remove
+              // registration/path check below is the safest available guard.
               const removed = await runGit(
                 runner,
                 ["worktree", "remove", "--force", registered.record.cwd],
@@ -1013,38 +1228,66 @@ async function removeGitWorktreeUnlocked(
             `Unable to verify Git branch ownership${conciseGitError(listedAfterRemoval.stderr)}`
           )
         );
-      } else if (hasRegisteredBranch(listedAfterRemoval.stdout, worktree.branchName)) {
-        errors.push(
-          new GitWorktreeError(
-            "WORKTREE_CLEANUP_FAILED",
-            "The Git branch is still registered to a worktree"
-          )
-        );
       } else {
-        const branch = await runGit(
-          runner,
-          [
-            "update-ref",
-            "--no-deref",
-            "-d",
-            `refs/heads/${worktree.branchName}`,
-            worktree.head,
-          ],
-          worktree.repoRoot
-        );
-        if (branch.code !== 0) {
-          const state = await runGit(
+        const remaining = findRegisteredWorktree(listedAfterRemoval.stdout, worktree.cwd);
+        if (remaining.uncertain || remaining.record || existsSync(worktree.cwd)) {
+          errors.push(
+            new GitWorktreeError(
+              "WORKTREE_CLEANUP_FAILED",
+              remaining.uncertain
+                ? "Unable to verify whether the Git worktree was removed"
+                : remaining.record
+                  ? "The Git worktree is still registered after cleanup"
+                  : "The Git worktree path still exists after cleanup"
+            )
+          );
+        } else if (hasRegisteredBranch(listedAfterRemoval.stdout, worktree.branchName)) {
+          errors.push(
+            new GitWorktreeError(
+              "WORKTREE_CLEANUP_FAILED",
+              "The Git branch is still registered to a worktree"
+            )
+          );
+        } else if (!worktree.branchOwnerToken) {
+          errors.push(
+            new GitWorktreeError(
+              "WORKTREE_CLEANUP_FAILED",
+              "The Git branch ownership marker is missing"
+            )
+          );
+        } else {
+          await assertBranchOwnership(
             runner,
-            ["show-ref", "--verify", "--quiet", `refs/heads/${worktree.branchName}`],
+            worktree.repoRoot,
+            worktree.branchName,
+            worktree.head,
+            worktree.branchOwnerToken
+          );
+          const branch = await runGit(
+            runner,
+            [
+              "update-ref",
+              "--no-deref",
+              "-d",
+              `refs/heads/${worktree.branchName}`,
+              worktree.head,
+            ],
             worktree.repoRoot
           );
-          if (state.code !== 1) {
-            errors.push(
-              new GitWorktreeError(
-                "WORKTREE_CLEANUP_FAILED",
-                `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
-              )
+          if (branch.code !== 0) {
+            const state = await runGit(
+              runner,
+              ["show-ref", "--verify", "--quiet", `refs/heads/${worktree.branchName}`],
+              worktree.repoRoot
             );
+            if (state.code !== 1) {
+              errors.push(
+                new GitWorktreeError(
+                  "WORKTREE_CLEANUP_FAILED",
+                  `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
+                )
+              );
+            }
           }
         }
       }
