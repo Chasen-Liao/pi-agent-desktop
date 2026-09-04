@@ -79,6 +79,7 @@ function runGitProcess(args: string[], options: { cwd: string }): Promise<GitCom
         cwd: options.cwd,
         windowsHide: true,
         encoding: "utf8",
+        env: { ...process.env, LC_ALL: "C", LANG: "C" },
         maxBuffer: 1024 * 1024,
       },
       (error, stdout, stderr) => {
@@ -103,15 +104,18 @@ function conciseGitError(stderr: string): string {
   return message ? `: ${message.slice(0, 300)}` : "";
 }
 
-function gitCommandReportsMissingResource(
-  result: GitCommandResult,
-  resource: "worktree" | "branch"
-): boolean {
-  if (result.code === 0) return false;
-  const output = `${result.stdout}\n${result.stderr}`.toLowerCase();
-  return resource === "worktree"
-    ? output.includes("is not a working tree") || output.includes("not a working tree")
-    : output.includes("branch ") && output.includes(" not found");
+function pathsMatch(left: string, right: string): boolean {
+  const leftPath = resolve(left);
+  const rightPath = resolve(right);
+  return process.platform === "win32" || process.platform === "darwin"
+    ? leftPath.toLowerCase() === rightPath.toLowerCase()
+    : leftPath === rightPath;
+}
+
+function worktreeListContains(stdout: string, targetCwd: string): boolean {
+  return stdout
+    .split(/\r?\n/)
+    .some((line) => line.startsWith("worktree ") && pathsMatch(line.slice(9), targetCwd));
 }
 
 type WorktreeLockMap = Map<string, Promise<void>>;
@@ -550,13 +554,26 @@ async function removeGitWorktreeUnlocked(
       ["worktree", "remove", "--force", worktree.cwd],
       worktree.repoRoot
     );
-    if (removed.code !== 0 && !gitCommandReportsMissingResource(removed, "worktree")) {
-      errors.push(
-        new GitWorktreeError(
-          "WORKTREE_CLEANUP_FAILED",
-          `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
-        )
-      );
+    if (removed.code !== 0) {
+      let stillPresent = true;
+      try {
+        const listed = await runGit(
+          runner,
+          ["worktree", "list", "--porcelain"],
+          worktree.repoRoot
+        );
+        stillPresent = listed.code !== 0 || worktreeListContains(listed.stdout, worktree.cwd);
+      } catch (error) {
+        errors.push(error);
+      }
+      if (stillPresent) {
+        errors.push(
+          new GitWorktreeError(
+            "WORKTREE_CLEANUP_FAILED",
+            `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+          )
+        );
+      }
     }
   } catch (error) {
     errors.push(error);
@@ -569,13 +586,26 @@ async function removeGitWorktreeUnlocked(
         ["branch", "-D", worktree.branchName],
         worktree.repoRoot
       );
-      if (branch.code !== 0 && !gitCommandReportsMissingResource(branch, "branch")) {
-        errors.push(
-          new GitWorktreeError(
-            "WORKTREE_CLEANUP_FAILED",
-            `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
-          )
-        );
+      if (branch.code !== 0) {
+        let stillPresent = true;
+        try {
+          const state = await runGit(
+            runner,
+            ["show-ref", "--verify", "--quiet", `refs/heads/${worktree.branchName}`],
+            worktree.repoRoot
+          );
+          stillPresent = state.code !== 1;
+        } catch (error) {
+          errors.push(error);
+        }
+        if (stillPresent) {
+          errors.push(
+            new GitWorktreeError(
+              "WORKTREE_CLEANUP_FAILED",
+              `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
+            )
+          );
+        }
       }
     } catch (error) {
       errors.push(error);

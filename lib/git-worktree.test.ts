@@ -139,15 +139,22 @@ test("createGitWorktree cleans up a partially created worktree", async () => {
 test("createGitWorktree retries failed cleanup and exposes its target", async () => {
   let removeAttempts = 0;
   let branchAttempts = 0;
+  let showRefAttempts = 0;
   const runner = scriptedRunner((args) => {
     if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
-    if (args[0] === "show-ref") return { code: 1 };
+    if (args[0] === "show-ref") {
+      showRefAttempts += 1;
+      return { code: showRefAttempts === 1 ? 1 : 0 };
+    }
     if (args[0] === "worktree" && args[1] === "add") {
       return { code: 128, stderr: "fatal: checkout hook failed" };
     }
-    if (args[0] === "worktree") {
+    if (args[0] === "worktree" && args[1] === "remove") {
       removeAttempts += 1;
       return { code: 128, stderr: "fatal: cleanup is temporarily unavailable" };
+    }
+    if (args[0] === "worktree" && args[1] === "list") {
+      return { code: 0, stdout: "worktree /workspace/project-copy\n" };
     }
     if (args[0] === "branch") {
       branchAttempts += 1;
@@ -176,17 +183,24 @@ test("createGitWorktree retries failed cleanup and exposes its target", async ()
 test("createGitWorktree treats completed cleanup as idempotent", async () => {
   let removeAttempts = 0;
   let branchAttempts = 0;
+  let showRefAttempts = 0;
   const runner = scriptedRunner((args) => {
     if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
-    if (args[0] === "show-ref") return { code: 1 };
+    if (args[0] === "show-ref") {
+      showRefAttempts += 1;
+      return { code: showRefAttempts === 1 ? 1 : 0 };
+    }
     if (args[0] === "worktree" && args[1] === "add") {
       return { code: 128, stderr: "fatal: checkout hook failed" };
     }
-    if (args[0] === "worktree") {
+    if (args[0] === "worktree" && args[1] === "remove") {
       removeAttempts += 1;
       return removeAttempts === 1
         ? {}
         : { code: 128, stderr: "fatal: '/workspace/project-copy' is not a working tree" };
+    }
+    if (args[0] === "worktree" && args[1] === "list") {
+      return { code: 0, stdout: "", stderr: "" };
     }
     if (args[0] === "branch") {
       branchAttempts += 1;
@@ -285,8 +299,13 @@ test("removeGitWorktree attempts branch cleanup when worktree removal fails", as
   const calls: string[][] = [];
   const runner = scriptedRunner((args) => {
     calls.push(args);
-    if (args[0] === "worktree") {
+    if (args[0] === "worktree" && args[1] === "remove") {
       return { code: 128, stderr: "fatal: worktree is locked" };
+    }
+    if (args[0] === "worktree" && args[1] === "list") {
+      return {
+        stdout: `worktree ${fixturePath("/workspace/project-copy")}\n`,
+      };
     }
     return {};
   });
@@ -309,6 +328,7 @@ test("removeGitWorktree attempts branch cleanup when worktree removal fails", as
   );
   assert.deepEqual(calls, [
     ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
+    ["worktree", "list", "--porcelain"],
     ["branch", "-D", "pi-agent/project-copy"],
   ]);
 });
@@ -320,6 +340,7 @@ test("removeGitWorktree reports a branch cleanup failure", async () => {
     if (args[0] === "branch") {
       return { code: 1, stderr: "error: branch is still in use" };
     }
+    if (args[0] === "show-ref") return { code: 0 };
     return {};
   });
 
@@ -342,6 +363,7 @@ test("removeGitWorktree reports a branch cleanup failure", async () => {
   assert.deepEqual(calls, [
     ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
     ["branch", "-D", "pi-agent/project-copy"],
+    ["show-ref", "--verify", "--quiet", "refs/heads/pi-agent/project-copy"],
   ]);
 });
 
