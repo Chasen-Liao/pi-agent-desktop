@@ -136,6 +136,43 @@ test("createGitWorktree cleans up a partially created worktree", async () => {
   assert.deepEqual(calls.at(-1), ["branch", "-D", "pi-agent/partial"]);
 });
 
+test("createGitWorktree retries failed cleanup and exposes its target", async () => {
+  let removeAttempts = 0;
+  let branchAttempts = 0;
+  const runner = scriptedRunner((args) => {
+    if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
+    if (args[0] === "show-ref") return { code: 1 };
+    if (args[0] === "worktree" && args[1] === "add") {
+      return { code: 128, stderr: "fatal: checkout hook failed" };
+    }
+    if (args[0] === "worktree") {
+      removeAttempts += 1;
+      return { code: 128, stderr: "fatal: cleanup is temporarily unavailable" };
+    }
+    if (args[0] === "branch") {
+      branchAttempts += 1;
+      return { code: 1, stderr: "error: branch cleanup is temporarily unavailable" };
+    }
+    return {};
+  });
+
+  await assert.rejects(
+    createGitWorktree(
+      { sourceCwd: "/workspace/project", branchName: "pi-agent/retry-cleanup" },
+      { runner, pathExists: () => false, realpath: identityRealpath }
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof GitWorktreeError);
+      assert.equal(error.code, "WORKTREE_CREATE_FAILED");
+      assert.equal(error.cleanupTarget?.removeBranch, true);
+      assert.equal(error.cleanupTarget?.worktree.branchName, "pi-agent/retry-cleanup");
+      return true;
+    }
+  );
+  assert.equal(removeAttempts, 2);
+  assert.equal(branchAttempts, 2);
+});
+
 test("createGitWorktree preserves a pre-existing branch after creation fails", async () => {
   const calls: string[][] = [];
   const runner = scriptedRunner((args) => {

@@ -1,7 +1,16 @@
 import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { existsSync, realpathSync } from "node:fs";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export interface GitCommandResult {
   code: number;
@@ -26,6 +35,11 @@ export interface GitWorktreeResult {
   repoRoot: string;
 }
 
+export interface GitWorktreeCleanupTarget {
+  worktree: GitWorktreeResult;
+  removeBranch: boolean;
+}
+
 export type GitWorktreeErrorCode =
   | "GIT_UNAVAILABLE"
   | "NOT_GIT_REPOSITORY"
@@ -38,12 +52,19 @@ export type GitWorktreeErrorCode =
 export class GitWorktreeError extends Error {
   readonly code: GitWorktreeErrorCode;
   readonly originalError?: unknown;
+  readonly cleanupTarget?: GitWorktreeCleanupTarget;
 
-  constructor(code: GitWorktreeErrorCode, message: string, originalError?: unknown) {
+  constructor(
+    code: GitWorktreeErrorCode,
+    message: string,
+    originalError?: unknown,
+    cleanupTarget?: GitWorktreeCleanupTarget
+  ) {
     super(message);
     this.name = "GitWorktreeError";
     this.code = code;
     this.originalError = originalError;
+    this.cleanupTarget = cleanupTarget;
   }
 }
 
@@ -93,22 +114,122 @@ function getWorktreeLocks(): WorktreeLockMap {
   return globalThis.__piGitWorktreeLocks;
 }
 
-async function withWorktreeLock<T>(repoRoot: string, operation: () => Promise<T>): Promise<T> {
+function isErrorCode(error: unknown, code: string): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as Error & { code?: unknown }).code === code
+  );
+}
+
+function interprocessLockPath(resourceKey: string): string {
+  const key = createHash("sha256").update(resourceKey).digest("hex");
+  return join(tmpdir(), "pi-agent-desktop-worktree-locks", key);
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return isErrorCode(error, "EPERM");
+  }
+}
+
+function removeStaleInterprocessLock(lockPath: string): boolean {
+  let lockAgeMs = 0;
+  try {
+    lockAgeMs = Date.now() - statSync(lockPath).mtimeMs;
+  } catch (error) {
+    return isErrorCode(error, "ENOENT");
+  }
+  if (lockAgeMs < 30_000) return false;
+
+  try {
+    const owner = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8")) as {
+      pid?: unknown;
+    };
+    if (typeof owner.pid === "number" && processIsAlive(owner.pid)) {
+      return false;
+    }
+  } catch (error) {
+    if (!isErrorCode(error, "ENOENT")) {
+      // A stale or partially written owner file is safe to reclaim after the age check.
+    }
+  }
+
+  try {
+    rmSync(lockPath, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function acquireInterprocessLock(resourceKey: string): Promise<() => void> {
+  const lockPath = interprocessLockPath(resourceKey);
+  mkdirSync(dirname(lockPath), { recursive: true });
+
+  while (true) {
+    const token = randomUUID();
+    let created = false;
+    try {
+      mkdirSync(lockPath);
+      created = true;
+      writeFileSync(
+        join(lockPath, "owner"),
+        JSON.stringify({ pid: process.pid, token }),
+        { flag: "wx" }
+      );
+      return () => {
+        try {
+          const owner = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8")) as {
+            token?: unknown;
+          };
+          if (owner.token === token) {
+            rmSync(lockPath, { recursive: true, force: true });
+          }
+        } catch {
+          // The lock was already reclaimed or removed.
+        }
+      };
+    } catch (error) {
+      if (created) {
+        rmSync(lockPath, { recursive: true, force: true });
+      }
+      if (!isErrorCode(error, "EEXIST")) throw error;
+      if (!removeStaleInterprocessLock(lockPath)) {
+        await new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 25));
+      }
+    }
+  }
+}
+
+async function withWorktreeLocks<T>(
+  resourceKeys: string[],
+  operation: () => Promise<T>
+): Promise<T> {
+  const keys = [...new Set(resourceKeys)].sort();
   const locks = getWorktreeLocks();
-  const previous = locks.get(repoRoot) ?? Promise.resolve();
+  const previous = keys.map((key) => locks.get(key) ?? Promise.resolve());
   let release!: () => void;
   const current = new Promise<void>((resolvePromise) => {
     release = resolvePromise;
   });
-  locks.set(repoRoot, current);
+  for (const key of keys) locks.set(key, current);
 
-  await previous;
+  await Promise.all(previous);
+  const releaseInterprocess: Array<() => void> = [];
   try {
+    for (const key of keys) {
+      releaseInterprocess.push(await acquireInterprocessLock(key));
+    }
     return await operation();
   } finally {
+    for (const releaseLock of releaseInterprocess.reverse()) releaseLock();
     release();
-    if (locks.get(repoRoot) === current) {
-      locks.delete(repoRoot);
+    for (const key of keys) {
+      if (locks.get(key) === current) locks.delete(key);
     }
   }
 }
@@ -270,7 +391,7 @@ export async function createGitWorktree(
   );
   const targetPath = resolve(targetParent, basename(unresolvedTargetPath));
 
-  return withWorktreeLock(repoRoot, async () => {
+  return withWorktreeLocks([repoRoot, targetPath], async () => {
     if (isWithin(repoRoot, targetPath)) {
       throw new GitWorktreeError(
         "TARGET_INSIDE_REPOSITORY",
@@ -303,18 +424,35 @@ export async function createGitWorktree(
       repoRoot
     );
     if (created.code !== 0) {
+      const cleanupTarget = {
+        worktree: { cwd: targetPath, branchName, repoRoot },
+        removeBranch: !branchExisted,
+      };
+      let cleanupError: unknown;
       try {
         await removeGitWorktreeUnlocked(
-          { cwd: targetPath, branchName, repoRoot },
+          cleanupTarget.worktree,
           runner,
-          { removeBranch: !branchExisted }
+          { removeBranch: cleanupTarget.removeBranch }
         );
-      } catch {
-        // Preserve the original creation error; cleanup is best effort here.
+      } catch (error) {
+        cleanupError = error;
+        try {
+          await removeGitWorktreeUnlocked(
+            cleanupTarget.worktree,
+            runner,
+            { removeBranch: cleanupTarget.removeBranch }
+          );
+          cleanupError = undefined;
+        } catch (retryError) {
+          cleanupError = retryError;
+        }
       }
       throw new GitWorktreeError(
         "WORKTREE_CREATE_FAILED",
-        `Failed to create Git worktree${conciseGitError(created.stderr)}`
+        `Failed to create Git worktree${conciseGitError(created.stderr)}`,
+        cleanupError,
+        cleanupError ? cleanupTarget : undefined
       );
     }
 
@@ -384,7 +522,7 @@ export async function removeGitWorktree(
   runner: GitRunner = DEFAULT_GIT_RUNNER,
   options: { removeBranch?: boolean } = {}
 ): Promise<void> {
-  return withWorktreeLock(worktree.repoRoot, () =>
+  return withWorktreeLocks([worktree.repoRoot, worktree.cwd], () =>
     removeGitWorktreeUnlocked(worktree, runner, options)
   );
 }

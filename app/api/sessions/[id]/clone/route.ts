@@ -29,12 +29,21 @@ class CloneCreateError extends Error {
   }
 }
 
+function isErrorCode(error: unknown, code: string): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as Error & { code?: unknown }).code === code
+  );
+}
+
 function removeForkedSessionFiles(
   sessionsRoot: string,
   sessionId: string,
   knownSessionFile?: string
 ): void {
   const sessionFiles = new Set<string>();
+  const errors: unknown[] = [];
   if (knownSessionFile) sessionFiles.add(knownSessionFile);
 
   try {
@@ -45,13 +54,20 @@ function removeForkedSessionFiles(
       }
     }
   } catch (error) {
-    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
-      throw error;
-    }
+    if (!isErrorCode(error, "ENOENT")) errors.push(error);
   }
 
   for (const sessionFile of sessionFiles) {
-    rmSync(sessionFile, { force: true });
+    try {
+      rmSync(sessionFile, { force: true });
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length > 0) {
+    throw new Error(
+      errors.map((error) => (error instanceof Error ? error.message : String(error))).join("; ")
+    );
   }
 }
 
@@ -176,16 +192,23 @@ export async function POST(
         });
       }
     }
-    if (createdWorktree) {
+    const worktreeCleanup = createdWorktree
+      ? { worktree: createdWorktree, removeBranch: true }
+      : error instanceof GitWorktreeError
+        ? error.cleanupTarget
+        : undefined;
+    if (worktreeCleanup) {
       try {
-        await removeGitWorktree(createdWorktree);
+        await removeGitWorktree(worktreeCleanup.worktree, undefined, {
+          removeBranch: worktreeCleanup.removeBranch,
+        });
       } catch (cleanupError) {
         logApiError({
           route: `/api/sessions/${id}/clone`,
           method: "POST",
           requestId,
           error: cleanupError,
-          params: { worktreeCwd: createdWorktree.cwd },
+          params: { worktreeCwd: worktreeCleanup.worktree.cwd },
         });
       }
     }
