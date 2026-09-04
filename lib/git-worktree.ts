@@ -582,7 +582,7 @@ async function withCreatedGitWorktree<T>(
 
     const created = await runGit(
       runner,
-      ["worktree", "add", "-b", branchName, targetPath, "HEAD"],
+      ["worktree", "add", "--no-checkout", "-b", branchName, targetPath, "HEAD"],
       repoRoot
     );
     if (created.code !== 0) {
@@ -598,6 +598,17 @@ async function withCreatedGitWorktree<T>(
     const identity = await readWorktreeIdentity(runner, targetPath);
     const worktree = { cwd: targetPath, branchName, repoRoot, ...identity };
     try {
+      const checkedOut = await runGit(
+        runner,
+        ["checkout", "--force", "HEAD"],
+        targetPath
+      );
+      if (checkedOut.code !== 0) {
+        throw new GitWorktreeError(
+          "WORKTREE_CREATE_FAILED",
+          `Failed to check out Git worktree${conciseGitError(checkedOut.stderr)}`
+        );
+      }
       return await operation(worktree);
     } catch (error) {
       const cleanupTarget = { worktree, removeBranch: true };
@@ -738,6 +749,13 @@ async function removeGitWorktreeUnlocked(
               );
             }
           }
+        } else if (options.removeBranch !== false) {
+          errors.push(
+            new GitWorktreeError(
+              "WORKTREE_CLEANUP_FAILED",
+              "The Git worktree registration is missing; branch ownership is unverified"
+            )
+          );
         }
       }
     } catch (error) {
@@ -775,6 +793,7 @@ async function removeGitWorktreeUnlocked(
           runner,
           [
             "update-ref",
+            "--no-deref",
             "-d",
             `refs/heads/${worktree.branchName}`,
             worktree.head,

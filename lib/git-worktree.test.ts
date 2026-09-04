@@ -86,11 +86,15 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
   assert.deepEqual(calls[3]?.args, [
     "worktree",
     "add",
+    "--no-checkout",
     "-b",
     "pi-agent/refactor-ui",
     fixturePath("/workspace/project-pi-agent-refactor-ui"),
     "HEAD",
   ]);
+  assert.deepEqual(calls[4]?.args, ["rev-parse", "--git-dir"]);
+  assert.deepEqual(calls[5]?.args, ["rev-parse", "HEAD"]);
+  assert.deepEqual(calls[6]?.args, ["checkout", "--force", "HEAD"]);
 });
 
 test("removeGitWorktree removes the worktree and its branch", async () => {
@@ -143,6 +147,7 @@ test("removeGitWorktree removes the worktree and its branch", async () => {
     {
       args: [
         "update-ref",
+        "--no-deref",
         "-d",
         `refs/heads/${worktree.branchName}`,
         worktree.head,
@@ -175,6 +180,7 @@ test("createGitWorktree does not clean up unowned resources after add fails", as
   assert.deepEqual(calls.at(-1), [
     "worktree",
     "add",
+    "--no-checkout",
     "-b",
     "pi-agent/partial",
     fixturePath("/workspace/project-pi-agent-partial"),
@@ -311,6 +317,7 @@ test("createGitWorktree preserves a pre-existing branch after creation fails", a
   assert.deepEqual(calls.at(-1), [
     "worktree",
     "add",
+    "--no-checkout",
     "-b",
     "pi-agent/existing",
     fixturePath("/workspace/project-pi-agent-existing"),
@@ -553,7 +560,13 @@ test("removeGitWorktree reports a branch cleanup failure", async () => {
     ["rev-parse", "HEAD"],
     ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
     ["worktree", "list", "--porcelain", "-z"],
-    ["update-ref", "-d", "refs/heads/pi-agent/project-copy", "deadbeef"],
+    [
+      "update-ref",
+      "--no-deref",
+      "-d",
+      "refs/heads/pi-agent/project-copy",
+      "deadbeef",
+    ],
     ["show-ref", "--verify", "--quiet", "refs/heads/pi-agent/project-copy"],
   ]);
 });
@@ -595,11 +608,6 @@ test("removeGitWorktree does not remove a different registered worktree", async 
   const calls: string[][] = [];
   const runner = scriptedRunner((args) => {
     calls.push(args);
-    if (args[0] === "worktree" && args[1] === "remove") {
-      return args[3] === fixturePath("/workspace/project-copy")
-        ? { code: 128, stderr: "fatal: already removed" }
-        : {};
-    }
     if (args[0] === "worktree" && args[1] === "list") {
       return {
         stdout:
@@ -610,14 +618,18 @@ test("removeGitWorktree does not remove a different registered worktree", async 
     return {};
   });
 
-  await removeGitWorktree(
-    {
-      cwd: fixturePath("/workspace/project-copy"),
-      branchName: "pi-agent/case",
-      repoRoot: fixturePath("/workspace/project"),
-      ...fakeWorktreeIdentity,
-    },
-    runner
+  await assert.rejects(
+    removeGitWorktree(
+      {
+        cwd: fixturePath("/workspace/project-copy"),
+        branchName: "pi-agent/case",
+        repoRoot: fixturePath("/workspace/project"),
+        ...fakeWorktreeIdentity,
+      },
+      runner
+    ),
+    (error: unknown) =>
+      error instanceof GitWorktreeError && error.code === "WORKTREE_CLEANUP_FAILED"
   );
 
   assert.deepEqual(calls, [["worktree", "list", "--porcelain", "-z"]]);
