@@ -364,16 +364,19 @@ stateDiagram-v2
     Destroyed --> [*]
 ```
 
-**六个必须存 `globalThis` 的原因**（Next.js HMR 会丢弃模块级变量）：
+**进程级状态必须存 `globalThis`**（Next.js HMR 会丢弃模块级变量）：
 
 | 全局变量 | 用途 | 定义位置 | 回收策略 |
 |---|---|---|---|
 | `globalThis.__piSessions` | `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | wrapper.destroy() 时 delete；process.once("exit") 全清 |
-| `globalThis.__piSessionPathCache` | `sessionId → .jsonl` 绝对路径缓存 | [lib/session-reader.ts](../lib/session-reader.ts) | invalidateSessionPathCache(id) 单条删；fork 失败 / DELETE 后主动清 |
+| `globalThis.__piSessionOnlyTrust` | `Map<sessionId, boolean>` 会话级信任状态 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | 会话信任完成或测试 reset 时清理 |
+| `globalThis.__piSessionPathCacheState` | `sessionId → .jsonl` 路径与 miss 缓存 | [lib/session-reader.ts](../lib/session-reader.ts) | invalidateSessionPathEntry(id) 单条删；TTL 自动过期 |
 | `globalThis.__piStartLocks` | `Map<sessionId, Promise>` 并发启动共享锁 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | startRpcSession finally 块自动清 |
 | `globalThis.__piWriteLocks` | `Map<filePath, Promise>` per-file 写入锁 | [lib/session-lock.ts](../lib/session-lock.ts) | withFileLock finally 块自动清 |
 | `globalThis.__piAllowedRootsCache` | `{ roots: Set<string>; expiresAt: number }` 文件访问白名单缓存（见 §14.11） | [lib/allowed-roots.ts](../lib/allowed-roots.ts) | 5s TTL 自动过期；POST /api/agent/new 时主动 add |
 | `globalThis.__piLtmService` | 长期记忆 `MemoryService` 单例 | [lib/ltm/service.ts](../lib/ltm/service.ts) | 配置 key 变化时重建；测试可显式 reset |
+| `globalThis.__piLoginCallbacks` | OAuth 手动输入回调注册表 | [app/api/auth/login/[provider]/route.ts](../app/api/auth/login/[provider]/route.ts) | 登录完成、取消或流结束时删除 token |
+| `globalThis.__piGitWorktreeLocks` | Worktree 创建/清理的进程内锁 | [lib/git-worktree.ts](../lib/git-worktree.ts) | 操作完成后释放；键值为空时删除 |
 
 **Fork 注册顺序陷阱**（详见 §14.2）：fork 在**文件层**通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）完成，**不修改旧 wrapper 内部状态**。但 `send("fork")` 仍需先 `startRpcSession(newSessionId, ...)` 预注册新 wrapper，再 `this.destroy()` 旧 wrapper，以满足"返回时 newSessionId 已在注册表"的契约。
 
@@ -679,7 +682,7 @@ resources/
 
 Next.js 热重载（HMR）会丢弃模块级变量。若把 `Map<sessionId, AgentSessionWrapper>` 放在模块顶层，每次 HMR 后所有活跃 session 都会丢失。
 
-**解决**：存到五个 globalThis 变量（详见 §7 表格）：`globalThis.__piSessions`、`globalThis.__piSessionPathCache`、`globalThis.__piStartLocks`、`globalThis.__piWriteLocks`、`globalThis.__piAllowedRootsCache`。
+**解决**：将这些进程级状态存到 `globalThis`（详见 §7 表格），包括会话注册/信任、路径缓存、并发锁、文件访问缓存、LTM、OAuth 回调和 Git Worktree 锁。
 
 ### 14.2 Fork 的执行顺序：预注册 → 销毁旧 wrapper
 

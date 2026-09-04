@@ -92,7 +92,7 @@ npm run dist:mac
 
 ### 最常踩坑的设计决策
 
-- **活跃 session 注册表必须存 `globalThis`**：Next.js HMR 会丢弃模块级变量；至少：`__piSessions` / `__piSessionPathCache` / `__piStartLocks` / `__piWriteLocks` / `__piAllowedRootsCache`；LTM 另有 `__piLtmService`（见 `lib/ltm/service.ts`）。详见 [AGENTS.md](AGENTS.md#必须存-globalthis-的原因) 与 [docs/ARCHITECTURE.md §14.1](docs/ARCHITECTURE.md)。
+- **活跃 session 注册表必须存 `globalThis`**：Next.js HMR 会丢弃模块级变量；至少：`__piSessions` / `__piSessionPathCacheState` / `__piStartLocks` / `__piWriteLocks` / `__piAllowedRootsCache`；LTM 另有 `__piLtmService`（见 `lib/ltm/service.ts`）。详见 [AGENTS.md](AGENTS.md) 与 [docs/ARCHITECTURE.md §14.1](docs/ARCHITECTURE.md)。
 - **Electron 打包 + 原生运行时**：`build:standalone` 在 `next build` 后补齐 Next turbo runtime、Pi 运行时依赖和 macOS 双架构 Sharp。不要删除这些 ensure 脚本，也不要删除 `electron-builder.yml` 的 `mac.x64ArchFiles`，否则桌面端会卡在启动页、Universal 合并失败或 Intel 端加载原生模块失败。
 - **macOS 后台服务不能直接执行 App 主程序**：packaged macOS 必须用 `utilityProcess.fork(server.js)`；若改回 `spawn(process.execPath)` + `ELECTRON_RUN_AS_NODE`，Dock 会出现持续弹跳的黑色 `exec` 图标。
 - **用户可见文案走 `lib/i18n`**：`en` / `zh-CN`，偏好可 `system`；新增字符串同步改 `dictionaries.ts` 两边。
