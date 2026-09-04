@@ -1,7 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server.js";
-import { existsSync, rmSync } from "fs";
+import { existsSync, readdirSync, rmSync } from "fs";
+import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import {
+  getSessionsDir,
   resolveSessionPath,
   cacheSessionPath,
   invalidateSessionPathCache,
@@ -26,6 +29,32 @@ class CloneCreateError extends Error {
   }
 }
 
+function removeForkedSessionFiles(
+  sessionsRoot: string,
+  sessionId: string,
+  knownSessionFile?: string
+): void {
+  const sessionFiles = new Set<string>();
+  if (knownSessionFile) sessionFiles.add(knownSessionFile);
+
+  try {
+    for (const fileName of readdirSync(sessionsRoot, { recursive: true })) {
+      const relativePath = typeof fileName === "string" ? fileName : fileName.toString();
+      if (relativePath.endsWith(`_${sessionId}.jsonl`)) {
+        sessionFiles.add(join(sessionsRoot, relativePath));
+      }
+    }
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+      throw error;
+    }
+  }
+
+  for (const sessionFile of sessionFiles) {
+    rmSync(sessionFile, { force: true });
+  }
+}
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -33,6 +62,8 @@ export async function POST(
   const { id } = await params;
   const requestId = getRequestId(req);
   let createdWorktree: GitWorktreeResult | undefined;
+  let cloneSessionsRoot: string | undefined;
+  let cloneSessionId: string | undefined;
   let createdSessionFile: string | undefined;
   let cachedSessionId: string | undefined;
   try {
@@ -96,7 +127,14 @@ export async function POST(
       };
     }
 
-    const forkedSm = SessionManager.forkFrom(sessionFile, targetCwd);
+    cloneSessionsRoot = getSessionsDir();
+    cloneSessionId = randomUUID();
+    const forkedSm = SessionManager.forkFrom(
+      sessionFile,
+      targetCwd,
+      undefined,
+      { id: cloneSessionId }
+    );
     const newSessionFile = forkedSm.getSessionFile();
     if (!newSessionFile) {
       throw new CloneCreateError();
@@ -125,16 +163,16 @@ export async function POST(
     if (cachedSessionId) {
       invalidateSessionPathCache(cachedSessionId);
     }
-    if (createdSessionFile) {
+    if (cloneSessionsRoot && cloneSessionId) {
       try {
-        rmSync(createdSessionFile, { force: true });
+        removeForkedSessionFiles(cloneSessionsRoot, cloneSessionId, createdSessionFile);
       } catch (cleanupError) {
         logApiError({
           route: `/api/sessions/${id}/clone`,
           method: "POST",
           requestId,
           error: cleanupError,
-          params: { sessionFile: createdSessionFile },
+          params: { sessionsRoot: cloneSessionsRoot, sessionId: cloneSessionId },
         });
       }
     }

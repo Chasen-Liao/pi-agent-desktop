@@ -1,7 +1,7 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
@@ -317,6 +317,88 @@ test("POST /api/sessions/[id]/clone cleans up a worktree when forking fails", as
     rmSync(targetCwd, { recursive: true, force: true });
     rmSync(targetParent, { recursive: true, force: true });
     rmSync(blockerRoot, { recursive: true, force: true });
+    rmSync(repoDir, { recursive: true, force: true });
+  }
+});
+
+test("POST /api/sessions/[id]/clone removes a partial fork file on failure", async () => {
+  const repoDir = mkdtempSync(join(tmpdir(), "pi-clone-partial-session-test-"));
+  const targetParent = mkdtempSync(join(tmpdir(), "pi-clone-partial-session-target-"));
+  const targetCwd = join(targetParent, "worktree");
+  const branchName = "pi-agent/partial-session-cleanup";
+  const originalForkFrom = SessionManager.forkFrom;
+  let partialSessionFile: string | null = null;
+  const sessionManagerClass = SessionManager as typeof SessionManager & {
+    forkFrom: typeof SessionManager.forkFrom;
+  };
+
+  try {
+    const { id } = createTestSession(repoDir);
+    runGit(repoDir, ["init"]);
+    runGit(repoDir, ["add", "."]);
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Pi Route Test",
+        "-c",
+        "user.email=pi-route-test@example.com",
+        "commit",
+        "-m",
+        "initial session",
+      ],
+      { cwd: repoDir, stdio: "ignore" }
+    );
+
+    sessionManagerClass.forkFrom = (...args) => {
+      const sessionId = args[3]?.id;
+      if (!sessionId) {
+        throw new Error("test fork stub received incomplete arguments");
+      }
+      const partialSessionDir = join(testAgentDir, "sessions", "partial-fork");
+      mkdirSync(partialSessionDir, { recursive: true });
+      partialSessionFile = join(partialSessionDir, `partial_${sessionId}.jsonl`);
+      writeFileSync(partialSessionFile, "partial session");
+      throw new Error("forced fork copy failure");
+    };
+
+    const req = new Request(`http://localhost/api/sessions/${id}/clone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceMode: "worktree",
+        targetCwd,
+        branchName,
+      }),
+    });
+    const res = await cloneSession(req, { params: Promise.resolve({ id }) });
+    assert.equal(res.status, 500);
+    const data = await res.json();
+    assert.equal(data.errorCode, "CLONE_OPERATION_FAILED");
+    assert.ok(partialSessionFile);
+    assert.equal(existsSync(partialSessionFile), false);
+    assert.equal(existsSync(targetCwd), false);
+    assert.equal(runGit(repoDir, ["branch", "--list", branchName]), "");
+  } finally {
+    sessionManagerClass.forkFrom = originalForkFrom;
+    try {
+      execFileSync("git", ["worktree", "remove", "--force", targetCwd], {
+        cwd: repoDir,
+        stdio: "ignore",
+      });
+    } catch {
+      // The route should already have removed the worktree.
+    }
+    try {
+      execFileSync("git", ["branch", "-D", branchName], {
+        cwd: repoDir,
+        stdio: "ignore",
+      });
+    } catch {
+      // The route should already have removed the branch.
+    }
+    rmSync(targetCwd, { recursive: true, force: true });
+    rmSync(targetParent, { recursive: true, force: true });
     rmSync(repoDir, { recursive: true, force: true });
   }
 });

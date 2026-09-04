@@ -136,6 +136,78 @@ test("createGitWorktree cleans up a partially created worktree", async () => {
   assert.deepEqual(calls.at(-1), ["branch", "-D", "pi-agent/partial"]);
 });
 
+test("createGitWorktree preserves a pre-existing branch after creation fails", async () => {
+  const calls: string[][] = [];
+  const runner = scriptedRunner((args) => {
+    calls.push(args);
+    if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
+    if (args[0] === "show-ref") return { code: 0 };
+    if (args[0] === "worktree" && args[1] === "add") {
+      return { code: 128, stderr: "fatal: a branch named 'pi-agent/existing' already exists" };
+    }
+    return {};
+  });
+
+  await assert.rejects(
+    createGitWorktree(
+      { sourceCwd: "/workspace/project", branchName: "pi-agent/existing" },
+      { runner, pathExists: () => false, realpath: identityRealpath }
+    ),
+    (error: unknown) =>
+      error instanceof GitWorktreeError && error.code === "WORKTREE_CREATE_FAILED"
+  );
+
+  assert.deepEqual(calls.at(-1), [
+    "worktree",
+    "remove",
+    "--force",
+    fixturePath("/workspace/project-pi-agent-existing"),
+  ]);
+  assert.equal(calls.some((args) => args[0] === "branch"), false);
+});
+
+test("createGitWorktree serializes target allocation per repository", async () => {
+  let targetExists = false;
+  let activeAdds = 0;
+  let maxActiveAdds = 0;
+  const runner: GitRunner = async (args) => {
+    if (args[0] === "rev-parse") {
+      return { code: 0, stdout: "/workspace/project\n", stderr: "" };
+    }
+    if (args[0] === "worktree" && args[1] === "add") {
+      activeAdds += 1;
+      maxActiveAdds = Math.max(maxActiveAdds, activeAdds);
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 20));
+      targetExists = true;
+      activeAdds -= 1;
+    }
+    if (args[0] === "show-ref") {
+      return { code: 1, stdout: "", stderr: "" };
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  const options = {
+    sourceCwd: "/workspace/project",
+    targetCwd: "/workspace/project-copy",
+    branchName: "pi-agent/serialized",
+  };
+  const createOptions = {
+    runner,
+    pathExists: () => targetExists,
+    realpath: identityRealpath,
+  };
+
+  const first = createGitWorktree(options, createOptions);
+  const second = createGitWorktree(options, createOptions);
+  await first;
+  await assert.rejects(
+    second,
+    (error: unknown) =>
+      error instanceof GitWorktreeError && error.code === "TARGET_EXISTS"
+  );
+  assert.equal(maxActiveAdds, 1);
+});
+
 test("removeGitWorktree attempts branch cleanup when worktree removal fails", async () => {
   const calls: string[][] = [];
   const runner = scriptedRunner((args) => {

@@ -80,6 +80,39 @@ function conciseGitError(stderr: string): string {
   return message ? `: ${message.slice(0, 300)}` : "";
 }
 
+type WorktreeLockMap = Map<string, Promise<void>>;
+
+declare global {
+  var __piGitWorktreeLocks: WorktreeLockMap | undefined;
+}
+
+function getWorktreeLocks(): WorktreeLockMap {
+  if (!globalThis.__piGitWorktreeLocks) {
+    globalThis.__piGitWorktreeLocks = new Map();
+  }
+  return globalThis.__piGitWorktreeLocks;
+}
+
+async function withWorktreeLock<T>(repoRoot: string, operation: () => Promise<T>): Promise<T> {
+  const locks = getWorktreeLocks();
+  const previous = locks.get(repoRoot) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolvePromise) => {
+    release = resolvePromise;
+  });
+  locks.set(repoRoot, current);
+
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (locks.get(repoRoot) === current) {
+      locks.delete(repoRoot);
+    }
+  }
+}
+
 async function runGit(
   runner: GitRunner,
   args: string[],
@@ -237,59 +270,61 @@ export async function createGitWorktree(
   );
   const targetPath = resolve(targetParent, basename(unresolvedTargetPath));
 
-  if (isWithin(repoRoot, targetPath)) {
-    throw new GitWorktreeError(
-      "TARGET_INSIDE_REPOSITORY",
-      "Worktree directory must be outside the source repository"
-    );
-  }
-  if (pathExists(targetPath)) {
-    throw new GitWorktreeError(
-      "TARGET_EXISTS",
-      `Worktree directory already exists: ${targetPath}`
-    );
-  }
-
-  const branchState = await runGit(
-    runner,
-    ["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`],
-    repoRoot
-  );
-  if (branchState.code !== 0 && branchState.code !== 1) {
-    throw new GitWorktreeError(
-      "WORKTREE_CREATE_FAILED",
-      `Unable to check whether Git branch '${branchName}' exists${conciseGitError(branchState.stderr)}`
-    );
-  }
-  const branchExisted = branchState.code === 0;
-
-  const created = await runGit(
-    runner,
-    ["worktree", "add", "-b", branchName, targetPath, "HEAD"],
-    repoRoot
-  );
-  if (created.code !== 0) {
-    try {
-      await removeGitWorktree(
-        { cwd: targetPath, branchName, repoRoot },
-        runner,
-        { removeBranch: !branchExisted }
+  return withWorktreeLock(repoRoot, async () => {
+    if (isWithin(repoRoot, targetPath)) {
+      throw new GitWorktreeError(
+        "TARGET_INSIDE_REPOSITORY",
+        "Worktree directory must be outside the source repository"
       );
-    } catch {
-      // Preserve the original creation error; cleanup is best effort here.
     }
-    throw new GitWorktreeError(
-      "WORKTREE_CREATE_FAILED",
-      `Failed to create Git worktree${conciseGitError(created.stderr)}`
-    );
-  }
+    if (pathExists(targetPath)) {
+      throw new GitWorktreeError(
+        "TARGET_EXISTS",
+        `Worktree directory already exists: ${targetPath}`
+      );
+    }
 
-  return { cwd: targetPath, branchName, repoRoot };
+    const branchState = await runGit(
+      runner,
+      ["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`],
+      repoRoot
+    );
+    if (branchState.code !== 0 && branchState.code !== 1) {
+      throw new GitWorktreeError(
+        "WORKTREE_CREATE_FAILED",
+        `Unable to check whether Git branch '${branchName}' exists${conciseGitError(branchState.stderr)}`
+      );
+    }
+    const branchExisted = branchState.code === 0;
+
+    const created = await runGit(
+      runner,
+      ["worktree", "add", "-b", branchName, targetPath, "HEAD"],
+      repoRoot
+    );
+    if (created.code !== 0) {
+      try {
+        await removeGitWorktreeUnlocked(
+          { cwd: targetPath, branchName, repoRoot },
+          runner,
+          { removeBranch: !branchExisted }
+        );
+      } catch {
+        // Preserve the original creation error; cleanup is best effort here.
+      }
+      throw new GitWorktreeError(
+        "WORKTREE_CREATE_FAILED",
+        `Failed to create Git worktree${conciseGitError(created.stderr)}`
+      );
+    }
+
+    return { cwd: targetPath, branchName, repoRoot };
+  });
 }
 
-export async function removeGitWorktree(
+async function removeGitWorktreeUnlocked(
   worktree: GitWorktreeResult,
-  runner: GitRunner = DEFAULT_GIT_RUNNER,
+  runner: GitRunner,
   options: { removeBranch?: boolean } = {}
 ): Promise<void> {
   const errors: unknown[] = [];
@@ -342,4 +377,14 @@ export async function removeGitWorktree(
       errors[0]
     );
   }
+}
+
+export async function removeGitWorktree(
+  worktree: GitWorktreeResult,
+  runner: GitRunner = DEFAULT_GIT_RUNNER,
+  options: { removeBranch?: boolean } = {}
+): Promise<void> {
+  return withWorktreeLock(worktree.repoRoot, () =>
+    removeGitWorktreeUnlocked(worktree, runner, options)
+  );
 }
