@@ -173,6 +173,42 @@ test("createGitWorktree retries failed cleanup and exposes its target", async ()
   assert.equal(branchAttempts, 2);
 });
 
+test("createGitWorktree treats completed cleanup as idempotent", async () => {
+  let removeAttempts = 0;
+  let branchAttempts = 0;
+  const runner = scriptedRunner((args) => {
+    if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
+    if (args[0] === "show-ref") return { code: 1 };
+    if (args[0] === "worktree" && args[1] === "add") {
+      return { code: 128, stderr: "fatal: checkout hook failed" };
+    }
+    if (args[0] === "worktree") {
+      removeAttempts += 1;
+      return removeAttempts === 1
+        ? {}
+        : { code: 128, stderr: "fatal: '/workspace/project-copy' is not a working tree" };
+    }
+    if (args[0] === "branch") {
+      branchAttempts += 1;
+      return branchAttempts === 1 ? { code: 1, stderr: "error: temporary failure" } : {};
+    }
+    return {};
+  });
+
+  await assert.rejects(
+    createGitWorktree(
+      { sourceCwd: "/workspace/project", branchName: "pi-agent/idempotent-cleanup" },
+      { runner, pathExists: () => false, realpath: identityRealpath }
+    ),
+    (error: unknown) =>
+      error instanceof GitWorktreeError &&
+      error.code === "WORKTREE_CREATE_FAILED" &&
+      error.cleanupTarget === undefined
+  );
+  assert.equal(removeAttempts, 2);
+  assert.equal(branchAttempts, 2);
+});
+
 test("createGitWorktree preserves a pre-existing branch after creation fails", async () => {
   const calls: string[][] = [];
   const runner = scriptedRunner((args) => {

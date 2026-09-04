@@ -103,6 +103,17 @@ function conciseGitError(stderr: string): string {
   return message ? `: ${message.slice(0, 300)}` : "";
 }
 
+function gitCommandReportsMissingResource(
+  result: GitCommandResult,
+  resource: "worktree" | "branch"
+): boolean {
+  if (result.code === 0) return false;
+  const output = `${result.stdout}\n${result.stderr}`.toLowerCase();
+  return resource === "worktree"
+    ? output.includes("is not a working tree") || output.includes("not a working tree")
+    : output.includes("branch ") && output.includes(" not found");
+}
+
 type WorktreeLockMap = Map<string, Promise<void>>;
 
 declare global {
@@ -136,6 +147,15 @@ function interprocessLockPath(resourceKey: string): string {
   return join(tmpdir(), "pi-agent-desktop-worktree-locks", key);
 }
 
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return isErrorCode(error, "EPERM");
+  }
+}
+
 function removeStaleInterprocessLock(lockPath: string): boolean {
   let lockAgeMs = 0;
   try {
@@ -144,6 +164,19 @@ function removeStaleInterprocessLock(lockPath: string): boolean {
     return isErrorCode(error, "ENOENT");
   }
   if (lockAgeMs < 30_000) return false;
+
+  try {
+    const owner = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8")) as {
+      pid?: unknown;
+    };
+    if (typeof owner.pid === "number" && processIsAlive(owner.pid)) {
+      return false;
+    }
+  } catch (error) {
+    if (!isErrorCode(error, "ENOENT")) {
+      // A stale or partially written owner file is safe to reclaim after the age check.
+    }
+  }
 
   const quarantinePath = `${lockPath}.stale-${randomUUID()}`;
   try {
@@ -172,7 +205,11 @@ async function acquireInterprocessLock(resourceKey: string): Promise<() => void>
       created = true;
       writeFileSync(
         join(lockPath, "owner"),
-        JSON.stringify({ pid: process.pid, token }),
+        JSON.stringify({
+          pid: process.pid,
+          startedAt: Date.now() - process.uptime() * 1_000,
+          token,
+        }),
         { flag: "wx" }
       );
       const heartbeat = setInterval(() => {
@@ -513,7 +550,7 @@ async function removeGitWorktreeUnlocked(
       ["worktree", "remove", "--force", worktree.cwd],
       worktree.repoRoot
     );
-    if (removed.code !== 0) {
+    if (removed.code !== 0 && !gitCommandReportsMissingResource(removed, "worktree")) {
       errors.push(
         new GitWorktreeError(
           "WORKTREE_CLEANUP_FAILED",
@@ -532,7 +569,7 @@ async function removeGitWorktreeUnlocked(
         ["branch", "-D", worktree.branchName],
         worktree.repoRoot
       );
-      if (branch.code !== 0) {
+      if (branch.code !== 0 && !gitCommandReportsMissingResource(branch, "branch")) {
         errors.push(
           new GitWorktreeError(
             "WORKTREE_CLEANUP_FAILED",
