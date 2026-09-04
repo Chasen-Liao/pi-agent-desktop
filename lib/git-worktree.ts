@@ -105,11 +105,15 @@ function conciseGitError(stderr: string): string {
 }
 
 function pathsMatch(left: string, right: string): boolean {
-  const leftPath = resolve(left);
-  const rightPath = resolve(right);
-  return process.platform === "win32" || process.platform === "darwin"
-    ? leftPath.toLowerCase() === rightPath.toLowerCase()
-    : leftPath === rightPath;
+  const canonicalPath = (path: string): string => {
+    const absolutePath = resolve(path);
+    try {
+      return realpathSync.native(absolutePath);
+    } catch {
+      return absolutePath;
+    }
+  };
+  return canonicalPath(left) === canonicalPath(right);
 }
 
 function worktreeListContains(stdout: string, targetCwd: string): boolean {

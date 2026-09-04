@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { mkdtempSync, mkdirSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   createGitWorktree,
   GitWorktreeError,
@@ -365,6 +367,44 @@ test("removeGitWorktree reports a branch cleanup failure", async () => {
     ["branch", "-D", "pi-agent/project-copy"],
     ["show-ref", "--verify", "--quiet", "refs/heads/pi-agent/project-copy"],
   ]);
+});
+
+test("removeGitWorktree compares worktree paths according to the filesystem", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pi-worktree-case-"));
+  const targetCwd = join(root, "Foo");
+  const alternateCwd = join(root, "foo");
+  mkdirSync(targetCwd);
+  let caseInsensitive = false;
+  try {
+    caseInsensitive = realpathSync.native(targetCwd) === realpathSync.native(alternateCwd);
+  } catch {
+    // The alternate spelling does not resolve on a case-sensitive filesystem.
+  }
+  const runner = scriptedRunner((args) => {
+    if (args[0] === "worktree" && args[1] === "remove") {
+      return { code: 128, stderr: "fatal: already removed" };
+    }
+    if (args[0] === "worktree" && args[1] === "list") {
+      return { stdout: `worktree ${alternateCwd}\n` };
+    }
+    return {};
+  });
+
+  try {
+    const cleanup = removeGitWorktree(
+      { cwd: targetCwd, branchName: "pi-agent/case", repoRoot: root },
+      runner
+    );
+    if (caseInsensitive) {
+      await assert.rejects(cleanup, (error: unknown) =>
+        error instanceof GitWorktreeError && error.code === "WORKTREE_CLEANUP_FAILED"
+      );
+    } else {
+      await cleanup;
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("createGitWorktree resolves a relative target beside the repository", async () => {
