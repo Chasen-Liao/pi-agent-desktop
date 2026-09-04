@@ -11,14 +11,18 @@ import {
 } from "../../../../../lib/session-reader.ts";
 import { validateClonePayload } from "../../../../../lib/session-branch-clone.ts";
 import {
-  createGitWorktree,
   GitWorktreeError,
-  removeGitWorktree,
-  type GitWorktreeResult,
+  withGitWorktree,
 } from "../../../../../lib/git-worktree.ts";
 import { errorMessage, getRequestId, logApiError } from "../../../../../lib/api-error.ts";
 
 export const dynamic = "force-dynamic";
+
+type CloneWorkspace = {
+  mode: "directory" | "worktree";
+  cwd: string;
+  branchName?: string;
+};
 
 class CloneCreateError extends Error {
   readonly code = "CLONE_CREATE_FAILED" as const;
@@ -77,7 +81,6 @@ export async function POST(
 ) {
   const { id } = await params;
   const requestId = getRequestId(req);
-  let createdWorktree: GitWorktreeResult | undefined;
   let cloneSessionsRoot: string | undefined;
   let cloneSessionId: string | undefined;
   let createdSessionFile: string | undefined;
@@ -119,62 +122,73 @@ export async function POST(
     const header = sourceSm.getHeader();
     const sourceCwd = header?.cwd || process.cwd();
 
-    let targetCwd = validation.data.targetCwd || sourceCwd;
-    let workspace: {
-      mode: "directory" | "worktree";
-      cwd: string;
-      branchName?: string;
-    } = {
+    const targetCwd = validation.data.targetCwd || sourceCwd;
+    const directoryWorkspace: CloneWorkspace = {
       mode: "directory",
       cwd: targetCwd,
     };
+    const cloneSession = (cloneCwd: string, workspace: CloneWorkspace) => {
+      cloneSessionsRoot = getSessionsDir();
+      cloneSessionId = randomUUID();
+      const forkedSm = SessionManager.forkFrom(
+        sessionFile,
+        cloneCwd,
+        undefined,
+        { id: cloneSessionId }
+      );
+      const newSessionFile = forkedSm.getSessionFile();
+      if (!newSessionFile) {
+        throw new CloneCreateError();
+      }
+      createdSessionFile = newSessionFile;
+
+      if (validation.data.name) {
+        forkedSm.appendSessionInfo(validation.data.name);
+      }
+      (forkedSm as unknown as { _rewriteFile?: () => void })._rewriteFile?.();
+
+      const newSessionId = forkedSm.getSessionId();
+      cacheSessionPath(newSessionId, newSessionFile);
+      cachedSessionId = newSessionId;
+
+      return NextResponse.json(
+        {
+          success: true,
+          sessionId: newSessionId,
+          sessionFile: newSessionFile,
+          workspace,
+        },
+        { headers: { "x-request-id": requestId } }
+      );
+    };
 
     if (validation.data.workspaceMode === "worktree") {
-      createdWorktree = await createGitWorktree({
-        sourceCwd,
-        targetCwd: validation.data.targetCwd,
-        branchName: validation.data.branchName,
-      });
-      targetCwd = createdWorktree.cwd;
-      workspace = {
-        mode: "worktree",
-        cwd: createdWorktree.cwd,
-        branchName: createdWorktree.branchName,
-      };
+      return await withGitWorktree(
+        {
+          sourceCwd,
+          targetCwd: validation.data.targetCwd,
+          branchName: validation.data.branchName,
+        },
+        (worktree) =>
+          cloneSession(worktree.cwd, {
+            mode: "worktree",
+            cwd: worktree.cwd,
+            branchName: worktree.branchName,
+          }),
+        {
+          onCleanupError: (cleanupError, target) =>
+            logApiError({
+              route: `/api/sessions/${id}/clone`,
+              method: "POST",
+              requestId,
+              error: cleanupError,
+              params: { worktreeCwd: target.worktree.cwd },
+            }),
+        }
+      );
     }
 
-    cloneSessionsRoot = getSessionsDir();
-    cloneSessionId = randomUUID();
-    const forkedSm = SessionManager.forkFrom(
-      sessionFile,
-      targetCwd,
-      undefined,
-      { id: cloneSessionId }
-    );
-    const newSessionFile = forkedSm.getSessionFile();
-    if (!newSessionFile) {
-      throw new CloneCreateError();
-    }
-    createdSessionFile = newSessionFile;
-
-    if (validation.data.name) {
-      forkedSm.appendSessionInfo(validation.data.name);
-    }
-    (forkedSm as unknown as { _rewriteFile?: () => void })._rewriteFile?.();
-
-    const newSessionId = forkedSm.getSessionId();
-    cacheSessionPath(newSessionId, newSessionFile);
-    cachedSessionId = newSessionId;
-
-    return NextResponse.json(
-      {
-        success: true,
-        sessionId: newSessionId,
-        sessionFile: newSessionFile,
-        workspace,
-      },
-      { headers: { "x-request-id": requestId } }
-    );
+    return cloneSession(targetCwd, directoryWorkspace);
   } catch (error) {
     if (cachedSessionId) {
       invalidateSessionPathCache(cachedSessionId);
@@ -189,26 +203,6 @@ export async function POST(
           requestId,
           error: cleanupError,
           params: { sessionsRoot: cloneSessionsRoot, sessionId: cloneSessionId },
-        });
-      }
-    }
-    const worktreeCleanup = createdWorktree
-      ? { worktree: createdWorktree, removeBranch: true }
-      : error instanceof GitWorktreeError
-        ? error.cleanupTarget
-        : undefined;
-    if (worktreeCleanup) {
-      try {
-        await removeGitWorktree(worktreeCleanup.worktree, undefined, {
-          removeBranch: worktreeCleanup.removeBranch,
-        });
-      } catch (cleanupError) {
-        logApiError({
-          route: `/api/sessions/${id}/clone`,
-          method: "POST",
-          requestId,
-          error: cleanupError,
-          params: { worktreeCwd: worktreeCleanup.worktree.cwd },
         });
       }
     }

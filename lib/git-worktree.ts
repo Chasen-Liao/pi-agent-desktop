@@ -5,8 +5,10 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -122,18 +124,16 @@ function isErrorCode(error: unknown, code: string): boolean {
   );
 }
 
-function interprocessLockPath(resourceKey: string): string {
-  const key = createHash("sha256").update(resourceKey).digest("hex");
-  return join(tmpdir(), "pi-agent-desktop-worktree-locks", key);
+function canonicalLockKey(resourceKey: string): string {
+  const normalized = resolve(resourceKey);
+  return process.platform === "win32" || process.platform === "darwin"
+    ? normalized.toLowerCase()
+    : normalized;
 }
 
-function processIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return isErrorCode(error, "EPERM");
-  }
+function interprocessLockPath(resourceKey: string): string {
+  const key = createHash("sha256").update(canonicalLockKey(resourceKey)).digest("hex");
+  return join(tmpdir(), "pi-agent-desktop-worktree-locks", key);
 }
 
 function removeStaleInterprocessLock(lockPath: string): boolean {
@@ -145,25 +145,19 @@ function removeStaleInterprocessLock(lockPath: string): boolean {
   }
   if (lockAgeMs < 30_000) return false;
 
+  const quarantinePath = `${lockPath}.stale-${randomUUID()}`;
   try {
-    const owner = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8")) as {
-      pid?: unknown;
-    };
-    if (typeof owner.pid === "number" && processIsAlive(owner.pid)) {
-      return false;
-    }
+    renameSync(lockPath, quarantinePath);
   } catch (error) {
-    if (!isErrorCode(error, "ENOENT")) {
-      // A stale or partially written owner file is safe to reclaim after the age check.
-    }
+    return isErrorCode(error, "ENOENT");
   }
 
   try {
-    rmSync(lockPath, { recursive: true, force: true });
-    return true;
+    rmSync(quarantinePath, { recursive: true, force: true });
   } catch {
-    return false;
+    // The lock was atomically quarantined; a later pass can finish removal.
   }
+  return true;
 }
 
 async function acquireInterprocessLock(resourceKey: string): Promise<() => void> {
@@ -181,7 +175,24 @@ async function acquireInterprocessLock(resourceKey: string): Promise<() => void>
         JSON.stringify({ pid: process.pid, token }),
         { flag: "wx" }
       );
+      const heartbeat = setInterval(() => {
+        try {
+          const owner = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8")) as {
+            token?: unknown;
+          };
+          if (owner.token !== token) {
+            clearInterval(heartbeat);
+            return;
+          }
+          const now = new Date();
+          utimesSync(lockPath, now, now);
+        } catch {
+          // The lock may have been reclaimed after a process or filesystem failure.
+        }
+      }, 5_000);
+      heartbeat.unref?.();
       return () => {
+        clearInterval(heartbeat);
         try {
           const owner = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8")) as {
             token?: unknown;
@@ -209,7 +220,7 @@ async function withWorktreeLocks<T>(
   resourceKeys: string[],
   operation: () => Promise<T>
 ): Promise<T> {
-  const keys = [...new Set(resourceKeys)].sort();
+  const keys = [...new Set(resourceKeys.map(canonicalLockKey))].sort();
   const locks = getWorktreeLocks();
   const previous = keys.map((key) => locks.get(key) ?? Promise.resolve());
   let release!: () => void;
@@ -340,15 +351,19 @@ export async function resolveGitRoot(
   return resolve(root);
 }
 
-export async function createGitWorktree(
+type GitWorktreeDependencies = {
+  runner?: GitRunner;
+  pathExists?: (path: string) => boolean;
+  sourcePathExists?: (path: string) => boolean;
+  realpath?: (path: string) => string;
+  onCleanupError?: (error: unknown, target: GitWorktreeCleanupTarget) => void;
+};
+
+async function withCreatedGitWorktree<T>(
   options: CreateGitWorktreeOptions,
-  deps: {
-    runner?: GitRunner;
-    pathExists?: (path: string) => boolean;
-    sourcePathExists?: (path: string) => boolean;
-    realpath?: (path: string) => string;
-  } = {}
-): Promise<GitWorktreeResult> {
+  operation: (worktree: GitWorktreeResult) => T | Promise<T>,
+  deps: GitWorktreeDependencies = {}
+): Promise<T> {
   const runner = deps.runner ?? DEFAULT_GIT_RUNNER;
   const pathExists = deps.pathExists ?? existsSync;
   const sourcePathExists = deps.sourcePathExists ?? existsSync;
@@ -424,30 +439,12 @@ export async function createGitWorktree(
       repoRoot
     );
     if (created.code !== 0) {
-      const cleanupTarget = {
+      const cleanupTarget: GitWorktreeCleanupTarget = {
         worktree: { cwd: targetPath, branchName, repoRoot },
         removeBranch: !branchExisted,
       };
-      let cleanupError: unknown;
-      try {
-        await removeGitWorktreeUnlocked(
-          cleanupTarget.worktree,
-          runner,
-          { removeBranch: cleanupTarget.removeBranch }
-        );
-      } catch (error) {
-        cleanupError = error;
-        try {
-          await removeGitWorktreeUnlocked(
-            cleanupTarget.worktree,
-            runner,
-            { removeBranch: cleanupTarget.removeBranch }
-          );
-          cleanupError = undefined;
-        } catch (retryError) {
-          cleanupError = retryError;
-        }
-      }
+      const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner);
+      if (cleanupError) deps.onCleanupError?.(cleanupError, cleanupTarget);
       throw new GitWorktreeError(
         "WORKTREE_CREATE_FAILED",
         `Failed to create Git worktree${conciseGitError(created.stderr)}`,
@@ -456,8 +453,51 @@ export async function createGitWorktree(
       );
     }
 
-    return { cwd: targetPath, branchName, repoRoot };
+    const worktree = { cwd: targetPath, branchName, repoRoot };
+    try {
+      return await operation(worktree);
+    } catch (error) {
+      const cleanupTarget = { worktree, removeBranch: true };
+      const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner);
+      if (cleanupError) deps.onCleanupError?.(cleanupError, cleanupTarget);
+      throw error;
+    }
   });
+}
+
+export async function createGitWorktree(
+  options: CreateGitWorktreeOptions,
+  deps: GitWorktreeDependencies = {}
+): Promise<GitWorktreeResult> {
+  return withCreatedGitWorktree(options, (worktree) => worktree, deps);
+}
+
+export async function withGitWorktree<T>(
+  options: CreateGitWorktreeOptions,
+  operation: (worktree: GitWorktreeResult) => T | Promise<T>,
+  deps: GitWorktreeDependencies = {}
+): Promise<T> {
+  return withCreatedGitWorktree(options, operation, deps);
+}
+
+async function cleanupWorktreeWithRetry(
+  cleanupTarget: GitWorktreeCleanupTarget,
+  runner: GitRunner
+): Promise<unknown> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await removeGitWorktreeUnlocked(
+        cleanupTarget.worktree,
+        runner,
+        { removeBranch: cleanupTarget.removeBranch }
+      );
+      return undefined;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  return lastError;
 }
 
 async function removeGitWorktreeUnlocked(
