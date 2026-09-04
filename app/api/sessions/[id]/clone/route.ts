@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server.js";
-import { existsSync } from "fs";
+import { existsSync, rmSync } from "fs";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { resolveSessionPath, cacheSessionPath } from "../../../../../lib/session-reader.ts";
+import {
+  resolveSessionPath,
+  cacheSessionPath,
+  invalidateSessionPathCache,
+} from "../../../../../lib/session-reader.ts";
 import { validateClonePayload } from "../../../../../lib/session-branch-clone.ts";
 import {
   createGitWorktree,
@@ -29,6 +33,8 @@ export async function POST(
   const { id } = await params;
   const requestId = getRequestId(req);
   let createdWorktree: GitWorktreeResult | undefined;
+  let createdSessionFile: string | undefined;
+  let cachedSessionId: string | undefined;
   try {
     const sessionFile = await resolveSessionPath(id);
     if (!sessionFile || !existsSync(sessionFile)) {
@@ -95,6 +101,7 @@ export async function POST(
     if (!newSessionFile) {
       throw new CloneCreateError();
     }
+    createdSessionFile = newSessionFile;
 
     if (validation.data.name) {
       forkedSm.appendSessionInfo(validation.data.name);
@@ -103,6 +110,7 @@ export async function POST(
 
     const newSessionId = forkedSm.getSessionId();
     cacheSessionPath(newSessionId, newSessionFile);
+    cachedSessionId = newSessionId;
 
     return NextResponse.json(
       {
@@ -114,6 +122,22 @@ export async function POST(
       { headers: { "x-request-id": requestId } }
     );
   } catch (error) {
+    if (cachedSessionId) {
+      invalidateSessionPathCache(cachedSessionId);
+    }
+    if (createdSessionFile) {
+      try {
+        rmSync(createdSessionFile, { force: true });
+      } catch (cleanupError) {
+        logApiError({
+          route: `/api/sessions/${id}/clone`,
+          method: "POST",
+          requestId,
+          error: cleanupError,
+          params: { sessionFile: createdSessionFile },
+        });
+      }
+    }
     if (createdWorktree) {
       try {
         await removeGitWorktree(createdWorktree);

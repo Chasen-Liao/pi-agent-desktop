@@ -65,6 +65,12 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
     "pi-agent/refactor-ui",
   ]);
   assert.deepEqual(calls[2]?.args, [
+    "show-ref",
+    "--verify",
+    "--quiet",
+    "refs/heads/pi-agent/refactor-ui",
+  ]);
+  assert.deepEqual(calls[3]?.args, [
     "worktree",
     "add",
     "-b",
@@ -97,6 +103,100 @@ test("removeGitWorktree removes the worktree and its branch", async () => {
       args: ["branch", "-D", worktree.branchName],
       cwd: worktree.repoRoot,
     },
+  ]);
+});
+
+test("createGitWorktree cleans up a partially created worktree", async () => {
+  const calls: string[][] = [];
+  const runner = scriptedRunner((args) => {
+    calls.push(args);
+    if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
+    if (args[0] === "show-ref") return { code: 1 };
+    if (args[0] === "worktree" && args[1] === "add") {
+      return { code: 128, stderr: "fatal: post-checkout hook failed" };
+    }
+    return {};
+  });
+
+  await assert.rejects(
+    createGitWorktree(
+      { sourceCwd: "/workspace/project", branchName: "pi-agent/partial" },
+      { runner, pathExists: () => false, realpath: identityRealpath }
+    ),
+    (error: unknown) =>
+      error instanceof GitWorktreeError && error.code === "WORKTREE_CREATE_FAILED"
+  );
+
+  assert.deepEqual(calls.at(-2), [
+    "worktree",
+    "remove",
+    "--force",
+    fixturePath("/workspace/project-pi-agent-partial"),
+  ]);
+  assert.deepEqual(calls.at(-1), ["branch", "-D", "pi-agent/partial"]);
+});
+
+test("removeGitWorktree attempts branch cleanup when worktree removal fails", async () => {
+  const calls: string[][] = [];
+  const runner = scriptedRunner((args) => {
+    calls.push(args);
+    if (args[0] === "worktree") {
+      return { code: 128, stderr: "fatal: worktree is locked" };
+    }
+    return {};
+  });
+
+  await assert.rejects(
+    removeGitWorktree(
+      {
+        cwd: fixturePath("/workspace/project-copy"),
+        branchName: "pi-agent/project-copy",
+        repoRoot: fixturePath("/workspace/project"),
+      },
+      runner
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof GitWorktreeError);
+      assert.equal(error.code, "WORKTREE_CLEANUP_FAILED");
+      assert.match(error.message, /worktree is locked/);
+      return true;
+    }
+  );
+  assert.deepEqual(calls, [
+    ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
+    ["branch", "-D", "pi-agent/project-copy"],
+  ]);
+});
+
+test("removeGitWorktree reports a branch cleanup failure", async () => {
+  const calls: string[][] = [];
+  const runner = scriptedRunner((args) => {
+    calls.push(args);
+    if (args[0] === "branch") {
+      return { code: 1, stderr: "error: branch is still in use" };
+    }
+    return {};
+  });
+
+  await assert.rejects(
+    removeGitWorktree(
+      {
+        cwd: fixturePath("/workspace/project-copy"),
+        branchName: "pi-agent/project-copy",
+        repoRoot: fixturePath("/workspace/project"),
+      },
+      runner
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof GitWorktreeError);
+      assert.equal(error.code, "WORKTREE_CLEANUP_FAILED");
+      assert.match(error.message, /branch is still in use/);
+      return true;
+    }
+  );
+  assert.deepEqual(calls, [
+    ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
+    ["branch", "-D", "pi-agent/project-copy"],
   ]);
 });
 

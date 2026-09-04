@@ -250,12 +250,34 @@ export async function createGitWorktree(
     );
   }
 
+  const branchState = await runGit(
+    runner,
+    ["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`],
+    repoRoot
+  );
+  if (branchState.code !== 0 && branchState.code !== 1) {
+    throw new GitWorktreeError(
+      "WORKTREE_CREATE_FAILED",
+      `Unable to check whether Git branch '${branchName}' exists${conciseGitError(branchState.stderr)}`
+    );
+  }
+  const branchExisted = branchState.code === 0;
+
   const created = await runGit(
     runner,
     ["worktree", "add", "-b", branchName, targetPath, "HEAD"],
     repoRoot
   );
   if (created.code !== 0) {
+    try {
+      await removeGitWorktree(
+        { cwd: targetPath, branchName, repoRoot },
+        runner,
+        { removeBranch: !branchExisted }
+      );
+    } catch {
+      // Preserve the original creation error; cleanup is best effort here.
+    }
     throw new GitWorktreeError(
       "WORKTREE_CREATE_FAILED",
       `Failed to create Git worktree${conciseGitError(created.stderr)}`
@@ -267,29 +289,57 @@ export async function createGitWorktree(
 
 export async function removeGitWorktree(
   worktree: GitWorktreeResult,
-  runner: GitRunner = DEFAULT_GIT_RUNNER
+  runner: GitRunner = DEFAULT_GIT_RUNNER,
+  options: { removeBranch?: boolean } = {}
 ): Promise<void> {
-  const removed = await runGit(
-    runner,
-    ["worktree", "remove", "--force", worktree.cwd],
-    worktree.repoRoot
-  );
-  if (removed.code !== 0) {
-    throw new GitWorktreeError(
-      "WORKTREE_CLEANUP_FAILED",
-      `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+  const errors: unknown[] = [];
+
+  try {
+    const removed = await runGit(
+      runner,
+      ["worktree", "remove", "--force", worktree.cwd],
+      worktree.repoRoot
     );
+    if (removed.code !== 0) {
+      errors.push(
+        new GitWorktreeError(
+          "WORKTREE_CLEANUP_FAILED",
+          `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+        )
+      );
+    }
+  } catch (error) {
+    errors.push(error);
   }
 
-  const branch = await runGit(
-    runner,
-    ["branch", "-D", worktree.branchName],
-    worktree.repoRoot
-  );
-  if (branch.code !== 0) {
+  if (options.removeBranch !== false) {
+    try {
+      const branch = await runGit(
+        runner,
+        ["branch", "-D", worktree.branchName],
+        worktree.repoRoot
+      );
+      if (branch.code !== 0) {
+        errors.push(
+          new GitWorktreeError(
+            "WORKTREE_CLEANUP_FAILED",
+            `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
+          )
+        );
+      }
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  if (errors.length > 0) {
+    const message = errors
+      .map((error) => (error instanceof Error ? error.message : String(error)))
+      .join("; ");
     throw new GitWorktreeError(
       "WORKTREE_CLEANUP_FAILED",
-      `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
+      `Failed to clean up Git worktree: ${message}`,
+      errors[0]
     );
   }
 }

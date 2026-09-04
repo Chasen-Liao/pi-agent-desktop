@@ -321,6 +321,97 @@ test("POST /api/sessions/[id]/clone cleans up a worktree when forking fails", as
   }
 });
 
+test("POST /api/sessions/[id]/clone removes a forked session file on failure", async () => {
+  const repoDir = mkdtempSync(join(tmpdir(), "pi-clone-session-cleanup-test-"));
+  const targetParent = mkdtempSync(join(tmpdir(), "pi-clone-session-cleanup-target-"));
+  const targetCwd = join(targetParent, "worktree");
+  const branchName = "pi-agent/session-cleanup";
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  const originalForkFrom = SessionManager.forkFrom;
+  const originalAppendSessionInfo = SessionManager.prototype.appendSessionInfo;
+  let forkedSessionFile: string | null = null;
+  const sessionManagerClass = SessionManager as typeof SessionManager & {
+    forkFrom: typeof SessionManager.forkFrom;
+  };
+  const sessionManagerPrototype = SessionManager.prototype as SessionManager & {
+    appendSessionInfo: (name: string) => string;
+  };
+
+  try {
+    const { id } = createTestSession(repoDir);
+    runGit(repoDir, ["init"]);
+    runGit(repoDir, ["add", "."]);
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Pi Route Test",
+        "-c",
+        "user.email=pi-route-test@example.com",
+        "commit",
+        "-m",
+        "initial session",
+      ],
+      { cwd: repoDir, stdio: "ignore" }
+    );
+
+    sessionManagerClass.forkFrom = (...args) => {
+      const forkedSm = originalForkFrom.call(SessionManager, ...args);
+      forkedSessionFile = forkedSm.getSessionFile() ?? null;
+      return forkedSm;
+    };
+    sessionManagerPrototype.appendSessionInfo = (name) => {
+      throw new Error(`forced append failure for ${name}`);
+    };
+
+    const req = new Request(`http://localhost/api/sessions/${id}/clone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceMode: "worktree",
+        targetCwd,
+        branchName,
+        name: "Will fail",
+      }),
+    });
+    const res = await cloneSession(req, { params: Promise.resolve({ id }) });
+    assert.equal(res.status, 500);
+    const data = await res.json();
+    assert.equal(data.errorCode, "CLONE_OPERATION_FAILED");
+    assert.ok(forkedSessionFile);
+    assert.equal(existsSync(forkedSessionFile), false);
+    assert.equal(existsSync(targetCwd), false);
+    assert.equal(runGit(repoDir, ["branch", "--list", branchName]), "");
+  } finally {
+    sessionManagerClass.forkFrom = originalForkFrom;
+    sessionManagerPrototype.appendSessionInfo = originalAppendSessionInfo;
+    if (previousAgentDir === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
+    } else {
+      process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    }
+    try {
+      execFileSync("git", ["worktree", "remove", "--force", targetCwd], {
+        cwd: repoDir,
+        stdio: "ignore",
+      });
+    } catch {
+      // The route should already have removed the worktree.
+    }
+    try {
+      execFileSync("git", ["branch", "-D", branchName], {
+        cwd: repoDir,
+        stdio: "ignore",
+      });
+    } catch {
+      // The route should already have removed the branch.
+    }
+    rmSync(targetCwd, { recursive: true, force: true });
+    rmSync(targetParent, { recursive: true, force: true });
+    rmSync(repoDir, { recursive: true, force: true });
+  }
+});
+
 test("POST /api/sessions/[id]/clone creates cloned session", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pi-clone-test-"));
   let clonedSessionFile: string | null = null;
