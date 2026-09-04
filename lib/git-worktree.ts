@@ -491,6 +491,59 @@ type GitWorktreeDependencies = {
   onCleanupError?: (error: unknown, target: GitWorktreeCleanupTarget) => void;
 };
 
+async function cleanupUnidentifiedWorktree(
+  runner: GitRunner,
+  repoRoot: string,
+  cwd: string,
+  branchName: string
+): Promise<unknown> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const listed = await runGit(
+        runner,
+        ["worktree", "list", "--porcelain", "-z"],
+        repoRoot
+      );
+      if (listed.code !== 0) {
+        lastError = new GitWorktreeError(
+          "WORKTREE_CLEANUP_FAILED",
+          `Unable to inspect Git worktrees${conciseGitError(listed.stderr)}`
+        );
+        continue;
+      }
+      const registered = findRegisteredWorktree(listed.stdout, cwd);
+      if (registered.uncertain) {
+        lastError = new GitWorktreeError(
+          "WORKTREE_CLEANUP_FAILED",
+          "Unable to verify the unidentified Git worktree"
+        );
+        continue;
+      }
+      if (!registered.record) return undefined;
+      if (registered.record.branchName !== branchName) {
+        return new GitWorktreeError(
+          "WORKTREE_CLEANUP_FAILED",
+          "The unidentified Git worktree is not owned by this operation"
+        );
+      }
+      const removed = await runGit(
+        runner,
+        ["worktree", "remove", "--force", registered.record.cwd],
+        repoRoot
+      );
+      if (removed.code === 0) return undefined;
+      lastError = new GitWorktreeError(
+        "WORKTREE_CLEANUP_FAILED",
+        `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+      );
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  return lastError;
+}
+
 async function withCreatedGitWorktree<T>(
   options: CreateGitWorktreeOptions,
   operation: (worktree: GitWorktreeResult) => T | Promise<T>,
@@ -595,9 +648,10 @@ async function withCreatedGitWorktree<T>(
       );
     }
 
-    const identity = await readWorktreeIdentity(runner, targetPath);
-    const worktree = { cwd: targetPath, branchName, repoRoot, ...identity };
+    let worktree: GitWorktreeResult | undefined;
     try {
+      const identity = await readWorktreeIdentity(runner, targetPath);
+      worktree = { cwd: targetPath, branchName, repoRoot, ...identity };
       const checkedOut = await runGit(
         runner,
         ["checkout", "--force", "HEAD"],
@@ -611,9 +665,27 @@ async function withCreatedGitWorktree<T>(
       }
       return await operation(worktree);
     } catch (error) {
-      const cleanupTarget = { worktree, removeBranch: true };
-      const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner);
-      if (cleanupError) deps.onCleanupError?.(cleanupError, cleanupTarget);
+      if (worktree) {
+        const cleanupTarget = { worktree, removeBranch: true };
+        const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner);
+        if (cleanupError) deps.onCleanupError?.(cleanupError, cleanupTarget);
+      } else {
+        const cleanupError = await cleanupUnidentifiedWorktree(
+          runner,
+          repoRoot,
+          targetPath,
+          branchName
+        );
+        if (cleanupError) {
+          const cleanupMessage =
+            cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+          throw new GitWorktreeError(
+            "WORKTREE_CREATE_FAILED",
+            `${error instanceof Error ? error.message : String(error)}; ${cleanupMessage}`,
+            error
+          );
+        }
+      }
       throw error;
     }
   });
