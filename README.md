@@ -34,7 +34,7 @@
 - **项目信任机制** — Project Trust 409 握手与授权弹窗
 - **MCP 服务器管理** — 支持全局 (`~/.pi/agent/mcp.json`) 与项目 (`<cwd>/.pi/mcp.json`) MCP 配置与 UI 管理
 - **扩展与 Skill 管理** — 统一 UI 管理全局和项目扩展、Skill 启用与诊断
-- **会话分叉与克隆** — API/UI 支持从任意节点 Branch 及 Clone 会话到新目录
+- **会话分叉与克隆** — API/UI 支持从任意节点 Branch，以及将会话 Clone 到普通目录或 Git Worktree（新分支）
 - **会话导出** — 一键导出为 HTML / Markdown 格式
 - **AgentMode 持久化** — 自动写入 `.jsonl` 自定义 `desktop_agent_mode` 节点，重载恢复历史模式
 - **长期记忆 LTM** — 项目级 SQLite 记忆（`memory_save` / `memory_recall` / `memory_forget`），跨会话检索；中文/日韩走 FTS5 trigram；`agent_end` 与 compact 前自动观察写入
@@ -114,6 +114,8 @@ lib/
   ltm/               # 长期记忆（SQLite + MemoryService + hooks）
   i18n/              # 界面文案（en / zh-CN / system）
   session-reader.ts  # 解析 .jsonl 会话文件
+  session-branch-clone.ts # 会话分叉与克隆参数及 header
+  git-worktree.ts    # Git Worktree 创建、身份校验与清理
   rpc-manager.ts     # 管理 AgentSession 生命周期
   normalize.ts       # 规范化 toolCall 字段名
   types.ts

@@ -391,6 +391,12 @@ Pi 有两种独立的分支机制，**不要混淆**：
 - 触发位置：用户消息上的 Fork 按钮
 - API：`POST /api/agent/[id]` body `{ type:"fork", entryId }`
 
+### Clone 工作区（跨目录）
+
+`POST /api/sessions/[id]/clone` 默认创建普通目录 Clone；传入 `workspaceMode: "worktree"` 时，要求源 `cwd` 位于 Git 仓库中，并在仓库外的不存在目标路径创建一个新的 Git worktree。可选 `branchName` 指定分支名；未指定时由服务端生成。成功响应的 `workspace` 会返回 `mode`、`cwd`，Worktree 还会返回 `branchName`。
+
+Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并记录 worktree 的 `gitDir`、`HEAD` 与分支身份。目标路径、分支和身份校验失败时会拒绝操作；Clone/fork 失败时只清理已证明属于本次创建的资源。
+
 ### 会话内分支（同文件分支）
 
 - 仍在**同一个 `.jsonl` 文件**内
@@ -554,7 +560,7 @@ components/models-config/     模型配置弹窗的子组件
 | `app/api/sessions/[id]/route.ts` | GET / PATCH / DELETE | 读取 / 重命名 / 删除 |
 | `app/api/sessions/[id]/context/route.ts` | GET | `?leafId=` 返回指定分支叶子的上下文 |
 | `app/api/sessions/[id]/branch/route.ts` | POST | 从指定 entryId 节点创建分叉新会话 (.jsonl) |
-| `app/api/sessions/[id]/clone/route.ts` | POST | 全量复制/Fork 会话至目标 cwd 目录 |
+| `app/api/sessions/[id]/clone/route.ts` | POST | 全量 Clone 会话至普通目录或 Git Worktree |
 | `app/api/sessions/[id]/export/route.ts` | GET | 导出会话为独立 HTML 或 Markdown 文件 |
 | `app/api/sessions/new/route.ts` | — | 已弃用，返回 410 |
 
@@ -702,7 +708,7 @@ Pi SDK 存储格式 `{ id, name, arguments }` 与前端类型 `{ toolCallId, too
 
 ### 14.4 两种分支机制不要混淆
 
-见 §8。**Fork = 跨文件**，**会话内分支 = 同文件**，分别由不同 UI 入口和不同 API 触发。
+见 §8。**Fork / Branch = 跨文件**，**会话内分支 = 同文件**，**Git Worktree Clone = Git 仓库外的新工作区和分支**，分别由不同 UI 入口和不同 API 触发。Worktree 清理必须先确认目标路径、分支、HEAD 与 linked worktree 的 `gitDir` 身份一致；身份无法证明时应 fail closed，避免删除外部资源。
 
 ### 14.5 SSE 而非 WebSocket
 
@@ -909,14 +915,14 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 
 ### Wave 2: MCP / 会话分支与导出 / 扩展管理 UI（已完成）
 - **MCP 服务器配置与管理 UI**：支持全局与项目级 `mcp.json` 的读写、开启/禁用、测试连通性与工具数查看。
-- **会话 Branching & Cloning**：支持从指定节点分叉 Session Branch 以及将 Session 全量 Clone 至新目录。
+- **会话 Branching & Cloning**：支持从指定节点分叉 Session Branch，以及将 Session 全量 Clone 至普通目录或 Git Worktree。
 - **会话导出 (HTML / Markdown)**：一键导出会话内容为原生 HTML 或 Markdown。
 - **AgentMode `.jsonl` 持久化**：写入 `desktop_agent_mode` 自定义节点并在加载时自后向前恢复历史模式。
 - **扩展与 Skill 统一管理**：Tab 化管理已配置的 Extensions、Skills 与 MCP 服务。
 
 ### 后续规划
 - **操作系统级沙盒隔离**：Docker / OS 容器沙盒执行隔离。
-- **多 Agent 协作与 Worktree**：支持独立 Worktree 分支与多 Agent 并行处理。
+- **多 Agent 协作**：在现有会话与 Worktree 基础上支持多 Agent 并行处理。
 
 ## 附录：相关文档
 
