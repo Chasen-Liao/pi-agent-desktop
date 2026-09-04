@@ -37,6 +37,8 @@ export interface GitWorktreeResult {
   repoRoot: string;
   gitDir: string;
   head: string;
+  ownerMarkerPath?: string;
+  ownerToken?: string;
 }
 
 export interface GitWorktreeCleanupTarget {
@@ -174,21 +176,48 @@ function pathsMatch(left: string, right: string): boolean | undefined {
   return false;
 }
 
-async function readWorktreeIdentity(
-  runner: GitRunner,
-  cwd: string
-): Promise<{ gitDir: string; head: string }> {
-  const gitDirResult = await runGit(runner, ["rev-parse", "--git-dir"], cwd);
-  const headResult = await runGit(runner, ["rev-parse", "HEAD"], cwd);
-  const gitDir = gitDirResult.stdout.trim();
-  const head = headResult.stdout.trim();
-  if (gitDirResult.code !== 0 || !gitDir || headResult.code !== 0 || !head) {
+async function readWorktreeGitDir(runner: GitRunner, cwd: string): Promise<string> {
+  try {
+    const result = await runGit(runner, ["rev-parse", "--git-dir"], cwd);
+    const gitDir = result.stdout.trim();
+    if (result.code === 0 && gitDir) return resolve(cwd, gitDir);
+  } catch {
+    // Fall back to the linked worktree's .git file.
+  }
+
+  try {
+    const gitFile = readFileSync(join(cwd, ".git"), "utf8").trim();
+    const match = /^gitdir:\s*(.+)$/i.exec(gitFile);
+    if (match?.[1]) return resolve(cwd, match[1].trim());
+  } catch {
+    // Report a stable library error below.
+  }
+  throw new GitWorktreeError(
+    "WORKTREE_CREATE_FAILED",
+    "Unable to record Git worktree identity"
+  );
+}
+
+async function readWorktreeHead(runner: GitRunner, cwd: string): Promise<string> {
+  const result = await runGit(runner, ["rev-parse", "HEAD"], cwd);
+  const head = result.stdout.trim();
+  if (result.code !== 0 || !head) {
     throw new GitWorktreeError(
       "WORKTREE_CREATE_FAILED",
       "Unable to record Git worktree identity"
     );
   }
-  return { gitDir: resolve(cwd, gitDir), head };
+  return head;
+}
+
+async function readWorktreeIdentity(
+  runner: GitRunner,
+  cwd: string
+): Promise<{ gitDir: string; head: string }> {
+  return {
+    gitDir: await readWorktreeGitDir(runner, cwd),
+    head: await readWorktreeHead(runner, cwd),
+  };
 }
 
 function findRegisteredWorktree(
@@ -495,47 +524,123 @@ async function cleanupUnidentifiedWorktree(
   runner: GitRunner,
   repoRoot: string,
   cwd: string,
-  branchName: string
+  branchName: string,
+  ownerMarkerPath?: string,
+  ownerToken?: string
 ): Promise<unknown> {
+  if (!ownerMarkerPath || !ownerToken) {
+    return new GitWorktreeError(
+      "WORKTREE_CLEANUP_FAILED",
+      "Unable to verify ownership of the newly created Git worktree"
+    );
+  }
+
   let lastError: unknown;
+  let worktreeRemoved = false;
+  let branchHead: string | undefined;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const listed = await runGit(
+      if (!worktreeRemoved) {
+        const listed = await runGit(
+          runner,
+          ["worktree", "list", "--porcelain", "-z"],
+          repoRoot
+        );
+        if (listed.code !== 0) {
+          lastError = new GitWorktreeError(
+            "WORKTREE_CLEANUP_FAILED",
+            `Unable to inspect Git worktrees${conciseGitError(listed.stderr)}`
+          );
+          continue;
+        }
+        const registered = findRegisteredWorktree(listed.stdout, cwd);
+        if (registered.uncertain || !registered.record) {
+          lastError = new GitWorktreeError(
+            "WORKTREE_CLEANUP_FAILED",
+            "Unable to verify ownership of the newly created Git worktree"
+          );
+          continue;
+        }
+        if (
+          registered.record.branchName !== branchName ||
+          !registered.record.head
+        ) {
+          return new GitWorktreeError(
+            "WORKTREE_CLEANUP_FAILED",
+            "The newly created Git worktree is no longer owned by this operation"
+          );
+        }
+        try {
+          if (readFileSync(ownerMarkerPath, "utf8") !== ownerToken) {
+            return new GitWorktreeError(
+              "WORKTREE_CLEANUP_FAILED",
+              "The newly created Git worktree ownership marker changed"
+            );
+          }
+        } catch (error) {
+          return new GitWorktreeError(
+            "WORKTREE_CLEANUP_FAILED",
+            "Unable to verify ownership of the newly created Git worktree",
+            error
+          );
+        }
+        branchHead = registered.record.head;
+        const removed = await runGit(
+          runner,
+          ["worktree", "remove", "--force", registered.record.cwd],
+          repoRoot
+        );
+        if (removed.code !== 0) {
+          lastError = new GitWorktreeError(
+            "WORKTREE_CLEANUP_FAILED",
+            `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+          );
+          continue;
+        }
+        worktreeRemoved = true;
+      }
+
+      const listedAfterRemoval = await runGit(
         runner,
         ["worktree", "list", "--porcelain", "-z"],
         repoRoot
       );
-      if (listed.code !== 0) {
+      if (listedAfterRemoval.code !== 0) {
         lastError = new GitWorktreeError(
           "WORKTREE_CLEANUP_FAILED",
-          `Unable to inspect Git worktrees${conciseGitError(listed.stderr)}`
+          `Unable to verify Git branch ownership${conciseGitError(listedAfterRemoval.stderr)}`
         );
         continue;
       }
-      const registered = findRegisteredWorktree(listed.stdout, cwd);
-      if (registered.uncertain) {
+      if (hasRegisteredBranch(listedAfterRemoval.stdout, branchName)) {
         lastError = new GitWorktreeError(
           "WORKTREE_CLEANUP_FAILED",
-          "Unable to verify the unidentified Git worktree"
+          "The Git branch is still registered to a worktree"
         );
         continue;
       }
-      if (!registered.record) return undefined;
-      if (registered.record.branchName !== branchName) {
-        return new GitWorktreeError(
-          "WORKTREE_CLEANUP_FAILED",
-          "The unidentified Git worktree is not owned by this operation"
-        );
-      }
-      const removed = await runGit(
+      if (!branchHead) return lastError;
+      const branch = await runGit(
         runner,
-        ["worktree", "remove", "--force", registered.record.cwd],
+        [
+          "update-ref",
+          "--no-deref",
+          "-d",
+          `refs/heads/${branchName}`,
+          branchHead,
+        ],
         repoRoot
       );
-      if (removed.code === 0) return undefined;
+      if (branch.code === 0) return undefined;
+      const state = await runGit(
+        runner,
+        ["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`],
+        repoRoot
+      );
+      if (state.code === 1) return undefined;
       lastError = new GitWorktreeError(
         "WORKTREE_CLEANUP_FAILED",
-        `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+        `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
       );
     } catch (error) {
       lastError = error;
@@ -648,10 +753,36 @@ async function withCreatedGitWorktree<T>(
       );
     }
 
+    const ownerToken = randomUUID();
+    let ownerMarkerPath: string | undefined;
     let worktree: GitWorktreeResult | undefined;
     try {
-      const identity = await readWorktreeIdentity(runner, targetPath);
-      worktree = { cwd: targetPath, branchName, repoRoot, ...identity };
+      const gitDir = await readWorktreeGitDir(runner, targetPath);
+      ownerMarkerPath = join(gitDir, "pi-agent-desktop-worktree-owner");
+      if (existsSync(gitDir)) {
+        writeFileSync(ownerMarkerPath, ownerToken, { flag: "wx" });
+      } else {
+        ownerMarkerPath = undefined;
+      }
+      const head = await readWorktreeHead(runner, targetPath);
+      worktree = {
+        cwd: targetPath,
+        branchName,
+        repoRoot,
+        gitDir,
+        head,
+        ...(ownerMarkerPath ? { ownerMarkerPath, ownerToken } : {}),
+      };
+      const checkoutIdentity = await readWorktreeIdentity(runner, targetPath);
+      if (
+        checkoutIdentity.head !== worktree.head ||
+        pathsMatch(checkoutIdentity.gitDir, worktree.gitDir) !== true
+      ) {
+        throw new GitWorktreeError(
+          "WORKTREE_CREATE_FAILED",
+          "The Git worktree identity changed before checkout"
+        );
+      }
       const checkedOut = await runGit(
         runner,
         ["checkout", "--force", "HEAD"],
@@ -674,7 +805,9 @@ async function withCreatedGitWorktree<T>(
           runner,
           repoRoot,
           targetPath,
-          branchName
+          branchName,
+          ownerMarkerPath,
+          ownerToken
         );
         if (cleanupError) {
           const cleanupMessage =
@@ -779,19 +912,46 @@ async function removeGitWorktreeUnlocked(
               )
             );
           } else {
+            let markerMatches = true;
+            if (worktree.ownerMarkerPath && worktree.ownerToken) {
+              try {
+                markerMatches =
+                  readFileSync(worktree.ownerMarkerPath, "utf8") === worktree.ownerToken;
+              } catch (error) {
+                markerMatches = false;
+                errors.push(
+                  new GitWorktreeError(
+                    "WORKTREE_CLEANUP_FAILED",
+                    "Unable to verify Git worktree ownership marker",
+                    error
+                  )
+                );
+              }
+              if (!markerMatches && errors.length === 0) {
+                errors.push(
+                  new GitWorktreeError(
+                    "WORKTREE_CLEANUP_FAILED",
+                    "The Git worktree ownership marker changed"
+                  )
+                );
+              }
+            }
             let identity: { gitDir: string; head: string } | undefined;
-            try {
-              identity = await readWorktreeIdentity(runner, registered.record.cwd);
-            } catch (error) {
-              errors.push(
-                new GitWorktreeError(
-                  "WORKTREE_CLEANUP_FAILED",
-                  "Unable to verify Git worktree identity",
-                  error
-                )
-              );
+            if (markerMatches) {
+              try {
+                identity = await readWorktreeIdentity(runner, registered.record.cwd);
+              } catch (error) {
+                errors.push(
+                  new GitWorktreeError(
+                    "WORKTREE_CLEANUP_FAILED",
+                    "Unable to verify Git worktree identity",
+                    error
+                  )
+                );
+              }
             }
             if (
+              markerMatches &&
               identity &&
               identity.head === worktree.head &&
               pathsMatch(identity.gitDir, worktree.gitDir) === true

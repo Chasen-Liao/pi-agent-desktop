@@ -94,7 +94,9 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
   ]);
   assert.deepEqual(calls[4]?.args, ["rev-parse", "--git-dir"]);
   assert.deepEqual(calls[5]?.args, ["rev-parse", "HEAD"]);
-  assert.deepEqual(calls[6]?.args, ["checkout", "--force", "HEAD"]);
+  assert.deepEqual(calls[6]?.args, ["rev-parse", "--git-dir"]);
+  assert.deepEqual(calls[7]?.args, ["rev-parse", "HEAD"]);
+  assert.deepEqual(calls[8]?.args, ["checkout", "--force", "HEAD"]);
 });
 
 test("removeGitWorktree removes the worktree and its branch", async () => {
