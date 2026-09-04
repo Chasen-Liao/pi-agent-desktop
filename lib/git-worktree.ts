@@ -4,7 +4,6 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   realpathSync,
   renameSync,
@@ -132,54 +131,39 @@ function caseVariantResolvesToSamePath(current: string, alternate: string): bool
     const alternateStat = lstatSync(alternate);
     if (currentStat.isSymbolicLink() || alternateStat.isSymbolicLink()) return false;
     return realpathSync.native(current) === realpathSync.native(alternate);
-  } catch {
-    return false;
-  }
-}
-
-function probeFilesystemCaseSensitivity(directory: string): boolean | undefined {
-  let probePath: string | undefined;
-  try {
-    probePath = mkdtempSync(join(directory, ".pi-agent-case-probe-"));
-    const alternatePath = join(dirname(probePath), swapAsciiCase(basename(probePath)));
-    const samePath = caseVariantResolvesToSamePath(probePath, alternatePath);
-    return samePath === true;
-  } catch {
-    return undefined;
-  } finally {
-    if (probePath) {
-      try {
-        rmSync(probePath, { recursive: true, force: true });
-      } catch {
-        // Best-effort cleanup for the temporary sensitivity probe.
-      }
-    }
+  } catch (error) {
+    return isErrorCode(error, "ENOENT") ? false : undefined;
   }
 }
 
 function filesystemIsCaseInsensitive(path: string): boolean | undefined {
   let current = existingAncestor(path);
   while (current) {
-    const name = basename(current);
-    const alternateName = swapAsciiCase(name);
-    if (alternateName !== name) {
-      const samePath = caseVariantResolvesToSamePath(
-        current,
-        join(dirname(current), alternateName)
-      );
-      if (samePath !== undefined) return samePath;
-    } else {
-      const probe = probeFilesystemCaseSensitivity(current);
-      if (probe !== undefined) return probe;
+    let physicalCurrent: string | undefined;
+    try {
+      physicalCurrent = realpathSync.native(current);
+    } catch {
+      // Continue to an ancestor if the current path cannot be canonicalized.
+    }
+    if (physicalCurrent) {
+      const name = basename(physicalCurrent);
+      const alternateName = swapAsciiCase(name);
+      if (alternateName !== name) {
+        const samePath = caseVariantResolvesToSamePath(
+          physicalCurrent,
+          join(dirname(physicalCurrent), alternateName)
+        );
+        if (samePath !== undefined) return samePath;
+      }
     }
     const parent = dirname(current);
     if (parent === current) break;
-    current = parent;
+    current = existingAncestor(parent);
   }
   return undefined;
 }
 
-function pathsMatch(left: string, right: string): boolean {
+function pathsMatch(left: string, right: string): boolean | undefined {
   const leftPath = resolve(left);
   const rightPath = resolve(right);
   if (leftPath === rightPath) return true;
@@ -200,7 +184,10 @@ function pathsMatch(left: string, right: string): boolean {
 function worktreeListContains(stdout: string, targetCwd: string): boolean {
   return stdout
     .split(/\r?\n/)
-    .some((line) => line.startsWith("worktree ") && pathsMatch(line.slice(9), targetCwd));
+    .some(
+      (line) =>
+        line.startsWith("worktree ") && pathsMatch(line.slice(9), targetCwd) !== false
+    );
 }
 
 type WorktreeLockMap = Map<string, Promise<void>>;
