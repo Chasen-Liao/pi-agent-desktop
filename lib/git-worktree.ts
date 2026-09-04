@@ -117,14 +117,14 @@ function parseGitWorktreeList(stdout: string): GitWorktreeListRecord[] {
     current = undefined;
   };
 
-  for (const line of stdout.split(/\r?\n/)) {
-    if (line === "") {
+  for (const field of stdout.split("\0")) {
+    if (field === "") {
       addCurrent();
-    } else if (line.startsWith("worktree ")) {
+    } else if (field.startsWith("worktree ")) {
       addCurrent();
-      current = { cwd: line.slice(9) };
-    } else if (line.startsWith("branch refs/heads/") && current) {
-      current.branchName = line.slice("branch refs/heads/".length);
+      current = { cwd: field.slice(9) };
+    } else if (field.startsWith("branch refs/heads/") && current) {
+      current.branchName = field.slice("branch refs/heads/".length);
     }
   }
   addCurrent();
@@ -138,8 +138,9 @@ function pathsMatch(left: string, right: string): boolean | undefined {
   try {
     return realpathSync.native(leftPath) === realpathSync.native(rightPath);
   } catch {
-    // A removed or inaccessible path cannot be compared safely.
-    return undefined;
+    // Case-only variants may still refer to the same removed path; all other
+    // lexical differences identify distinct paths without filesystem probing.
+    return leftPath.toLowerCase() === rightPath.toLowerCase() ? undefined : false;
   }
 }
 
@@ -506,18 +507,33 @@ async function withCreatedGitWorktree<T>(
       );
     }
 
-    const branchState = await runGit(
+    const registeredBeforeCreate = await runGit(
       runner,
-      ["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`],
+      ["worktree", "list", "--porcelain", "-z"],
       repoRoot
     );
-    if (branchState.code !== 0 && branchState.code !== 1) {
+    if (registeredBeforeCreate.code !== 0) {
       throw new GitWorktreeError(
         "WORKTREE_CREATE_FAILED",
-        `Unable to check whether Git branch '${branchName}' exists${conciseGitError(branchState.stderr)}`
+        `Unable to inspect existing Git worktrees${conciseGitError(registeredBeforeCreate.stderr)}`
       );
     }
-    const branchExisted = branchState.code === 0;
+    const existingTarget = findRegisteredWorktree(
+      registeredBeforeCreate.stdout,
+      targetPath
+    );
+    if (existingTarget.cwd) {
+      throw new GitWorktreeError(
+        "TARGET_EXISTS",
+        `Worktree directory already exists: ${targetPath}`
+      );
+    }
+    if (existingTarget.uncertain) {
+      throw new GitWorktreeError(
+        "WORKTREE_CREATE_FAILED",
+        `Unable to verify whether a Git worktree already uses ${targetPath}`
+      );
+    }
 
     const created = await runGit(
       runner,
@@ -525,9 +541,13 @@ async function withCreatedGitWorktree<T>(
       repoRoot
     );
     if (created.code !== 0) {
+      // A failed `worktree add -b` does not prove branch ownership: an external
+      // Git process may have created the same branch between our checks. Only a
+      // successful add establishes ownership, so failed creation never deletes
+      // a branch; the worktree path itself is still cleaned up and retried.
       const cleanupTarget: GitWorktreeCleanupTarget = {
         worktree: { cwd: targetPath, branchName, repoRoot },
-        removeBranch: !branchExisted,
+        removeBranch: false,
       };
       const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner, {
         allowBranchLookup: false,
@@ -613,7 +633,7 @@ async function removeGitWorktreeUnlocked(
       try {
         const listed = await runGit(
           runner,
-          ["worktree", "list", "--porcelain"],
+          ["worktree", "list", "--porcelain", "-z"],
           worktree.repoRoot
         );
         if (listed.code === 0) {
