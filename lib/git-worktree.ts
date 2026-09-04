@@ -104,16 +104,63 @@ function conciseGitError(stderr: string): string {
   return message ? `: ${message.slice(0, 300)}` : "";
 }
 
-function pathsMatch(left: string, right: string): boolean {
-  const canonicalPath = (path: string): string => {
-    const absolutePath = resolve(path);
+function swapAsciiCase(value: string): string {
+  return value.replace(/[A-Za-z]/g, (character) =>
+    character === character.toLowerCase() ? character.toUpperCase() : character.toLowerCase()
+  );
+}
+
+function existingAncestor(path: string): string | undefined {
+  let current = resolve(path);
+  while (true) {
     try {
-      return realpathSync.native(absolutePath);
+      if (statSync(current).isDirectory()) return current;
     } catch {
-      return absolutePath;
+      // Walk up through missing or inaccessible path components.
     }
-  };
-  return canonicalPath(left) === canonicalPath(right);
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+function filesystemIsCaseInsensitive(path: string): boolean | undefined {
+  let current = existingAncestor(path);
+  while (current) {
+    const name = basename(current);
+    const alternateName = swapAsciiCase(name);
+    if (alternateName !== name) {
+      try {
+        const currentRealpath = realpathSync.native(current);
+        const alternateRealpath = realpathSync.native(join(dirname(current), alternateName));
+        return currentRealpath === alternateRealpath;
+      } catch {
+        return false;
+      }
+    }
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = existingAncestor(parent);
+  }
+  return undefined;
+}
+
+function pathsMatch(left: string, right: string): boolean {
+  const leftPath = resolve(left);
+  const rightPath = resolve(right);
+  if (leftPath === rightPath) return true;
+
+  try {
+    if (realpathSync.native(leftPath) === realpathSync.native(rightPath)) return true;
+  } catch {
+    // One or both paths may have been removed; compare their lexical forms below.
+  }
+
+  const caseInsensitive =
+    filesystemIsCaseInsensitive(leftPath) ?? filesystemIsCaseInsensitive(rightPath);
+  return caseInsensitive === true
+    ? leftPath.toLowerCase() === rightPath.toLowerCase()
+    : leftPath === rightPath;
 }
 
 function worktreeListContains(stdout: string, targetCwd: string): boolean {

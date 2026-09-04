@@ -380,6 +380,7 @@ test("removeGitWorktree compares worktree paths according to the filesystem", as
   } catch {
     // The alternate spelling does not resolve on a case-sensitive filesystem.
   }
+  rmSync(targetCwd, { recursive: true, force: true });
   const runner = scriptedRunner((args) => {
     if (args[0] === "worktree" && args[1] === "remove") {
       return { code: 128, stderr: "fatal: already removed" };
