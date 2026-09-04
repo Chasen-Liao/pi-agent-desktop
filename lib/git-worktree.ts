@@ -106,6 +106,7 @@ function conciseGitError(stderr: string): string {
 
 type GitWorktreeListRecord = {
   cwd: string;
+  branchName?: string;
 };
 
 function parseGitWorktreeList(stdout: string): GitWorktreeListRecord[] {
@@ -122,6 +123,8 @@ function parseGitWorktreeList(stdout: string): GitWorktreeListRecord[] {
     } else if (field.startsWith("worktree ")) {
       addCurrent();
       current = { cwd: field.slice(9) };
+    } else if (field.startsWith("branch refs/heads/") && current) {
+      current.branchName = field.slice("branch refs/heads/".length);
     }
   }
   addCurrent();
@@ -169,15 +172,19 @@ function pathsMatch(left: string, right: string): boolean | undefined {
 function findRegisteredWorktree(
   stdout: string,
   targetCwd: string
-): { cwd?: string; uncertain: boolean } {
+): { record?: GitWorktreeListRecord; uncertain: boolean } {
   const records = parseGitWorktreeList(stdout);
   let uncertain = false;
   for (const record of records) {
     const match = pathsMatch(record.cwd, targetCwd);
-    if (match === true) return { cwd: record.cwd, uncertain: false };
+    if (match === true) return { record, uncertain: false };
     if (match === undefined) uncertain = true;
   }
   return { uncertain };
+}
+
+function hasRegisteredBranch(stdout: string, branchName: string): boolean {
+  return parseGitWorktreeList(stdout).some((record) => record.branchName === branchName);
 }
 
 type WorktreeLockMap = Map<string, Promise<void>>;
@@ -538,7 +545,7 @@ async function withCreatedGitWorktree<T>(
       registeredBeforeCreate.stdout,
       targetPath
     );
-    if (existingTarget.cwd) {
+    if (existingTarget.record) {
       throw new GitWorktreeError(
         "TARGET_EXISTS",
         `Worktree directory already exists: ${targetPath}`
@@ -619,78 +626,105 @@ async function removeGitWorktreeUnlocked(
   options: { removeBranch?: boolean } = {}
 ): Promise<void> {
   const errors: unknown[] = [];
+  let worktreeReadyForBranchDeletion = options.removeBranch !== false;
 
   try {
-    const removed = await runGit(
+    const listed = await runGit(
       runner,
-      ["worktree", "remove", "--force", worktree.cwd],
+      ["worktree", "list", "--porcelain", "-z"],
       worktree.repoRoot
     );
-    if (removed.code !== 0) {
-      let stillPresent = true;
-      let removalFailure = removed;
-      try {
-        const listed = await runGit(
-          runner,
-          ["worktree", "list", "--porcelain", "-z"],
-          worktree.repoRoot
-        );
-        if (listed.code === 0) {
-          const registered = findRegisteredWorktree(listed.stdout, worktree.cwd);
-          if (!registered.uncertain && !registered.cwd) {
-            stillPresent = false;
-          } else if (registered.cwd) {
-            const retried = await runGit(
-              runner,
-              ["worktree", "remove", "--force", registered.cwd],
-              worktree.repoRoot
-            );
-            stillPresent = retried.code !== 0;
-            removalFailure = retried;
-          }
-        }
-      } catch (error) {
-        errors.push(error);
-      }
-      if (stillPresent) {
+    if (listed.code !== 0) {
+      worktreeReadyForBranchDeletion = false;
+      errors.push(
+        new GitWorktreeError(
+          "WORKTREE_CLEANUP_FAILED",
+          `Unable to inspect Git worktrees${conciseGitError(listed.stderr)}`
+        )
+      );
+    } else {
+      const registered = findRegisteredWorktree(listed.stdout, worktree.cwd);
+      if (registered.uncertain) {
+        worktreeReadyForBranchDeletion = false;
         errors.push(
           new GitWorktreeError(
             "WORKTREE_CLEANUP_FAILED",
-            `Failed to remove Git worktree${conciseGitError(removalFailure.stderr)}`
+            "Unable to verify whether the Git worktree still exists"
           )
         );
+      } else if (registered.record) {
+        if (registered.record.branchName !== worktree.branchName) {
+          worktreeReadyForBranchDeletion = false;
+          errors.push(
+            new GitWorktreeError(
+              "WORKTREE_CLEANUP_FAILED",
+              "The registered Git worktree is not owned by this operation"
+            )
+          );
+        } else {
+          const removed = await runGit(
+            runner,
+            ["worktree", "remove", "--force", registered.record.cwd],
+            worktree.repoRoot
+          );
+          if (removed.code !== 0) {
+            worktreeReadyForBranchDeletion = false;
+            errors.push(
+              new GitWorktreeError(
+                "WORKTREE_CLEANUP_FAILED",
+                `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+              )
+            );
+          }
+        }
       }
     }
   } catch (error) {
+    worktreeReadyForBranchDeletion = false;
     errors.push(error);
   }
 
-  if (options.removeBranch !== false) {
+  if (options.removeBranch !== false && worktreeReadyForBranchDeletion) {
     try {
-      const branch = await runGit(
+      const listedAfterRemoval = await runGit(
         runner,
-        ["branch", "-D", worktree.branchName],
+        ["worktree", "list", "--porcelain", "-z"],
         worktree.repoRoot
       );
-      if (branch.code !== 0) {
-        let stillPresent = true;
-        try {
+      if (listedAfterRemoval.code !== 0) {
+        errors.push(
+          new GitWorktreeError(
+            "WORKTREE_CLEANUP_FAILED",
+            `Unable to verify Git branch ownership${conciseGitError(listedAfterRemoval.stderr)}`
+          )
+        );
+      } else if (hasRegisteredBranch(listedAfterRemoval.stdout, worktree.branchName)) {
+        errors.push(
+          new GitWorktreeError(
+            "WORKTREE_CLEANUP_FAILED",
+            "The Git branch is still registered to a worktree"
+          )
+        );
+      } else {
+        const branch = await runGit(
+          runner,
+          ["branch", "-D", worktree.branchName],
+          worktree.repoRoot
+        );
+        if (branch.code !== 0) {
           const state = await runGit(
             runner,
             ["show-ref", "--verify", "--quiet", `refs/heads/${worktree.branchName}`],
             worktree.repoRoot
           );
-          stillPresent = state.code !== 1;
-        } catch (error) {
-          errors.push(error);
-        }
-        if (stillPresent) {
-          errors.push(
-            new GitWorktreeError(
-              "WORKTREE_CLEANUP_FAILED",
-              `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
-            )
-          );
+          if (state.code !== 1) {
+            errors.push(
+              new GitWorktreeError(
+                "WORKTREE_CLEANUP_FAILED",
+                `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
+              )
+            );
+          }
         }
       }
     } catch (error) {
