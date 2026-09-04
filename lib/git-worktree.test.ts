@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, realpathSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
   createGitWorktree,
   GitWorktreeError,
@@ -156,7 +154,10 @@ test("createGitWorktree retries failed cleanup and exposes its target", async ()
       return { code: 128, stderr: "fatal: cleanup is temporarily unavailable" };
     }
     if (args[0] === "worktree" && args[1] === "list") {
-      return { code: 0, stdout: "worktree /workspace/project-copy\n" };
+      return {
+        code: 0,
+        stdout: "worktree /workspace/project-copy\nbranch refs/heads/pi-agent/retry-cleanup\n",
+      };
     }
     if (args[0] === "branch") {
       branchAttempts += 1;
@@ -178,7 +179,7 @@ test("createGitWorktree retries failed cleanup and exposes its target", async ()
       return true;
     }
   );
-  assert.equal(removeAttempts, 2);
+  assert.equal(removeAttempts, 4);
   assert.equal(branchAttempts, 2);
 });
 
@@ -306,7 +307,7 @@ test("removeGitWorktree attempts branch cleanup when worktree removal fails", as
     }
     if (args[0] === "worktree" && args[1] === "list") {
       return {
-        stdout: `worktree ${fixturePath("/workspace/project-copy")}\n`,
+        stdout: `worktree ${fixturePath("/workspace/project-copy")}\nbranch refs/heads/pi-agent/project-copy\n`,
       };
     }
     return {};
@@ -331,6 +332,7 @@ test("removeGitWorktree attempts branch cleanup when worktree removal fails", as
   assert.deepEqual(calls, [
     ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
     ["worktree", "list", "--porcelain"],
+    ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
     ["branch", "-D", "pi-agent/project-copy"],
   ]);
 });
@@ -369,44 +371,40 @@ test("removeGitWorktree reports a branch cleanup failure", async () => {
   ]);
 });
 
-test("removeGitWorktree compares worktree paths according to the filesystem", async () => {
-  const root = mkdtempSync(join(tmpdir(), "pi-worktree-case-"));
-  const numericAncestor = join(root, "123");
-  const targetCwd = join(numericAncestor, "Foo");
-  const alternateCwd = join(numericAncestor, "foo");
-  mkdirSync(targetCwd, { recursive: true });
-  let caseInsensitive = false;
-  try {
-    caseInsensitive = realpathSync.native(targetCwd) === realpathSync.native(alternateCwd);
-  } catch {
-    // The alternate spelling does not resolve on a case-sensitive filesystem.
-  }
-  rmSync(targetCwd, { recursive: true, force: true });
+test("removeGitWorktree retries with Git's registered worktree path", async () => {
+  const calls: string[][] = [];
   const runner = scriptedRunner((args) => {
+    calls.push(args);
     if (args[0] === "worktree" && args[1] === "remove") {
-      return { code: 128, stderr: "fatal: already removed" };
+      return args[3] === fixturePath("/workspace/project-copy")
+        ? { code: 128, stderr: "fatal: already removed" }
+        : {};
     }
     if (args[0] === "worktree" && args[1] === "list") {
-      return { stdout: `worktree ${alternateCwd}\n` };
+      return {
+        stdout:
+          "worktree /workspace/project-copy-renamed\n" +
+          "branch refs/heads/pi-agent/case\n",
+      };
     }
     return {};
   });
 
-  try {
-    const cleanup = removeGitWorktree(
-      { cwd: targetCwd, branchName: "pi-agent/case", repoRoot: root },
-      runner
-    );
-    if (caseInsensitive) {
-      await assert.rejects(cleanup, (error: unknown) =>
-        error instanceof GitWorktreeError && error.code === "WORKTREE_CLEANUP_FAILED"
-      );
-    } else {
-      await cleanup;
-    }
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+  await removeGitWorktree(
+    {
+      cwd: fixturePath("/workspace/project-copy"),
+      branchName: "pi-agent/case",
+      repoRoot: fixturePath("/workspace/project"),
+    },
+    runner
+  );
+
+  assert.deepEqual(calls, [
+    ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
+    ["worktree", "list", "--porcelain"],
+    ["worktree", "remove", "--force", "/workspace/project-copy-renamed"],
+    ["branch", "-D", "pi-agent/case"],
+  ]);
 });
 
 test("createGitWorktree resolves a relative target beside the repository", async () => {

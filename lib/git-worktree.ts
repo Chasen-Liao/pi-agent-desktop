@@ -2,7 +2,6 @@ import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync,
-  lstatSync,
   mkdirSync,
   readFileSync,
   realpathSync,
@@ -105,89 +104,22 @@ function conciseGitError(stderr: string): string {
   return message ? `: ${message.slice(0, 300)}` : "";
 }
 
-function swapAsciiCase(value: string): string {
-  return value.replace(/[A-Za-z]/g, (character) =>
-    character === character.toLowerCase() ? character.toUpperCase() : character.toLowerCase()
-  );
-}
-
-function existingAncestor(path: string): string | undefined {
-  let current = resolve(path);
-  while (true) {
-    try {
-      if (statSync(current).isDirectory()) return current;
-    } catch {
-      // Walk up through missing or inaccessible path components.
+function worktreeListPathForBranch(
+  stdout: string,
+  branchName: string
+): string | undefined {
+  const branchRef = `branch refs/heads/${branchName}`;
+  let worktreePath: string | undefined;
+  for (const line of stdout.split(/\r?\n/)) {
+    if (line === "") {
+      worktreePath = undefined;
+    } else if (line.startsWith("worktree ")) {
+      worktreePath = line.slice(9);
+    } else if (line === branchRef) {
+      return worktreePath;
     }
-    const parent = dirname(current);
-    if (parent === current) return undefined;
-    current = parent;
-  }
-}
-
-function caseVariantResolvesToSamePath(current: string, alternate: string): boolean | undefined {
-  try {
-    const currentStat = lstatSync(current);
-    const alternateStat = lstatSync(alternate);
-    if (currentStat.isSymbolicLink() || alternateStat.isSymbolicLink()) return false;
-    return realpathSync.native(current) === realpathSync.native(alternate);
-  } catch (error) {
-    return isErrorCode(error, "ENOENT") ? false : undefined;
-  }
-}
-
-function filesystemIsCaseInsensitive(path: string): boolean | undefined {
-  let current = existingAncestor(path);
-  while (current) {
-    let physicalCurrent: string | undefined;
-    try {
-      physicalCurrent = realpathSync.native(current);
-    } catch {
-      // Continue to an ancestor if the current path cannot be canonicalized.
-    }
-    if (physicalCurrent) {
-      const name = basename(physicalCurrent);
-      const alternateName = swapAsciiCase(name);
-      if (alternateName !== name) {
-        const samePath = caseVariantResolvesToSamePath(
-          physicalCurrent,
-          join(dirname(physicalCurrent), alternateName)
-        );
-        if (samePath !== undefined) return samePath;
-      }
-    }
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = existingAncestor(parent);
   }
   return undefined;
-}
-
-function pathsMatch(left: string, right: string): boolean | undefined {
-  const leftPath = resolve(left);
-  const rightPath = resolve(right);
-  if (leftPath === rightPath) return true;
-
-  try {
-    if (realpathSync.native(leftPath) === realpathSync.native(rightPath)) return true;
-  } catch {
-    // One or both paths may have been removed; compare their lexical forms below.
-  }
-
-  const caseInsensitive =
-    filesystemIsCaseInsensitive(leftPath) ?? filesystemIsCaseInsensitive(rightPath);
-  return caseInsensitive === true
-    ? leftPath.toLowerCase() === rightPath.toLowerCase()
-    : leftPath === rightPath;
-}
-
-function worktreeListContains(stdout: string, targetCwd: string): boolean {
-  return stdout
-    .split(/\r?\n/)
-    .some(
-      (line) =>
-        line.startsWith("worktree ") && pathsMatch(line.slice(9), targetCwd) !== false
-    );
 }
 
 type WorktreeLockMap = Map<string, Promise<void>>;
@@ -628,13 +560,27 @@ async function removeGitWorktreeUnlocked(
     );
     if (removed.code !== 0) {
       let stillPresent = true;
+      let removalFailure = removed;
       try {
         const listed = await runGit(
           runner,
           ["worktree", "list", "--porcelain"],
           worktree.repoRoot
         );
-        stillPresent = listed.code !== 0 || worktreeListContains(listed.stdout, worktree.cwd);
+        if (listed.code === 0) {
+          const listedCwd = worktreeListPathForBranch(listed.stdout, worktree.branchName);
+          if (!listedCwd) {
+            stillPresent = false;
+          } else {
+            const retried = await runGit(
+              runner,
+              ["worktree", "remove", "--force", listedCwd],
+              worktree.repoRoot
+            );
+            stillPresent = retried.code !== 0;
+            removalFailure = retried;
+          }
+        }
       } catch (error) {
         errors.push(error);
       }
@@ -642,7 +588,7 @@ async function removeGitWorktreeUnlocked(
         errors.push(
           new GitWorktreeError(
             "WORKTREE_CLEANUP_FAILED",
-            `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+            `Failed to remove Git worktree${conciseGitError(removalFailure.stderr)}`
           )
         );
       }
