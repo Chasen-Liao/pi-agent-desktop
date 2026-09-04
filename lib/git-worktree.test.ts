@@ -4,8 +4,10 @@ import { resolve } from "node:path";
 import {
   createGitWorktree,
   GitWorktreeError,
+  type GitWorktreeCleanupTarget,
   removeGitWorktree,
   validateWorktreeBranchName,
+  withGitWorktree,
   type GitRunner,
 } from "./git-worktree.ts";
 
@@ -106,25 +108,13 @@ test("removeGitWorktree removes the worktree and its branch", async () => {
   ]);
 });
 
-test("createGitWorktree cleans up a partially created worktree", async () => {
+test("createGitWorktree does not clean up unowned resources after add fails", async () => {
   const calls: string[][] = [];
-  let listCalls = 0;
   const runner = scriptedRunner((args) => {
     calls.push(args);
     if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
-    if (args[0] === "show-ref") return { code: 1 };
     if (args[0] === "worktree" && args[1] === "add") {
       return { code: 128, stderr: "fatal: post-checkout hook failed" };
-    }
-    if (args[0] === "worktree" && args[1] === "list") {
-      listCalls += 1;
-      return listCalls === 2
-        ? {
-            stdout:
-              "worktree /workspace/project-pi-agent-partial\0" +
-              "branch refs/heads/pi-agent/partial\0",
-          }
-        : {};
     }
     return {};
   });
@@ -140,27 +130,24 @@ test("createGitWorktree cleans up a partially created worktree", async () => {
 
   assert.deepEqual(calls.at(-1), [
     "worktree",
-    "remove",
-    "--force",
+    "add",
+    "-b",
+    "pi-agent/partial",
     fixturePath("/workspace/project-pi-agent-partial"),
+    "HEAD",
   ]);
+  assert.equal(calls.some((args) => args[1] === "remove"), false);
   assert.equal(calls.some((args) => args[0] === "branch"), false);
 });
 
-test("createGitWorktree retries failed cleanup and exposes its target", async () => {
+test("withGitWorktree retries failed cleanup and exposes its target", async () => {
   let removeAttempts = 0;
   let branchAttempts = 0;
-  let showRefAttempts = 0;
   let listCalls = 0;
+  let cleanupTarget: GitWorktreeCleanupTarget | undefined;
   const runner = scriptedRunner((args) => {
     if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
-    if (args[0] === "show-ref") {
-      showRefAttempts += 1;
-      return { code: showRefAttempts === 1 ? 1 : 0 };
-    }
-    if (args[0] === "worktree" && args[1] === "add") {
-      return { code: 128, stderr: "fatal: checkout hook failed" };
-    }
+    if (args[0] === "worktree" && args[1] === "add") return {};
     if (args[0] === "worktree" && args[1] === "remove") {
       removeAttempts += 1;
       return { code: 128, stderr: "fatal: cleanup is temporarily unavailable" };
@@ -169,11 +156,7 @@ test("createGitWorktree retries failed cleanup and exposes its target", async ()
       listCalls += 1;
       return listCalls === 1
         ? {}
-        : {
-            code: 0,
-            stdout:
-              "worktree /workspace/project-pi-agent-retry-cleanup\0",
-          };
+        : { code: 0, stdout: "worktree /workspace/project-pi-agent-retry-cleanup\0" };
     }
     if (args[0] === "branch") {
       branchAttempts += 1;
@@ -183,72 +166,63 @@ test("createGitWorktree retries failed cleanup and exposes its target", async ()
   });
 
   await assert.rejects(
-    createGitWorktree(
+    withGitWorktree(
       { sourceCwd: "/workspace/project", branchName: "pi-agent/retry-cleanup" },
-      { runner, pathExists: () => false, realpath: identityRealpath }
+      async () => {
+        throw new Error("operation failed");
+      },
+      {
+        runner,
+        pathExists: () => false,
+        realpath: identityRealpath,
+        onCleanupError: (_error, target) => {
+          cleanupTarget = target;
+        },
+      }
     ),
-    (error: unknown) => {
-      assert.ok(error instanceof GitWorktreeError);
-      assert.equal(error.code, "WORKTREE_CREATE_FAILED");
-      assert.equal(error.cleanupTarget?.removeBranch, false);
-      assert.equal(error.cleanupTarget?.worktree.branchName, "pi-agent/retry-cleanup");
-      return true;
-    }
+    (error: unknown) => error instanceof Error && error.message === "operation failed"
   );
   assert.equal(removeAttempts, 4);
-  assert.equal(branchAttempts, 0);
+  assert.equal(branchAttempts, 2);
+  assert.equal(cleanupTarget?.removeBranch, true);
+  assert.equal(cleanupTarget?.worktree.branchName, "pi-agent/retry-cleanup");
 });
 
-test("createGitWorktree treats completed cleanup as idempotent", async () => {
+test("withGitWorktree treats completed cleanup as idempotent", async () => {
   let removeAttempts = 0;
   let branchAttempts = 0;
-  let showRefAttempts = 0;
   let listCalls = 0;
   const runner = scriptedRunner((args) => {
     if (args[0] === "rev-parse") return { stdout: "/workspace/project\n" };
-    if (args[0] === "show-ref") {
-      showRefAttempts += 1;
-      return { code: showRefAttempts === 1 ? 1 : 0 };
-    }
-    if (args[0] === "worktree" && args[1] === "add") {
-      return { code: 128, stderr: "fatal: checkout hook failed" };
-    }
+    if (args[0] === "worktree" && args[1] === "add") return {};
     if (args[0] === "worktree" && args[1] === "remove") {
       removeAttempts += 1;
-      return removeAttempts === 1
-        ? {}
-        : { code: 128, stderr: "fatal: '/workspace/project-copy' is not a working tree" };
+      return removeAttempts === 1 ? {} : { code: 128, stderr: "fatal: already removed" };
     }
     if (args[0] === "worktree" && args[1] === "list") {
       listCalls += 1;
-      return listCalls === 2
-        ? {
-            code: 0,
-            stdout:
-              "worktree /workspace/project-pi-agent-idempotent-cleanup\0" +
-              "branch refs/heads/pi-agent/idempotent-cleanup\0",
-          }
-        : { code: 0, stdout: "", stderr: "" };
+      return listCalls === 2 ? { code: 0, stdout: "" } : {};
     }
     if (args[0] === "branch") {
       branchAttempts += 1;
       return branchAttempts === 1 ? { code: 1, stderr: "error: temporary failure" } : {};
     }
+    if (args[0] === "show-ref") return { code: 0 };
     return {};
   });
 
   await assert.rejects(
-    createGitWorktree(
+    withGitWorktree(
       { sourceCwd: "/workspace/project", branchName: "pi-agent/idempotent-cleanup" },
+      async () => {
+        throw new Error("operation failed");
+      },
       { runner, pathExists: () => false, realpath: identityRealpath }
     ),
-    (error: unknown) =>
-      error instanceof GitWorktreeError &&
-      error.code === "WORKTREE_CREATE_FAILED" &&
-      error.cleanupTarget === undefined
+    (error: unknown) => error instanceof Error && error.message === "operation failed"
   );
-  assert.equal(removeAttempts, 1);
-  assert.equal(branchAttempts, 0);
+  assert.equal(removeAttempts, 2);
+  assert.equal(branchAttempts, 2);
 });
 
 test("createGitWorktree preserves a pre-existing branch after creation fails", async () => {
@@ -274,10 +248,13 @@ test("createGitWorktree preserves a pre-existing branch after creation fails", a
 
   assert.deepEqual(calls.at(-1), [
     "worktree",
-    "remove",
-    "--force",
+    "add",
+    "-b",
+    "pi-agent/existing",
     fixturePath("/workspace/project-pi-agent-existing"),
+    "HEAD",
   ]);
+  assert.equal(calls.some((args) => args[1] === "remove"), false);
   assert.equal(calls.some((args) => args[0] === "branch"), false);
 });
 
@@ -525,7 +502,7 @@ test("removeGitWorktree retries a detached registered worktree by path", async (
   ]);
 });
 
-test("removeGitWorktree retries with Git's registered worktree path", async () => {
+test("removeGitWorktree does not remove a different registered worktree", async () => {
   const calls: string[][] = [];
   const runner = scriptedRunner((args) => {
     calls.push(args);
@@ -556,7 +533,6 @@ test("removeGitWorktree retries with Git's registered worktree path", async () =
   assert.deepEqual(calls, [
     ["worktree", "remove", "--force", fixturePath("/workspace/project-copy")],
     ["worktree", "list", "--porcelain", "-z"],
-    ["worktree", "remove", "--force", "/workspace/project-copy-renamed"],
     ["branch", "-D", "pi-agent/case"],
   ]);
 });

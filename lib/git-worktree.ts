@@ -106,7 +106,6 @@ function conciseGitError(stderr: string): string {
 
 type GitWorktreeListRecord = {
   cwd: string;
-  branchName?: string;
 };
 
 function parseGitWorktreeList(stdout: string): GitWorktreeListRecord[] {
@@ -123,38 +122,55 @@ function parseGitWorktreeList(stdout: string): GitWorktreeListRecord[] {
     } else if (field.startsWith("worktree ")) {
       addCurrent();
       current = { cwd: field.slice(9) };
-    } else if (field.startsWith("branch refs/heads/") && current) {
-      current.branchName = field.slice("branch refs/heads/".length);
     }
   }
   addCurrent();
   return records;
 }
 
-function pathsMatch(left: string, right: string): boolean | undefined {
-  const leftPath = resolve(left);
-  const rightPath = resolve(right);
-  if (leftPath === rightPath) return true;
-  try {
-    return realpathSync.native(leftPath) === realpathSync.native(rightPath);
-  } catch {
-    // Case-only variants may still refer to the same removed path; all other
-    // lexical differences identify distinct paths without filesystem probing.
-    return leftPath.toLowerCase() === rightPath.toLowerCase() ? undefined : false;
+type CanonicalComparisonPath = {
+  path: string;
+  complete: boolean;
+};
+
+function canonicalPathForComparison(input: string): CanonicalComparisonPath {
+  const missingParts: string[] = [];
+  let current = resolve(input);
+  while (true) {
+    try {
+      const existing = realpathSync.native(current);
+      return {
+        path: resolve(join(existing, ...missingParts.reverse())),
+        complete: missingParts.length === 0,
+      };
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) {
+        return { path: resolve(input), complete: false };
+      }
+      missingParts.push(basename(current));
+      current = parent;
+    }
   }
+}
+
+function pathsMatch(left: string, right: string): boolean | undefined {
+  const leftPath = canonicalPathForComparison(left);
+  const rightPath = canonicalPathForComparison(right);
+  if (leftPath.path === rightPath.path) return true;
+  if (!leftPath.complete || !rightPath.complete) {
+    // A missing tail cannot establish whether a case-only spelling is the
+    // same entry. Keep that comparison uncertain instead of deleting it.
+    if (leftPath.path.toLowerCase() === rightPath.path.toLowerCase()) return undefined;
+  }
+  return false;
 }
 
 function findRegisteredWorktree(
   stdout: string,
-  targetCwd: string,
-  branchName?: string
+  targetCwd: string
 ): { cwd?: string; uncertain: boolean } {
   const records = parseGitWorktreeList(stdout);
-  if (branchName) {
-    const branchRecord = records.find((record) => record.branchName === branchName);
-    if (branchRecord) return { cwd: branchRecord.cwd, uncertain: false };
-  }
-
   let uncertain = false;
   for (const record of records) {
     const match = pathsMatch(record.cwd, targetCwd);
@@ -541,23 +557,12 @@ async function withCreatedGitWorktree<T>(
       repoRoot
     );
     if (created.code !== 0) {
-      // A failed `worktree add -b` does not prove branch ownership: an external
-      // Git process may have created the same branch between our checks. Only a
-      // successful add establishes ownership, so failed creation never deletes
-      // a branch; the worktree path itself is still cleaned up and retried.
-      const cleanupTarget: GitWorktreeCleanupTarget = {
-        worktree: { cwd: targetPath, branchName, repoRoot },
-        removeBranch: false,
-      };
-      const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner, {
-        allowBranchLookup: false,
-      });
-      if (cleanupError) deps.onCleanupError?.(cleanupError, cleanupTarget);
+      // A failed `worktree add -b` does not prove ownership: an external Git
+      // process may have claimed the branch or target after preflight. Do not
+      // force-remove either resource when creation did not succeed.
       throw new GitWorktreeError(
         "WORKTREE_CREATE_FAILED",
-        `Failed to create Git worktree${conciseGitError(created.stderr)}`,
-        cleanupError,
-        cleanupError ? cleanupTarget : undefined
+        `Failed to create Git worktree${conciseGitError(created.stderr)}`
       );
     }
 
@@ -566,9 +571,7 @@ async function withCreatedGitWorktree<T>(
       return await operation(worktree);
     } catch (error) {
       const cleanupTarget = { worktree, removeBranch: true };
-      const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner, {
-        allowBranchLookup: true,
-      });
+      const cleanupError = await cleanupWorktreeWithRetry(cleanupTarget, runner);
       if (cleanupError) deps.onCleanupError?.(cleanupError, cleanupTarget);
       throw error;
     }
@@ -592,8 +595,7 @@ export async function withGitWorktree<T>(
 
 async function cleanupWorktreeWithRetry(
   cleanupTarget: GitWorktreeCleanupTarget,
-  runner: GitRunner,
-  options: { allowBranchLookup?: boolean } = {}
+  runner: GitRunner
 ): Promise<unknown> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -601,10 +603,7 @@ async function cleanupWorktreeWithRetry(
       await removeGitWorktreeUnlocked(
         cleanupTarget.worktree,
         runner,
-        {
-          removeBranch: cleanupTarget.removeBranch,
-          allowBranchLookup: options.allowBranchLookup,
-        }
+        { removeBranch: cleanupTarget.removeBranch }
       );
       return undefined;
     } catch (error) {
@@ -617,7 +616,7 @@ async function cleanupWorktreeWithRetry(
 async function removeGitWorktreeUnlocked(
   worktree: GitWorktreeResult,
   runner: GitRunner,
-  options: { removeBranch?: boolean; allowBranchLookup?: boolean } = {}
+  options: { removeBranch?: boolean } = {}
 ): Promise<void> {
   const errors: unknown[] = [];
 
@@ -637,11 +636,7 @@ async function removeGitWorktreeUnlocked(
           worktree.repoRoot
         );
         if (listed.code === 0) {
-          const registered = findRegisteredWorktree(
-            listed.stdout,
-            worktree.cwd,
-            options.allowBranchLookup ? worktree.branchName : undefined
-          );
+          const registered = findRegisteredWorktree(listed.stdout, worktree.cwd);
           if (!registered.uncertain && !registered.cwd) {
             stillPresent = false;
           } else if (registered.cwd) {
@@ -723,7 +718,6 @@ export async function removeGitWorktree(
   return withWorktreeLocks([worktree.repoRoot, worktree.cwd], () =>
     removeGitWorktreeUnlocked(worktree, runner, {
       ...options,
-      allowBranchLookup: true,
     })
   );
 }
