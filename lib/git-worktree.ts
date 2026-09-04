@@ -32,7 +32,8 @@ export type GitWorktreeErrorCode =
   | "INVALID_BRANCH"
   | "TARGET_INSIDE_REPOSITORY"
   | "TARGET_EXISTS"
-  | "WORKTREE_CREATE_FAILED";
+  | "WORKTREE_CREATE_FAILED"
+  | "WORKTREE_CLEANUP_FAILED";
 
 export class GitWorktreeError extends Error {
   readonly code: GitWorktreeErrorCode;
@@ -262,4 +263,33 @@ export async function createGitWorktree(
   }
 
   return { cwd: targetPath, branchName, repoRoot };
+}
+
+export async function removeGitWorktree(
+  worktree: GitWorktreeResult,
+  runner: GitRunner = DEFAULT_GIT_RUNNER
+): Promise<void> {
+  const removed = await runGit(
+    runner,
+    ["worktree", "remove", "--force", worktree.cwd],
+    worktree.repoRoot
+  );
+  if (removed.code !== 0) {
+    throw new GitWorktreeError(
+      "WORKTREE_CLEANUP_FAILED",
+      `Failed to remove Git worktree${conciseGitError(removed.stderr)}`
+    );
+  }
+
+  const branch = await runGit(
+    runner,
+    ["branch", "-D", worktree.branchName],
+    worktree.repoRoot
+  );
+  if (branch.code !== 0) {
+    throw new GitWorktreeError(
+      "WORKTREE_CLEANUP_FAILED",
+      `Failed to remove Git worktree branch${conciseGitError(branch.stderr)}`
+    );
+  }
 }

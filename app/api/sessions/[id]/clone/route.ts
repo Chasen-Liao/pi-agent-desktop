@@ -6,10 +6,21 @@ import { validateClonePayload } from "../../../../../lib/session-branch-clone.ts
 import {
   createGitWorktree,
   GitWorktreeError,
+  removeGitWorktree,
+  type GitWorktreeResult,
 } from "../../../../../lib/git-worktree.ts";
 import { errorMessage, getRequestId, logApiError } from "../../../../../lib/api-error.ts";
 
 export const dynamic = "force-dynamic";
+
+class CloneCreateError extends Error {
+  readonly code = "CLONE_CREATE_FAILED" as const;
+
+  constructor() {
+    super("Failed to clone session");
+    this.name = "CloneCreateError";
+  }
+}
 
 export async function POST(
   req: Request,
@@ -17,6 +28,7 @@ export async function POST(
 ) {
   const { id } = await params;
   const requestId = getRequestId(req);
+  let createdWorktree: GitWorktreeResult | undefined;
   try {
     const sessionFile = await resolveSessionPath(id);
     if (!sessionFile || !existsSync(sessionFile)) {
@@ -65,26 +77,23 @@ export async function POST(
     };
 
     if (validation.data.workspaceMode === "worktree") {
-      const worktree = await createGitWorktree({
+      createdWorktree = await createGitWorktree({
         sourceCwd,
         targetCwd: validation.data.targetCwd,
         branchName: validation.data.branchName,
       });
-      targetCwd = worktree.cwd;
+      targetCwd = createdWorktree.cwd;
       workspace = {
         mode: "worktree",
-        cwd: worktree.cwd,
-        branchName: worktree.branchName,
+        cwd: createdWorktree.cwd,
+        branchName: createdWorktree.branchName,
       };
     }
 
     const forkedSm = SessionManager.forkFrom(sessionFile, targetCwd);
     const newSessionFile = forkedSm.getSessionFile();
     if (!newSessionFile) {
-      return NextResponse.json(
-        { error: "Failed to clone session", errorCode: "CLONE_CREATE_FAILED" },
-        { status: 500, headers: { "x-request-id": requestId } }
-      );
+      throw new CloneCreateError();
     }
 
     if (validation.data.name) {
@@ -105,6 +114,19 @@ export async function POST(
       { headers: { "x-request-id": requestId } }
     );
   } catch (error) {
+    if (createdWorktree) {
+      try {
+        await removeGitWorktree(createdWorktree);
+      } catch (cleanupError) {
+        logApiError({
+          route: `/api/sessions/${id}/clone`,
+          method: "POST",
+          requestId,
+          error: cleanupError,
+          params: { worktreeCwd: createdWorktree.cwd },
+        });
+      }
+    }
     logApiError({ route: `/api/sessions/${id}/clone`, method: "POST", requestId, error });
     const status =
       error instanceof GitWorktreeError && error.code !== "GIT_UNAVAILABLE" ? 400 : 500;
@@ -112,7 +134,11 @@ export async function POST(
       {
         error: errorMessage(error),
         errorCode:
-          error instanceof GitWorktreeError ? error.code : "CLONE_OPERATION_FAILED",
+          error instanceof GitWorktreeError
+            ? error.code
+            : error instanceof CloneCreateError
+              ? error.code
+              : "CLONE_OPERATION_FAILED",
       },
       { status, headers: { "x-request-id": requestId } }
     );

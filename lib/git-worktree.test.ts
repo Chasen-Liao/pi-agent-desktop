@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import {
   createGitWorktree,
   GitWorktreeError,
+  removeGitWorktree,
   validateWorktreeBranchName,
   type GitRunner,
 } from "./git-worktree.ts";
@@ -70,6 +71,32 @@ test("createGitWorktree creates a new branch in a sibling worktree", async () =>
     "pi-agent/refactor-ui",
     fixturePath("/workspace/project-pi-agent-refactor-ui"),
     "HEAD",
+  ]);
+});
+
+test("removeGitWorktree removes the worktree and its branch", async () => {
+  const calls: Array<{ args: string[]; cwd: string }> = [];
+  const runner = scriptedRunner((args, cwd) => {
+    calls.push({ args, cwd });
+    return {};
+  });
+  const worktree = {
+    cwd: fixturePath("/workspace/project-copy"),
+    branchName: "pi-agent/project-copy",
+    repoRoot: fixturePath("/workspace/project"),
+  };
+
+  await removeGitWorktree(worktree, runner);
+
+  assert.deepEqual(calls, [
+    {
+      args: ["worktree", "remove", "--force", worktree.cwd],
+      cwd: worktree.repoRoot,
+    },
+    {
+      args: ["branch", "-D", worktree.branchName],
+      cwd: worktree.repoRoot,
+    },
   ]);
 });
 
