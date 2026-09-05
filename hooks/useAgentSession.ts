@@ -1,11 +1,21 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useReducer,
+  useMemo,
+} from "react";
 import type { SessionInfo, SessionTreeNode, UserMessage } from "@/lib/types";
 import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
 import { calculateSessionStats } from "./agent-session/session-stats";
 import { type AgentPhase } from "./agent-session/agent-phase";
-import { initialStreamingState, streamReducer } from "./agent-session/stream-state";
+import {
+  initialStreamingState,
+  streamReducer,
+} from "./agent-session/stream-state";
 import { useChatScroll } from "./agent-session/use-chat-scroll";
 import { useAgentEvents } from "./agent-session/use-agent-events";
 import { useSessionLoader } from "./agent-session/use-session-loader";
@@ -21,10 +31,11 @@ import {
   type ThinkingLevelOption,
 } from "./agent-session/session-lifecycle-reset";
 import { useSessionModelTools } from "./agent-session/use-session-model-tools";
-import {
-  useSessionCommands,
-  type AttachedImage,
-} from "./agent-session/use-session-commands";
+import { useSessionCommands } from "./agent-session/use-session-commands";
+import type {
+  AttachedImage,
+  ChatInputHandle,
+} from "@/components/chat-input/types";
 import type { AgentMode } from "@/lib/approval-policy";
 import { DEFAULT_AGENT_MODE } from "@/lib/approval-policy";
 import type { ExtensionUiRequestEvent } from "./agent-session/agent-events-manager";
@@ -32,8 +43,7 @@ import type { NeedsTrustPayload } from "@/lib/trust-types";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { reconcileOrAppendPendingUserMessage } from "./agent-session/user-message-reconciliation";
 
-export type { ThinkingLevelOption };
-export type { AttachedImage };
+export type { ThinkingLevelOption, AttachedImage, ChatInputHandle };
 
 const EMPTY_FOLLOW_UP_QUEUE: FollowUpQueueSnapshot = { revision: 0, items: [] };
 
@@ -41,7 +51,10 @@ function userMessageText(message: UserMessage): string {
   return typeof message.content === "string"
     ? message.content
     : message.content
-        .filter((block): block is { type: "text"; text: string } => block.type === "text")
+        .filter(
+          (block): block is { type: "text"; text: string } =>
+            block.type === "text",
+        )
         .map((block) => block.text)
         .join("\n");
 }
@@ -64,21 +77,12 @@ export interface UseAgentSessionOptions {
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string) => void;
   modelsRefreshKey?: number;
-  chatInputRef?: React.RefObject<ChatInputHandle | null>;
   onBranchDataChange?: (
     tree: SessionTreeNode[],
     activeLeafId: string | null,
-    onLeafChange: (leafId: string | null) => void
+    onLeafChange: (leafId: string | null) => void,
   ) => void;
   onSystemPromptChange?: (prompt: string | null) => void;
-  setNewSessionModel?: (model: { provider: string; modelId: string } | null) => void;
-  setToolPreset?: (preset: "none" | "default" | "full") => void;
-}
-
-export interface ChatInputHandle {
-  insertText: (text: string) => void;
-  insertIfEmpty: (content: string) => void;
-  addImages: (files: File[]) => void;
 }
 
 export function useAgentSession(opts: UseAgentSessionOptions) {
@@ -111,7 +115,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     loadContext,
   } = useSessionLoader(isNew);
 
-  const [streamState, dispatch] = useReducer(streamReducer, initialStreamingState);
+  const [streamState, dispatch] = useReducer(
+    streamReducer,
+    initialStreamingState,
+  );
   const [agentRunning, setAgentRunning] = useState(false);
   const [retryInfo, setRetryInfo] = useState<RetryInfo | null>(null);
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
@@ -122,19 +129,28 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [agentMode, setAgentMode] = useState<AgentMode>(DEFAULT_AGENT_MODE);
   const [canExecutePlan, setCanExecutePlan] = useState(false);
-  const [extensionUiRequest, setExtensionUiRequest] = useState<ExtensionUiRequestEvent | null>(null);
+  const [extensionUiRequest, setExtensionUiRequest] =
+    useState<ExtensionUiRequestEvent | null>(null);
   const [extensionUiNotify, setExtensionUiNotify] = useState<{
     message: string;
     notifyType: "info" | "warning" | "error";
   } | null>(null);
-  const [trustPrompt, setTrustPrompt] = useState<NeedsTrustPayload | null>(null);
-  const [followUpQueue, setFollowUpQueue] = useState<FollowUpQueueSnapshot>(EMPTY_FOLLOW_UP_QUEUE);
+  const [trustPrompt, setTrustPrompt] = useState<NeedsTrustPayload | null>(
+    null,
+  );
+  const [followUpQueue, setFollowUpQueue] = useState<FollowUpQueueSnapshot>(
+    EMPTY_FOLLOW_UP_QUEUE,
+  );
   const [followUpQueueBusy, setFollowUpQueueBusy] = useState(false);
   const followUpQueueRef = useRef(followUpQueue);
   followUpQueueRef.current = followUpQueue;
-  const pendingSteersRef = useRef<Array<{ id: string; message: string; glowing: boolean }>>([]);
+  const pendingSteersRef = useRef<
+    Array<{ id: string; message: string; glowing: boolean }>
+  >([]);
   const pendingPromptsRef = useRef<Array<{ id: string; message: string }>>([]);
-  const trustResolverRef = useRef<((optionId: string | null) => void) | null>(null);
+  const trustResolverRef = useRef<((optionId: string | null) => void) | null>(
+    null,
+  );
   const agentModeRef = useRef(agentMode);
   agentModeRef.current = agentMode;
 
@@ -144,75 +160,100 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setFollowUpQueue(snapshot);
   }, []);
 
-  const handlePendingSteerQueued = useCallback((item: { id: string; message: string }) => {
-    pendingSteersRef.current.push({ ...item, glowing: true });
-  }, []);
+  const handlePendingSteerQueued = useCallback(
+    (item: { id: string; message: string }) => {
+      pendingSteersRef.current.push({ ...item, glowing: true });
+    },
+    [],
+  );
 
-  const handlePendingSteerFailed = useCallback((id: string) => {
-    pendingSteersRef.current = pendingSteersRef.current.filter((item) => item.id !== id);
-    setMessages((prev) => prev.map((message) => {
-      if (message.role !== "user" || message.clientMessageId !== id) return message;
-      return clearPendingDelivery(message);
-    }));
-  }, [setMessages]);
+  const handlePendingSteerFailed = useCallback(
+    (id: string) => {
+      pendingSteersRef.current = pendingSteersRef.current.filter(
+        (item) => item.id !== id,
+      );
+      setMessages((prev) =>
+        prev.map((message) => {
+          if (message.role !== "user" || message.clientMessageId !== id)
+            return message;
+          return clearPendingDelivery(message);
+        }),
+      );
+    },
+    [setMessages],
+  );
 
-  const handlePendingPromptQueued = useCallback((item: { id: string; message: string }) => {
-    pendingPromptsRef.current.push(item);
-  }, []);
+  const handlePendingPromptQueued = useCallback(
+    (item: { id: string; message: string }) => {
+      pendingPromptsRef.current.push(item);
+    },
+    [],
+  );
 
-  const handlePendingPromptFailed = useCallback((id: string) => {
-    pendingPromptsRef.current = pendingPromptsRef.current.filter((item) => item.id !== id);
-    setMessages((prev) => prev.map((message) => {
-      if (message.role !== "user" || message.clientMessageId !== id) return message;
-      return clearPendingDelivery(message);
-    }));
-  }, [setMessages]);
+  const handlePendingPromptFailed = useCallback(
+    (id: string) => {
+      pendingPromptsRef.current = pendingPromptsRef.current.filter(
+        (item) => item.id !== id,
+      );
+      setMessages((prev) =>
+        prev.map((message) => {
+          if (message.role !== "user" || message.clientMessageId !== id)
+            return message;
+          return clearPendingDelivery(message);
+        }),
+      );
+    },
+    [setMessages],
+  );
 
-  const reconcileSteeringQueue = useCallback((steering: readonly string[]) => {
-    const remaining = new Map<string, number>();
-    for (const message of steering) remaining.set(message, (remaining.get(message) ?? 0) + 1);
-    const deliveredIds = new Set<string>();
-    pendingSteersRef.current = pendingSteersRef.current.map((item) => {
-      if (!item.glowing) return item;
-      const count = remaining.get(item.message) ?? 0;
-      if (count > 0) {
-        remaining.set(item.message, count - 1);
-        return item;
-      }
-      deliveredIds.add(item.id);
-      return { ...item, glowing: false };
-    });
-    if (!deliveredIds.size) return;
-    setMessages((prev) => prev.map((message) => {
-      if (message.role !== "user" || !message.clientMessageId || !deliveredIds.has(message.clientMessageId)) {
-        return message;
-      }
-      return clearPendingDelivery(message);
-    }));
-  }, [setMessages]);
+  const reconcileSteeringQueue = useCallback(
+    (steering: readonly string[]) => {
+      const remaining = new Map<string, number>();
+      for (const message of steering)
+        remaining.set(message, (remaining.get(message) ?? 0) + 1);
+      const deliveredIds = new Set<string>();
+      pendingSteersRef.current = pendingSteersRef.current.map((item) => {
+        if (!item.glowing) return item;
+        const count = remaining.get(item.message) ?? 0;
+        if (count > 0) {
+          remaining.set(item.message, count - 1);
+          return item;
+        }
+        deliveredIds.add(item.id);
+        return { ...item, glowing: false };
+      });
+      if (!deliveredIds.size) return;
+      setMessages((prev) =>
+        prev.map((message) => {
+          if (
+            message.role !== "user" ||
+            !message.clientMessageId ||
+            !deliveredIds.has(message.clientMessageId)
+          ) {
+            return message;
+          }
+          return clearPendingDelivery(message);
+        }),
+      );
+    },
+    [setMessages],
+  );
 
   const {
     messagesEndRef,
     scrollContainerRef,
     lastUserMsgRef,
     pendingScrollToUserRef,
-    initialScrollDoneRef,
   } = useChatScroll({ messageCount: messages.length, agentRunning });
 
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
-  const {
-    eventSourceRef,
-    handleAgentEventRef,
-    connectEvents,
-    connectionStatus,
-  } = useAgentEvents({ agentRunning });
+  const { handleAgentEventRef, connectEvents, connectionStatus } =
+    useAgentEvents({ agentRunning });
 
   const modelTools = useSessionModelTools({
     isNew,
     modelsRefreshKey,
     sessionIdRef,
-    setNewSessionModelExternal: opts.setNewSessionModel,
-    setToolPresetExternal: opts.setToolPreset,
   });
 
   const {
@@ -237,13 +278,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const currentModel = useMemo(
     () => currentModelOverride ?? data?.context.model ?? pendingModel ?? null,
-    [currentModelOverride, data?.context.model, pendingModel]
+    [currentModelOverride, data?.context.model, pendingModel],
   );
   const displayModel = useMemo(
     () => (isNew ? newSessionModel : currentModel),
-    [isNew, newSessionModel, currentModel]
+    [isNew, newSessionModel, currentModel],
   );
-  const sessionStats = useMemo(() => calculateSessionStats(messages), [messages]);
+  const sessionStats = useMemo(
+    () => calculateSessionStats(messages),
+    [messages],
+  );
 
   const loadSession = useCallback(
     async (sid: string, showLoading = false, includeState = false) => {
@@ -256,7 +300,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (loaded) setCurrentModelOverride(null);
       return loaded;
     },
-    [loadSessionFromApi, setCurrentModelOverride]
+    [loadSessionFromApi, setCurrentModelOverride],
   );
 
   const promptTrust = useCallback((payload: NeedsTrustPayload) => {
@@ -284,12 +328,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const sid = sessionIdRef.current;
       if (!sid) return;
       try {
-        await sendAgentCommand(sid, { type: "extension_ui_response", ...payload });
+        await sendAgentCommand(sid, {
+          type: "extension_ui_response",
+          ...payload,
+        });
       } catch (e) {
         console.error("extension_ui_response failed:", e);
       }
     },
-    []
+    [],
   );
 
   const handleAgentEvent = useCallback(
@@ -304,12 +351,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       let reconciledPromptId: string | null = null;
       if (event.type === "message_end" && event.message.role === "user") {
         const canonicalText = userMessageText(event.message);
-        const pendingIndex = pendingSteersRef.current.findIndex((item) => item.message === canonicalText);
+        const pendingIndex = pendingSteersRef.current.findIndex(
+          (item) => item.message === canonicalText,
+        );
         if (pendingIndex !== -1) {
           reconciledSteerId = pendingSteersRef.current[pendingIndex].id;
           pendingSteersRef.current.splice(pendingIndex, 1);
         } else {
-          const promptIndex = pendingPromptsRef.current.findIndex((item) => item.message === canonicalText);
+          const promptIndex = pendingPromptsRef.current.findIndex(
+            (item) => item.message === canonicalText,
+          );
           if (promptIndex !== -1) {
             reconciledPromptId = pendingPromptsRef.current[promptIndex].id;
             pendingPromptsRef.current.splice(promptIndex, 1);
@@ -318,34 +369,51 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       const result = applyAgentEvent(event);
 
-      if (reconciledSteerId && event.type === "message_end" && event.message.role === "user") {
+      if (
+        reconciledSteerId &&
+        event.type === "message_end" &&
+        event.message.role === "user"
+      ) {
         const clientMessageId = reconciledSteerId;
         const canonical = event.message;
         result.appendMessages = undefined;
-        setMessages((prev) => prev.map((message) => {
-          if (message.role !== "user" || message.clientMessageId !== clientMessageId) return message;
-          return { ...canonical, timestamp: message.timestamp };
-        }));
+        setMessages((prev) =>
+          prev.map((message) => {
+            if (
+              message.role !== "user" ||
+              message.clientMessageId !== clientMessageId
+            )
+              return message;
+            return { ...canonical, timestamp: message.timestamp };
+          }),
+        );
       }
 
-      if (reconciledPromptId && event.type === "message_end" && event.message.role === "user") {
+      if (
+        reconciledPromptId &&
+        event.type === "message_end" &&
+        event.message.role === "user"
+      ) {
         const clientMessageId = reconciledPromptId;
         const canonical = event.message;
         result.appendMessages = undefined;
         setMessages((prev) =>
-          reconcileOrAppendPendingUserMessage(prev, canonical, clientMessageId)
+          reconcileOrAppendPendingUserMessage(prev, canonical, clientMessageId),
         );
-        setEntryIds((prev) => [...prev, undefined as unknown as string]);
+        setEntryIds((prev) => [...prev, undefined]);
       }
 
-      if (result.agentRunning !== undefined) setAgentRunning(result.agentRunning);
+      if (result.agentRunning !== undefined)
+        setAgentRunning(result.agentRunning);
       if (result.phaseOp) {
         setAgentPhase((prev) => applyPhaseOp(prev, result.phaseOp!));
       }
       if (result.streamAction) dispatch(result.streamAction);
       if (result.retryInfo !== undefined) setRetryInfo(result.retryInfo);
-      if (result.isCompacting !== undefined) setIsCompacting(result.isCompacting);
-      if (result.compactError !== undefined) setCompactError(result.compactError);
+      if (result.isCompacting !== undefined)
+        setIsCompacting(result.isCompacting);
+      if (result.compactError !== undefined)
+        setCompactError(result.compactError);
       if (result.appendMessages?.length) {
         const appended = result.appendMessages!;
         // Pure updater: a side-effect-free spread (React StrictMode can
@@ -356,7 +424,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // the session entry id, so the new slots stay undefined until the next
         // reload populates real ids; MessageList falls back to idx keys, gates
         // fork/navigate on a truthy entryId, and handleFork guards empty ids.
-        setEntryIds((prev) => [...prev, ...appended.map(() => undefined as unknown as string)]);
+        setEntryIds((prev) => [...prev, ...appended.map(() => undefined)]);
         if (agentModeRef.current === "plan") {
           const last = appended[appended.length - 1];
           if (last && last.role === "assistant") {
@@ -365,7 +433,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                 ? last.content
                 : Array.isArray(last.content)
                   ? last.content
-                      .filter((b): b is { type: "text"; text: string } => b.type === "text")
+                      .filter(
+                        (b): b is { type: "text"; text: string } =>
+                          b.type === "text",
+                      )
                       .map((b) => b.text)
                       .join("")
                   : "";
@@ -405,8 +476,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                       setSystemPrompt(d.state.systemPrompt ?? null);
                     }
                     if (d.state?.agentMode) setAgentMode(d.state.agentMode);
-                    if (d.state?.followUpQueue) acceptFollowUpQueue(d.state.followUpQueue);
-                  }
+                    if (d.state?.followUpQueue)
+                      acceptFollowUpQueue(d.state.followUpQueue);
+                  },
                 )
                 .catch((err) => {
                   console.error("Agent end fetch failed:", err);
@@ -428,7 +500,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
       }
     },
-    [acceptFollowUpQueue, loadSession, onAgentEnd, onAgentEndEvent, reconcileSteeringQueue, setMessages, setEntryIds, setCanExecutePlan]
+    [
+      acceptFollowUpQueue,
+      loadSession,
+      onAgentEnd,
+      onAgentEndEvent,
+      reconcileSteeringQueue,
+      setMessages,
+      setEntryIds,
+      setCanExecutePlan,
+    ],
   );
   handleAgentEventRef.current = handleAgentEvent;
 
@@ -468,50 +549,60 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onPendingPromptFailed: handlePendingPromptFailed,
   });
 
-  const handleReorderFollowUps = useCallback(async (orderedIds: string[]) => {
-    if (followUpQueueBusy) return;
-    const previous = followUpQueueRef.current;
-    if (
-      orderedIds.length !== previous.items.length ||
-      orderedIds.every((id, index) => id === previous.items[index]?.id)
-    ) return;
-    const byId = new Map(previous.items.map((item) => [item.id, item]));
-    const optimistic: FollowUpQueueSnapshot = {
-      revision: previous.revision,
-      items: orderedIds.map((id) => byId.get(id)).filter((item): item is FollowUpQueueSnapshot["items"][number] => Boolean(item)),
-    };
-    if (optimistic.items.length !== previous.items.length) return;
-    followUpQueueRef.current = optimistic;
-    setFollowUpQueue(optimistic);
-    setFollowUpQueueBusy(true);
-    const sid = sessionIdRef.current;
-    if (!sid) {
-      acceptFollowUpQueue(previous);
-      setFollowUpQueueBusy(false);
-      return;
-    }
-    try {
-      const snapshot = await sendAgentCommand<FollowUpQueueSnapshot>(sid, {
-        type: "reorder_follow_ups",
-        orderedIds,
-        expectedRevision: previous.revision,
-      });
-      acceptFollowUpQueue(snapshot);
-    } catch (error) {
-      console.error("Failed to reorder follow-ups:", error);
-      try {
-        const state = await sendAgentCommand<{ followUpQueue?: FollowUpQueueSnapshot }>(sid, { type: "get_state" });
-        if (state.followUpQueue) acceptFollowUpQueue(state.followUpQueue);
-      } catch {
-        if (followUpQueueRef.current.revision === previous.revision) {
-          followUpQueueRef.current = previous;
-          setFollowUpQueue(previous);
-        }
+  const handleReorderFollowUps = useCallback(
+    async (orderedIds: string[]) => {
+      if (followUpQueueBusy) return;
+      const previous = followUpQueueRef.current;
+      if (
+        orderedIds.length !== previous.items.length ||
+        orderedIds.every((id, index) => id === previous.items[index]?.id)
+      )
+        return;
+      const byId = new Map(previous.items.map((item) => [item.id, item]));
+      const optimistic: FollowUpQueueSnapshot = {
+        revision: previous.revision,
+        items: orderedIds
+          .map((id) => byId.get(id))
+          .filter((item): item is FollowUpQueueSnapshot["items"][number] =>
+            Boolean(item),
+          ),
+      };
+      if (optimistic.items.length !== previous.items.length) return;
+      followUpQueueRef.current = optimistic;
+      setFollowUpQueue(optimistic);
+      setFollowUpQueueBusy(true);
+      const sid = sessionIdRef.current;
+      if (!sid) {
+        acceptFollowUpQueue(previous);
+        setFollowUpQueueBusy(false);
+        return;
       }
-    } finally {
-      setFollowUpQueueBusy(false);
-    }
-  }, [acceptFollowUpQueue, followUpQueueBusy, sessionIdRef]);
+      try {
+        const snapshot = await sendAgentCommand<FollowUpQueueSnapshot>(sid, {
+          type: "reorder_follow_ups",
+          orderedIds,
+          expectedRevision: previous.revision,
+        });
+        acceptFollowUpQueue(snapshot);
+      } catch (error) {
+        console.error("Failed to reorder follow-ups:", error);
+        try {
+          const state = await sendAgentCommand<{
+            followUpQueue?: FollowUpQueueSnapshot;
+          }>(sid, { type: "get_state" });
+          if (state.followUpQueue) acceptFollowUpQueue(state.followUpQueue);
+        } catch {
+          if (followUpQueueRef.current.revision === previous.revision) {
+            followUpQueueRef.current = previous;
+            setFollowUpQueue(previous);
+          }
+        }
+      } finally {
+        setFollowUpQueueBusy(false);
+      }
+    },
+    [acceptFollowUpQueue, followUpQueueBusy, sessionIdRef],
+  );
 
   // Load session on mount AND on session change.
   //
@@ -565,10 +656,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         agentState: loaded?.agentState ?? null,
         contextThinkingLevel: loaded?.contextThinkingLevel ?? null,
       });
-      if (patch.thinkingLevel !== undefined) setThinkingLevel(patch.thinkingLevel);
+      if (patch.thinkingLevel !== undefined)
+        setThinkingLevel(patch.thinkingLevel);
       if (patch.loadTools) loadTools(sid);
       if (patch.agentRunning) setAgentRunning(true);
-      if (patch.agentPhaseWaitingModel) setAgentPhase({ kind: "waiting_model" });
+      if (patch.agentPhaseWaitingModel)
+        setAgentPhase({ kind: "waiting_model" });
       if (patch.connectEvents) connectEvents(sid);
       if (patch.isCompacting !== undefined) setIsCompacting(patch.isCompacting);
       if (patch.contextUsage !== undefined) setContextUsage(patch.contextUsage);
@@ -592,7 +685,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   useEffect(() => {
     if (!onBranchDataChange) return;
-    onBranchDataChange(data?.tree ?? [], activeLeafId, commands.handleLeafChange);
+    onBranchDataChange(
+      data?.tree ?? [],
+      activeLeafId,
+      commands.handleLeafChange,
+    );
   }, [data?.tree, activeLeafId, commands.handleLeafChange, onBranchDataChange]);
 
   // Compact error auto-dismiss
@@ -607,10 +704,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!isNew) return;
     fetch("/api/desktop-settings")
       .then((r) => r.json())
-      .then((d: { defaultAgentMode?: AgentMode; defaultToolPreset?: "none" | "default" | "full" }) => {
-        if (d.defaultAgentMode) setAgentMode(d.defaultAgentMode);
-        if (d.defaultToolPreset) setToolPreset(d.defaultToolPreset);
-      })
+      .then(
+        (d: {
+          defaultAgentMode?: AgentMode;
+          defaultToolPreset?: "none" | "default" | "full";
+        }) => {
+          if (d.defaultAgentMode) setAgentMode(d.defaultAgentMode);
+          if (d.defaultToolPreset) setToolPreset(d.defaultToolPreset);
+        },
+      )
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNew]);
@@ -624,10 +726,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   return {
     // State
-    data,
     loading,
     error,
-    activeLeafId,
     messages,
     entryIds,
     streamState,
@@ -636,7 +736,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     modelList,
     modelThinkingLevels,
     modelThinkingLevelMaps,
-    newSessionModel,
     agentMode,
     canExecutePlan,
     extensionUiRequest,
@@ -652,7 +751,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     forkingEntryId,
     isCompacting,
     compactError,
-    currentModel,
     displayModel,
     sessionStats,
     agentPhase,
@@ -660,13 +758,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     followUpQueueBusy,
     isNew,
     // Refs
-    sessionIdRef,
-    eventSourceRef,
     messagesEndRef,
     scrollContainerRef,
     lastUserMsgRef,
-    pendingScrollToUserRef,
-    initialScrollDoneRef,
     // Actions
     handleSend: commands.handleSend,
     handleAgentModeChange: commands.handleAgentModeChange,
@@ -682,16 +776,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleAbortCompaction: commands.handleAbortCompaction,
     handleToolPresetChange,
     handleThinkingLevelChange,
-    loadTools,
-    setActiveLeafId,
-    setData,
-    setMessages,
-    dispatch,
-    setAgentRunning,
-    setForkingEntryId,
     connectEvents,
     connectionStatus,
-    // Subscriptions
-    handleAgentEventRef,
   };
 }

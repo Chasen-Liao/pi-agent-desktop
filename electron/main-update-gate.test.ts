@@ -37,7 +37,7 @@ test("main process quit-and-install is gated on update download state", () => {
 
 test("packaged readiness requires HTTP health", () => {
   assert.match(source, /requireHttpHealth:\s*app\.isPackaged/);
-  assert.match(source, /waitForNextServerReady\(port, nextProcess, nextServerReadyOptions\(\)\)/);
+  assert.match(source, /waitForNextServerReady\(port, nextProcess, \{\s*requireHttpHealth:\s*app\.isPackaged\s*\}\)/);
 });
 
 test("packaged macOS server uses a background utility process", () => {

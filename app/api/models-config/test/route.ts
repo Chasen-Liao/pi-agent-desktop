@@ -4,15 +4,12 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { completeSimple, type AssistantMessage } from "@earendil-works/pi-ai/compat";
 import { createPiRuntime } from "@/lib/pi-runtime";
+import { isObject } from "@/lib/normalize";
 import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
 const TEST_TIMEOUT_MS = 20_000;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function getAssistantText(message: AssistantMessage): string {
   return message.content
@@ -29,8 +26,8 @@ export async function POST(req: Request) {
     const body = await req.json() as { providerName?: unknown; provider?: unknown; model?: unknown };
     const providerName = typeof body.providerName === "string" ? body.providerName.trim() : "";
     if (!providerName) return NextResponse.json({ ok: false, error: "providerName is required" }, { status: 400, headers: { "x-request-id": requestId } });
-    if (!isRecord(body.provider)) return NextResponse.json({ ok: false, error: "provider is required" }, { status: 400, headers: { "x-request-id": requestId } });
-    if (!isRecord(body.model)) return NextResponse.json({ ok: false, error: "model is required" }, { status: 400, headers: { "x-request-id": requestId } });
+    if (!isObject(body.provider)) return NextResponse.json({ ok: false, error: "provider is required" }, { status: 400, headers: { "x-request-id": requestId } });
+    if (!isObject(body.model)) return NextResponse.json({ ok: false, error: "model is required" }, { status: 400, headers: { "x-request-id": requestId } });
 
     const modelId = typeof body.model.id === "string" ? body.model.id.trim() : "";
     if (!modelId) return NextResponse.json({ ok: false, error: "Model ID is required" }, { status: 400, headers: { "x-request-id": requestId } });

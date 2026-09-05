@@ -16,7 +16,7 @@ import {
 import { getRpcSession } from "@/lib/rpc-manager";
 import { rewriteChildHeader } from "@/lib/session-cascade";
 import { withFileLock } from "@/lib/session-lock";
-import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 
 export async function GET(
   req: Request,
@@ -27,7 +27,7 @@ export async function GET(
   try {
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404, headers: { "x-request-id": requestId } });
+      return jsonError(req, 404, "Session not found");
     }
 
     const entries = await getSessionEntriesAsync(filePath);
@@ -86,10 +86,7 @@ export async function GET(
     });
   } catch (error) {
     logApiError({ route: "/api/sessions/[id]", method: "GET", requestId, error, params: { id } });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }
 
@@ -103,21 +100,18 @@ export async function PATCH(
   try {
     const { name } = await req.json() as { name?: string };
     if (typeof name !== "string") {
-      return NextResponse.json({ error: "name is required" }, { status: 400, headers: { "x-request-id": requestId } });
+      return jsonError(req, 400, "name is required");
     }
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404, headers: { "x-request-id": requestId } });
+      return jsonError(req, 404, "Session not found");
     }
     const sm = SessionManager.open(filePath);
     sm.appendSessionInfo(name.trim());
     return NextResponse.json({ ok: true });
   } catch (error) {
     logApiError({ route: "/api/sessions/[id]", method: "PATCH", requestId, error, params: { id } });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }
 
@@ -131,7 +125,7 @@ export async function DELETE(
   try {
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404, headers: { "x-request-id": requestId } });
+      return jsonError(_req, 404, "Session not found");
     }
 
     // 1. Read parent's first line to get grandparent path
@@ -200,10 +194,7 @@ export async function DELETE(
     return NextResponse.json({ ok: true });
   } catch (error) {
     logApiError({ route: "/api/sessions/[id]", method: "DELETE", requestId, error, params: { id } });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(_req, 500, errorMessage(error));
   }
 }
 

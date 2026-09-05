@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { errorMessage, getRequestId, logApiError } from "./api-error.ts";
+import { errorMessage, getRequestId, jsonError, logApiError } from "./api-error.ts";
 
 // ---------------------------------------------------------------------------
 // errorMessage
@@ -66,6 +66,17 @@ test("getRequestId: trims whitespace around valid header", () => {
   const incoming = "  11111111-2222-3333-4444-555555555555  ";
   const req = new Request("http://x/", { headers: { "x-request-id": incoming } });
   assert.equal(getRequestId(req), "11111111-2222-3333-4444-555555555555");
+});
+
+test("jsonError: returns an error body, status, request id, and extra headers", async () => {
+  const requestId = "11111111-2222-3333-4444-555555555555";
+  const req = new Request("http://x/", { headers: { "x-request-id": requestId } });
+  const response = jsonError(req, 418, "teapot", { headers: { "cache-control": "no-store" } });
+
+  assert.equal(response.status, 418);
+  assert.equal(response.headers.get("x-request-id"), requestId);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), { error: "teapot" });
 });
 
 // ---------------------------------------------------------------------------

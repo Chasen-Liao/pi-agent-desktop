@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath, getHeaderAsync } from "@/lib/session-reader";
 import { startRpcSession, getRpcSession, getSessionOnlyTrustMap } from "@/lib/rpc-manager";
-import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 import { validateAgentCommand } from "@/lib/agent-commands";
 import { evaluateProjectTrust } from "@/lib/project-trust-desktop";
 
@@ -21,10 +21,7 @@ export async function POST(
     // throw (500, which could leak details via errorMessage).
     const cmdError = validateAgentCommand(body);
     if (cmdError) {
-      return NextResponse.json(
-        { error: cmdError },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, cmdError);
     }
 
     // Fast path: already-running session
@@ -36,7 +33,7 @@ export async function POST(
 
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404, headers: { "x-request-id": requestId } });
+      return jsonError(req, 404, "Session not found");
     }
 
     const header = await getHeaderAsync(filePath);
@@ -56,10 +53,7 @@ export async function POST(
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
     logApiError({ route: "/api/agent/[id]", method: "POST", requestId, error, params: { id } });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }
 
@@ -81,9 +75,6 @@ export async function GET(
     return NextResponse.json({ running: true, state });
   } catch (error) {
     logApiError({ route: "/api/agent/[id]", method: "GET", requestId, error, params: { id } });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(_req, 500, errorMessage(error));
   }
 }

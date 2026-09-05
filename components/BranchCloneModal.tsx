@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import type { TranslationKey } from "@/lib/i18n";
 import { useI18n } from "./I18nProvider";
+import { ModalSurface } from "./ModalSurface";
 
 export type BranchCloneMode = "branch" | "clone";
 type CloneWorkspaceMode = "directory" | "worktree";
@@ -150,16 +151,13 @@ export function BranchCloneModal({
   const title = mode === "branch" ? t("branch.createTitle") : t("branch.cloneTitle");
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      className="ui-dialog-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
+    <ModalSurface
+      panelClassName="t-modal is-open ui-dialog-surface w-full max-w-md rounded-[14px] flex flex-col overflow-hidden"
+      ariaLabelledBy="branch-clone-modal-title"
     >
-      <div className="t-modal is-open ui-dialog-surface w-full max-w-md rounded-[14px] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-divider bg-bg-elevated">
-          <h3 className="font-semibold text-text text-[14px]">{title}</h3>
+          <h3 id="branch-clone-modal-title" className="font-semibold text-text text-[14px]">{title}</h3>
           <button
             onClick={onClose}
             aria-label={t("common.close")}
@@ -305,7 +303,6 @@ export function BranchCloneModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalSurface>
   );
 }

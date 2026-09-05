@@ -28,9 +28,12 @@ test("streaming append keeps entryIds parallel with messages", () => {
 });
 
 test("canonical prompt events replace pending bubbles and reserve one entry id", () => {
+  // Anchors are semantic (not single-line formatting). Start at the prompt
+  // block's own condition: starting at the assignment would swallow the
+  // reconciledSteerId sister block and weaken the first assertion.
   const block = source.slice(
-    source.indexOf("if (reconciledPromptId"),
-    source.indexOf("if (result.agentRunning")
+    source.indexOf("reconciledPromptId &&"),
+    source.indexOf("result.agentRunning !== undefined")
   );
   assert.match(block, /result\.appendMessages = undefined;/);
   assert.match(block, /reconcileOrAppendPendingUserMessage\(prev, canonical, clientMessageId\)/);

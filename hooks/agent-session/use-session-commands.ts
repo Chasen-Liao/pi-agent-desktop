@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { AgentMessage, SessionInfo, CustomMessage, Skill, UserMessage } from "@/lib/types";
 import { sendAgentCommand } from "@/lib/agent-client";
+import { PRESET_NONE, PRESET_DEFAULT, PRESET_FULL } from "@/lib/tool-presets";
 import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
 import type { StreamAction } from "./stream-state";
 import type { AgentPhase } from "./agent-phase";
@@ -11,6 +12,7 @@ import type { AgentMode } from "@/lib/approval-policy";
 import { EXECUTE_PLAN_PROMPT } from "@/lib/approval-policy";
 import { ensureTrustThenFetch } from "@/lib/trust-fetch";
 import type { NeedsTrustPayload } from "@/lib/trust-types";
+import type { AttachedImage } from "@/components/chat-input/types";
 import { resolveSessionCommandTarget } from "./session-command-target";
 import {
   finishPromptDispatch,
@@ -18,11 +20,7 @@ import {
   type PromptDispatchState,
 } from "./prompt-dispatch-gate";
 
-export type AttachedImage = {
-  data: string;
-  mimeType: string;
-  previewUrl: string;
-};
+export type { AttachedImage };
 
 export type UseSessionCommandsOptions = {
   session: SessionInfo | null;
@@ -229,9 +227,6 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
         if (commandTarget.kind === "new") {
           const selectedModel = newSessionModel;
           if (selectedModel) setPendingModel(selectedModel);
-          const { PRESET_NONE, PRESET_DEFAULT, PRESET_FULL } = await import(
-            "@/components/ToolPanel"
-          );
           const toolNames =
             toolPreset === "none"
               ? PRESET_NONE

@@ -56,21 +56,18 @@ test("validateDesktopSettingsBody", () => {
   assert.match(validateDesktopSettingsBody({ defaultAgentMode: "x" })!, /defaultAgentMode/);
 });
 
-test("mergeDesktopSettings merges nested ltm and ignores invalid backend", () => {
+test("mergeDesktopSettings merges nested ltm", () => {
   const m = mergeDesktopSettings({
     defaultAgentMode: "full",
     ltm: {
       enabled: false,
-      backend: "nope",
       observeAgentEnd: false,
-      agentmemoryUrl: "http://localhost:9999",
     },
   });
   assert.equal(m.defaultAgentMode, "full");
   assert.deepEqual(m.ltm, {
     enabled: false,
     observeAgentEnd: false,
-    agentmemoryUrl: "http://localhost:9999",
   });
 });
 
@@ -80,21 +77,12 @@ test("read/write round-trip preserves nested ltm", () => {
     const written = writeDesktopSettings(dir, {
       defaultAgentMode: "ask",
       defaultToolPreset: "default",
-      ltm: { enabled: false, backend: "sqlite", dbPath: "C:/tmp/ltm.sqlite" },
+      ltm: { enabled: false, dbPath: "C:/tmp/ltm.sqlite" },
     });
     assert.equal(written.ltm?.enabled, false);
-    assert.equal(written.ltm?.backend, "sqlite");
     const read = readDesktopSettings(dir);
     assert.deepEqual(read.ltm, written.ltm);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("validateDesktopSettingsBody rejects invalid ltm.backend", () => {
-  assert.match(
-    validateDesktopSettingsBody({ ltm: { backend: "redis" } })!,
-    /ltm\.backend/
-  );
-  assert.equal(validateDesktopSettingsBody({ ltm: { enabled: true } }), null);
 });
