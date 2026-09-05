@@ -7,6 +7,7 @@ import { SidebarHeader } from "./session-sidebar/SidebarHeader";
 import { SessionTreeItem } from "./session-sidebar/SessionTree";
 import { buildSessionTree, getRecentCwds } from "./session-sidebar/helpers";
 import { useI18n } from "./I18nProvider";
+import { apiJson } from "./apiJson";
 
 interface Props {
   selectedSessionId: string | null;
@@ -59,9 +60,11 @@ export function SessionSidebar({
   const loadSessions = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setLoading(true);
-      const res = await fetch("/api/sessions");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { sessions: SessionInfo[] };
+      const data = await apiJson<{ sessions: SessionInfo[] }>(
+        "/api/sessions",
+        undefined,
+        { fallback: t("common.failed") },
+      );
       setAllSessions(data.sessions);
       setError(null);
       if (!showLoading) {
@@ -74,7 +77,7 @@ export function SessionSidebar({
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const initialLoadDone = useRef(false);
   useEffect(() => {

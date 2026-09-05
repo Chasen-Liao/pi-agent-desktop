@@ -36,13 +36,14 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 > 📖 详细架构文档：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 **双模式**
+
 - **Web**：浏览器 ──HTTP/SSE──▶ Next.js(:30141) ──进程内──▶ AgentSession
 - **Desktop**：Electron 主进程托管 Next.js standalone `server.js`（macOS: `utilityProcess`；Win/Linux: `ELECTRON_RUN_AS_NODE=1`）
 
 **关键入口**
 
 | 功能 | 路径 |
-|---|---|
+| --- | --- |
 | 发送消息 | `POST /api/agent/[id]` → `startRpcSession()` → `AgentSessionWrapper` |
 | 历史浏览 | `GET /api/sessions/*` → `session-reader.ts`（只读，不建 Session） |
 | 会话克隆 | `POST /api/sessions/[id]/clone` → 普通目录或 Git Worktree |
@@ -54,7 +55,7 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 **顶层目录**
 
 | 目录 | 内容 |
-|---|---|
+| --- | --- |
 | `app/api/` | 38 条 API 路由 |
 | `lib/` | `rpc-manager` / `session-reader` / `session-branch-clone` / `git-worktree` / `ltm` / `i18n` 等服务端库 |
 | `components/` | 27 个顶层组件 + 3 个子目录（`chat-input` / `models-config` / `session-sidebar`） |
@@ -67,7 +68,7 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 ## globalThis 状态（HMR 安全，必须挂全局）
 
 | 变量 | 用途 | 来源文件 |
-|---|---|---|
+| --- | --- | --- |
 | `__piSessions` | `Map<sessionId, AgentSessionWrapper>` 活跃会话表 | `rpc-manager.ts` |
 | `__piSessionPathCacheState` | sessionId → .jsonl 路径缓存状态 | `session-reader.ts` |
 | `__piStartLocks` | 并发启动共享 Promise 锁 | `rpc-manager.ts` |
@@ -85,17 +86,21 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 > 完整列表见 [ARCHITECTURE.md §14](docs/ARCHITECTURE.md#14-关键设计决策与陷阱)
 
 ### 1. Fork 预注册顺序
-`send("fork")` → 创建新 `.jsonl` → `startRpcSession(newId)` 预注册 → `destroy()` 旧 wrapper。中途出错旧 wrapper **保持可用**，孤儿文件可接受（下次覆盖）。
+
+`send("fork")` → 创建新 `.jsonl` → `startRpcSession(newId)` 预注册 → `destroy()` 旧 wrapper。中途出错旧 wrapper **保持可用**，孤儿 `.jsonl` 会被主动删除并失效路径缓存。
 
 ### 2. 分支与工作区别混淆
+
 - **Fork**（消息 Fork 按钮）→ 新 `.jsonl` + 侧边栏子节点
 - **会话内分支**（Continue / BranchNavigator）→ 同文件 `navigate_tree`，切换用 `?leafId=`
 - **Git Worktree Clone** → 在源 Git 仓库外创建新 worktree 和分支后再 Clone 会话；目标、分支与 worktree 身份无法证明时 fail closed
 
 ### 3. ToolCall 字段归一化
+
 SDK 存 `{id, name, arguments}`，前端用 `{toolCallId, toolName, input}`。`normalizeToolCalls()` 在文件加载和 SSE 流两处都转换。
 
 ### 4–6. 打包陷阱（摘要）
+
 - `node_modules` 须独立 extraResources 条目（`filter:["**/*"]` 静默排除它）
 - Frontend 依赖放 `devDependencies`；`outputFileTracingExcludes` 排除 `release/`/`.git/`/`dist/`/`*.test.*`
 - `build:standalone` 须补齐 Next turbo runtime；macOS Universal 须双架构 Sharp

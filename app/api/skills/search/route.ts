@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runNpx } from "@/lib/npx";
-import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 import { buildSkillUrl, buildSkillsSearchUrl, getAllowedSkillsApiBase } from "./skills-api-url";
 
 export const dynamic = "force-dynamic";
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json() as { query?: string; limit?: unknown };
     query = body.query;
-    if (!query?.trim()) return NextResponse.json({ error: "query required" }, { status: 400, headers: { "x-request-id": requestId } });
+    if (!query?.trim()) return jsonError(req, 400, "query required");
     const limit = parseLimit(body.limit);
 
     try {
@@ -122,9 +122,6 @@ export async function POST(req: Request) {
     const results = raw ? parseSearchOutput(raw) : [];
     if (results.length > 0) return NextResponse.json({ results });
     logApiError({ route: "/api/skills/search", method: "POST", requestId, error: e, params: { query } });
-    return NextResponse.json(
-      { error: errorMessage(e) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(e));
   }
 }

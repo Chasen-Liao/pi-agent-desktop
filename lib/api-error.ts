@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { NextResponse } from "next/server.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const REQUEST_IDS = new WeakMap<Request, string>();
 
 export function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -14,11 +16,35 @@ export function errorMessage(err: unknown): string {
 }
 
 export function getRequestId(req: Request): string {
+  const existing = REQUEST_IDS.get(req);
+  if (existing) return existing;
+
   const incoming = req.headers.get("x-request-id");
-  if (incoming && UUID_RE.test(incoming.trim())) {
-    return incoming.trim();
+  const requestId = incoming && UUID_RE.test(incoming.trim())
+    ? incoming.trim()
+    : randomUUID();
+  REQUEST_IDS.set(req, requestId);
+  return requestId;
+}
+
+export type JsonErrorInit = Omit<ResponseInit, "status" | "headers"> & {
+  headers?: HeadersInit;
+};
+
+export function jsonError(
+  req: Request,
+  status: number,
+  message: unknown,
+  extra: JsonErrorInit = {},
+): NextResponse {
+  const headers = new Headers(extra.headers);
+  if (!headers.has("x-request-id")) {
+    headers.set("x-request-id", getRequestId(req));
   }
-  return randomUUID();
+  return NextResponse.json(
+    { error: message },
+    { ...extra, status, headers },
+  );
 }
 
 export interface LogApiErrorInput {

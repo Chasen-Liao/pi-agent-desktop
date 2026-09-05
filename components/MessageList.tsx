@@ -4,7 +4,7 @@ import { MessageView } from "./MessageView.tsx";
 
 interface MessageListProps {
   messages: AgentMessage[];
-  entryIds: string[];
+  entryIds: Array<string | undefined>;
   toolResultsMap: Map<string, ToolResultMessage>;
   nextUserIdx: number[];
   nextAssistantIdx: number[];

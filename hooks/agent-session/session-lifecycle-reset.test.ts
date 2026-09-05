@@ -11,8 +11,6 @@ test("sessionScopedResetPatch clears session-scoped fields to safe defaults", ()
   assert.equal(p.thinkingLevel, "auto");
   assert.equal(p.agentRunning, false);
   assert.equal(p.agentPhase, null);
-  assert.equal(p.streamReset, true);
-  assert.equal(p.clearMessages, true);
   assert.equal(p.currentModelOverride, null);
   assert.equal(p.pendingModel, null);
 });

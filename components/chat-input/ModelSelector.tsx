@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import type { ModelOption } from "./types";
 import { useI18n } from "../I18nProvider";
+import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 
 interface ModelSelectorProps {
   isStreaming: boolean;
@@ -50,18 +51,7 @@ export function ModelSelector({
     ? (modelOptions.find((o) => o.modelId === model.modelId && o.provider === model.provider)?.name ?? model.modelId)
     : modelOptions.length > 0 ? modelOptions[0].name : null;
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (
-        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-        modelDropdownPanelRef.current && !modelDropdownPanelRef.current.contains(e.target as Node)
-      ) {
-        setModelDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  useDismissOnOutsideClick(dropdownRef, modelDropdownOpen, () => setModelDropdownOpen(false));
 
   if (modelOptions.length === 0 || !currentName || !onModelChange) {
     return null;

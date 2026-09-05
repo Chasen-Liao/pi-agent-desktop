@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { SessionInfo } from "@/lib/types";
 import { formatRelativeTime, type SessionTreeNode } from "./helpers";
 import { useI18n } from "../I18nProvider";
+import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 
 interface SessionTreeItemProps {
   node: SessionTreeNode;
@@ -175,23 +176,7 @@ function SessionItem({
     e.stopPropagation();
     setConfirmDelete(false);
   }, []);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handlePointerDown = (e: PointerEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
-    };
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [menuOpen]);
+  useDismissOnOutsideClick(menuRef, menuOpen, () => setMenuOpen(false));
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

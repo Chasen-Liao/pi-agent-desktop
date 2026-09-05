@@ -30,7 +30,7 @@ export interface DesktopSettings {
   ltm?: DesktopLtmSettings;
 }
 
-export const DESKTOP_SETTINGS_FILENAME = "desktop-settings.json";
+const DESKTOP_SETTINGS_FILENAME = "desktop-settings.json";
 
 export function defaultDesktopSettings(): DesktopSettings {
   return {
@@ -39,7 +39,7 @@ export function defaultDesktopSettings(): DesktopSettings {
   };
 }
 
-export function desktopSettingsPath(agentDir: string): string {
+function desktopSettingsPath(agentDir: string): string {
   return join(agentDir, DESKTOP_SETTINGS_FILENAME);
 }
 

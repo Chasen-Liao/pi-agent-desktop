@@ -1,7 +1,7 @@
-import type { ExtensionInfo } from "./extensions-config";
-
-export function getExtensionRenderKey(
-  extension: Pick<ExtensionInfo, "scope" | "source" | "path">
-): string {
+export function getExtensionRenderKey(extension: {
+  scope: string;
+  source: string;
+  path: string;
+}): string {
   return `${extension.scope}:${extension.source}:${extension.path}`;
 }

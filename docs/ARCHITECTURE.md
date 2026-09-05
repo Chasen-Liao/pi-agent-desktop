@@ -131,7 +131,7 @@ flowchart TD
 ```
 
 | 层 | 职责 | 关键约束 |
-|---|---|---|
+| --- | --- | --- |
 | **浏览器层** | UI 渲染、用户交互、SSE 消费、URL 状态 | 零状态库；流式消息由 `streamReducer` 增量更新 |
 | **服务端层** | API 路由、AgentSession 包装、文件解析 | 活跃 session 必须存 `globalThis`（HMR 安全） |
 | **SDK 层** | 真正的 AI 对话引擎、模型调度、工具执行 | 由 `@earendil-works/pi-coding-agent` 提供 |
@@ -174,7 +174,6 @@ pi-agent-desktop/
 │   ├── SessionSidebar.tsx        会话树侧边栏
 │   ├── BranchNavigator.tsx       会话内分支切换器
 │   ├── ChatMinimap.tsx           滚动缩略导航
-│   ├── ToolPanel.tsx             工具预设面板
 │   ├── ModelsConfig.tsx          模型配置弹窗
 │   ├── SkillsConfig.tsx          技能管理弹窗
 │   ├── FileExplorer.tsx          文件树
@@ -271,7 +270,6 @@ pi-agent-desktop/
 │   ├── server-wait.ts            等待 Next.js 子进程就绪
 │   ├── process-tree.ts           进程树管理
 │   ├── restart-policy.ts         重启策略
-│   ├── startup-failure.ts        启动失败诊断
 │   ├── log-format.ts             日志格式化
 │   ├── env-filter.ts             环境变量过滤
 │   ├── startup.html / startup.js 启动占位页
@@ -339,7 +337,7 @@ sequenceDiagram
 会话浏览和交互对话走**完全不同的路径**，避免为只读操作创建重量级的 AgentSession。
 
 | | 📖 只读浏览 | ⚡ 交互对话 |
-|---|---|---|
+| --- | --- | --- |
 | **触发** | 侧边栏点击会话 | 发送消息 / 恢复流式 |
 | **路径** | `app/api/sessions/*` → `lib/session-reader.ts` | `app/api/agent/*` → `lib/rpc-manager.ts` |
 | **是否创建 AgentSession** | ❌ 否 | ✅ 是 |
@@ -367,7 +365,7 @@ stateDiagram-v2
 **进程级状态必须存 `globalThis`**（Next.js HMR 会丢弃模块级变量）：
 
 | 全局变量 | 用途 | 定义位置 | 回收策略 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `globalThis.__piSessions` | `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | wrapper.destroy() 时 delete；process.once("exit") 全清 |
 | `globalThis.__piSessionOnlyTrust` | `Map<sessionId, boolean>` 会话级信任状态 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | 会话信任完成或测试 reset 时清理 |
 | `globalThis.__piSessionPathCacheState` | `sessionId → .jsonl` 路径与 miss 缓存 | [lib/session-reader.ts](../lib/session-reader.ts) | invalidateSessionPathEntry(id) 单条删；TTL 自动过期 |
@@ -443,7 +441,7 @@ Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并�
 ### 顶层组件（27 个）
 
 | 组件 | 职责 |
-|---|---|
+| --- | --- |
 | `I18nProvider.tsx` | 界面语言 Context：`en` / `zh-CN` / `system`，词典在 `lib/i18n` |
 | `AppShell.tsx` | 顶层布局：侧边栏 + 聊天区 + 标签页；URL `?session=` 状态；模型/技能弹窗 |
 | `ChatWindow.tsx` | 对话区域外壳；委托 `useAgentSession` 处理所有 agent 交互 |
@@ -455,7 +453,7 @@ Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并�
 | `SessionSidebar.tsx` | 按 cwd 分组的会话树 + 内嵌 `FileExplorer` |
 | `BranchNavigator.tsx` | 会话内分支切换器（线性链自动压缩，支持分叉与克隆按钮） |
 | `ChatMinimap.tsx` | 消息列表右侧的滚动缩略导航 |
-| `ToolPanel.tsx` | 三档工具预设：`PRESET_NONE` / `PRESET_DEFAULT` / `PRESET_FULL` |
+| `lib/tool-presets.ts` | 三档工具预设：`PRESET_NONE` / `PRESET_DEFAULT` / `PRESET_FULL` + `getPresetFromTools`（原 ToolPanel 组件已删，hooks 直接消费） |
 | `ModelsConfig.tsx` | 25+ 提供商配置弹窗 |
 | `SkillsConfig.tsx` | 技能搜索/安装/启用弹窗 |
 | `FileExplorer.tsx` | 懒加载目录浏览，支持 `@` 引用插入 |
@@ -499,7 +497,7 @@ components/models-config/     模型配置弹窗的子组件
 ### 顶层 Hooks（6 个）
 
 | Hook | 职责 |
-|---|---|
+| --- | --- |
 | `useAgentSession.ts` | ★ Agent 交互主 hook（加载、SSE、发送、中止、fork、导航、压缩、模型切换、工具预设） |
 | `useTheme.ts` | View Transitions API 圆形擦除主题切换 |
 | `useAudio.ts` | 完成音效 / 压缩音效 |
@@ -512,7 +510,7 @@ components/models-config/     模型配置弹窗的子组件
 `useAgentSession` 已按职责拆分，主 hook 组合这些子 hook：
 
 | 子 Hook / 模块 | 职责 |
-|---|---|
+| --- | --- |
 | `use-session-loader.ts` | 会话加载、`messages[]` / `entryIds[]` 状态 |
 | `use-agent-events.ts` | SSE `EventSource` 连接管理 |
 | `use-chat-scroll.ts` | 滚动容器行为（粘底、跳转到用户消息） |
@@ -538,7 +536,7 @@ components/models-config/     模型配置弹窗的子组件
 ### Agent 会话交互（3 条）
 
 | 路由 | 方法 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `app/api/agent/new/route.ts` | POST | 创建新会话并发送首条消息 |
 | `app/api/agent/[id]/route.ts` | GET / POST | GET 状态；POST 命令（prompt / steer / follow_up / reorder_follow_ups / abort / fork / navigate_tree / compact / model / tools / agent mode 等） |
 | `app/api/agent/[id]/events/route.ts` | GET | SSE 事件流（30s 心跳，含 Follow-up Queue、Extension UI 与运行状态事件） |
@@ -546,7 +544,7 @@ components/models-config/     模型配置弹窗的子组件
 ### 长期记忆 LTM（5 条）
 
 | 路由 | 方法 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `app/api/memory/health/route.ts` | GET | LTM 后端健康（`backend` / `enabled`） |
 | `app/api/memory/recall/route.ts` | GET | `?cwd=&q=&limit=` 项目级检索 |
 | `app/api/memory/remember/route.ts` | POST | 显式写入 memory（`cwd` + `content` + 可选 type） |
@@ -558,7 +556,7 @@ components/models-config/     模型配置弹窗的子组件
 ### 会话浏览、分叉与导出（7 条）
 
 | 路由 | 方法 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `app/api/sessions/route.ts` | GET | 列出所有会话（按 cwd 分组） |
 | `app/api/sessions/[id]/route.ts` | GET / PATCH / DELETE | 读取 / 重命名 / 删除 |
 | `app/api/sessions/[id]/context/route.ts` | GET | `?leafId=` 返回指定分支叶子的上下文 |
@@ -570,7 +568,7 @@ components/models-config/     模型配置弹窗的子组件
 ### MCP 服务器管理（3 条）
 
 | 路由 | 方法 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `app/api/mcp/route.ts` | GET / POST / DELETE | 读取合并配置与连线状态；新增/更新 MCP 配置；删除 MCP 配置 |
 | `app/api/mcp/toggle/route.ts` | POST | 启用或禁用特定 MCP 服务器 (`disabled` 标志) |
 | `app/api/mcp/test/route.ts` | POST | 测试特定 MCP 服务器配置连接与工具探针 |
@@ -578,7 +576,7 @@ components/models-config/     模型配置弹窗的子组件
 ### 扩展与 Skill 管理（4 条）
 
 | 路由 | 方法 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `app/api/extensions/route.ts` | GET / POST | 列出已加载扩展、Skill 及诊断信息；切换扩展/Skill 状态 |
 | `app/api/skills/route.ts` | GET | 列出 / 启用 / 禁用技能 |
 | `app/api/skills/search/route.ts` | POST | 搜索远程技能 |
@@ -587,14 +585,14 @@ components/models-config/     模型配置弹窗的子组件
 ### 桌面配置与 Trust（2 条）
 
 | 路由 | 方法 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `app/api/desktop-settings/route.ts` | GET / PUT | 读写 `~/.pi/agent/desktop-settings.json` 全局默认 AgentMode 及 ToolPreset |
 | `app/api/trust/route.ts` | POST | 确认并持久化 Project Trust 信任授权决策 |
 
 ### 文件与目录（4 条）
 
 | 路由 | 方法 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `app/api/files/[...path]/route.ts` | GET / PUT | 安全文件访问：GET `?type=list\|read\|watch`（目录列表 / 文件读取 / SSE 监听变更）；PUT 写入文件。**allowed-roots 鉴权**，仅允许 session cwd 与 `~/pi-cwd-*` 下的路径（详见 §14.11） |
 | `app/api/home/route.ts` | GET | 用户主目录路径 |
 | `app/api/default-cwd/route.ts` | POST | 创建并返回默认项目目录 |
@@ -603,7 +601,7 @@ components/models-config/     模型配置弹窗的子组件
 ### 模型配置（3 条）
 
 | 路由 | 方法 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `app/api/models/route.ts` | GET | 模型列表 + thinking levels + `defaultModel` |
 | `app/api/models-config/route.ts` | GET / PUT | 读写 `~/.pi/agent/models.json` |
 | `app/api/models-config/test/route.ts` | POST | 测试模型连接 |
@@ -611,7 +609,7 @@ components/models-config/     模型配置弹窗的子组件
 ### 认证（5 条）
 
 | 路由 | 方法 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `app/api/auth/providers/route.ts` | GET | 列出已配置的提供商 |
 | `app/api/auth/all-providers/route.ts` | GET | 列出所有支持的提供商 |
 | `app/api/auth/login/[provider]/route.ts` | GET / POST | OAuth 登录 |
@@ -621,9 +619,10 @@ components/models-config/     模型配置弹窗的子组件
 ### 其他（2 条）
 
 | 路由 | 方法 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `app/api/statusline/route.ts` | GET | git 分支与状态元数据 |
 | `app/api/health/route.ts` | GET | 桌面端启动健康探测（`server-wait.ts` 调用） |
+
 ---
 
 ## 13. Electron 桌面端
@@ -643,7 +642,7 @@ components/models-config/     模型配置弹窗的子组件
 ### 辅助模块
 
 | 文件 | 职责 |
-|---|---|
+| --- | --- |
 | `preload.ts` | `contextBridge`：`selectDirectory` / `getPathForFile` / 更新 / `setTheme` / 平台标记 |
 | `app-icon.ts` | 按平台选择 `.ico` 或 `.icns` 原生图标 |
 | `server-process.ts` | 统一 ChildProcess / UtilityProcess 的日志、退出、错误与进程树清理接口 |
@@ -651,7 +650,6 @@ components/models-config/     模型配置弹窗的子组件
 | `process-tree.ts` | 杀掉子进程树（不只是直接子进程） |
 | `restart-policy.ts` | 子进程崩溃后的重启策略 |
 | `crash-recovery.ts` | 渲染进程崩溃（`render-process-gone`）后的有界自动重载策略 |
-| `startup-failure.ts` | 启动失败诊断 UI（`startup.html`） |
 | `navigation.ts` | 主页面导航的单次超时、有限重试与错误封装 |
 | `port-selection.ts` | 端口选择 |
 | `server-wait.ts` | 等待 Next.js 子进程就绪 |
@@ -698,7 +696,7 @@ Next.js 热重载（HMR）会丢弃模块级变量。若把 `Map<sessionId, Agen
 4. `this.destroy()` 销毁旧 wrapper（释放订阅、idle timer、内存；旧 wrapper 不会被自动复用，因为新请求会命中新 wrapper）
 5. 返回 `{ cancelled: false, newSessionId }`
 
-**契约**：`send()` 返回时，`newSessionId` 已在注册表中。若 `startRpcSession` 抛错，旧 wrapper **不销毁**（保持可用），孤儿新 `.jsonl` 文件可接受（下次 fork 会覆盖）。
+**契约**：`send()` 返回时，`newSessionId` 已在注册表中。若 `startRpcSession` 抛错：旧 wrapper **不销毁**（保持可用）；孤儿新 `.jsonl` 在 catch 中被删除并失效路径缓存（best-effort），随后 rethrow。
 
 **为什么要立即销毁旧 wrapper**：旧 wrapper 持有的 `AgentSession` 仍订阅着原 session 的事件、跑着 10 分钟 idle timer。fork 是用户"另起炉灶"的信号，旧 wrapper 不再会被请求到（后续请求走新 id），立即销毁可及时释放资源，而非等 idle 超时。
 
@@ -707,7 +705,7 @@ Next.js 热重载（HMR）会丢弃模块级变量。若把 `Map<sessionId, Agen
 Pi SDK 存储格式 `{ id, name, arguments }` 与前端类型 `{ toolCallId, toolName, input }` 不一致。`normalizeToolCalls()`（`lib/normalize.ts`）在**两条路径**都做转换：
 
 - 文件加载：`session-reader.ts` 调用
-- SSE 流：`ChatWindow.handleAgentEvent()` 调用
+- SSE 流：`agent-event-apply.ts` 调用（经 useAgentSession 事件管线）
 
 ### 14.4 两种分支机制不要混淆
 
@@ -747,7 +745,7 @@ extraResources:
 ### 14.7 Windows 兼容层
 
 | 文件 | 问题 | 解决 |
-|---|---|---|
+| --- | --- | --- |
 | `lib/file-paths.ts` | Windows 反斜杠 | 统一正斜杠 |
 | `lib/npx.ts` | `npx.cmd` shell 限制（CVE-2024-27980） | 直接 spawn，绕过 shell |
 | `bin/pi-web.js` | 路径含空格 | 直接调用 next JS 入口 |
@@ -840,7 +838,7 @@ Next.js NFT 只会追踪构建宿主架构的可选原生依赖。在 Apple Sili
 **三种 GET 模式**（`?type=`）：
 
 | type | 行为 |
-|---|---|
+| --- | --- |
 | `list`（默认） | 目录列表：过滤 `node_modules`/`.git`/`.next` 等 `IGNORED_NAMES` 与 `.pyc` 后缀，目录在前字母序 |
 | `read` | 文件读取：图片/音频走流式 `streamFile`（支持 HTTP Range），文本返回 `{ content, language, size }` |
 | `watch` | SSE：`fs.watch` 监听文件变更，发射 `change` 事件（mtime + size） |
@@ -848,7 +846,7 @@ Next.js NFT 只会追踪构建宿主架构的可选原生依赖。在 Apple Sili
 **大小限制**：
 
 | 场景 | 上限 | 超限返回 |
-|---|---|---|
+| --- | --- | --- |
 | 文本预览（read） | 256 KB | 413 |
 | 文本写入（PUT） | 512 KB | 413 |
 | 图片预览 | 10 MB | 413 |
@@ -888,7 +886,7 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 ## 15. 技术栈
 
 | 类别 | 技术 | 版本 |
-|---|---|---|
+| --- | --- | --- |
 | 框架 | Next.js（App Router） | 16.3.2 |
 | UI 库 | React | ^19.2.4 |
 | 样式 | Tailwind CSS + CSS 变量 | ^4.2.2 |
@@ -912,11 +910,13 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 ## 16. 当前状态与后续规划
 
 ### Wave 1: Codex-alignment 基石能力（已完成）
+
 - **Agent 模式与 Ask 拦截**：Plan / Ask / Full 三模式，`ask` 模式拦截 `bash`/`write`/`edit` 并弹窗确认；Plan 模式一键执行计划。
 - **Extension UI Bridge**：支持 Extension 弹窗 (`confirm`/`select`/`input`/`editor`) 与原生 Notify 通知。
 - **Project Trust 409 握手**：409 响应与 ProjectTrustDialog 弹窗，信任后载入项目资源。
 
 ### Wave 2: MCP / 会话分支与导出 / 扩展管理 UI（已完成）
+
 - **MCP 服务器配置与管理 UI**：支持全局与项目级 `mcp.json` 的读写、开启/禁用、测试连通性与工具数查看。
 - **会话 Branching & Cloning**：支持从指定节点分叉 Session Branch，以及将 Session 全量 Clone 至普通目录或 Git Worktree。
 - **会话导出 (HTML / Markdown)**：一键导出会话内容为原生 HTML 或 Markdown。
@@ -924,6 +924,7 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 - **扩展与 Skill 统一管理**：Tab 化管理已配置的 Extensions、Skills 与 MCP 服务。
 
 ### 后续规划
+
 - **操作系统级沙盒隔离**：Docker / OS 容器沙盒执行隔离。
 - **多 Agent 协作**：在现有会话与 Worktree 基础上支持多 Agent 并行处理。
 

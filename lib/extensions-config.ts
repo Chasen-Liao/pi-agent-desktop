@@ -161,7 +161,7 @@ export interface MutateExtensionOptions {
   agentDir?: string;
 }
 
-export function getSettingsPath(
+function getSettingsPath(
   scope: "global" | "project",
   cwd?: string,
   agentDir?: string
@@ -175,7 +175,7 @@ export function getSettingsPath(
   return join(cwd, ".pi", "settings.json");
 }
 
-export function readSettingsFile(settingsPath: string): Record<string, unknown> {
+function readSettingsFile(settingsPath: string): Record<string, unknown> {
   if (!existsSync(settingsPath)) {
     return {};
   }
@@ -187,7 +187,7 @@ export function readSettingsFile(settingsPath: string): Record<string, unknown> 
   }
 }
 
-export function writeSettingsFile(settingsPath: string, data: Record<string, unknown>): void {
+function writeSettingsFile(settingsPath: string, data: Record<string, unknown>): void {
   mkdirSync(dirname(settingsPath), { recursive: true });
   writeFileSync(settingsPath, JSON.stringify(data, null, 2), "utf8");
 }

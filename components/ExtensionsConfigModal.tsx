@@ -2,9 +2,14 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { McpConfigContent } from "./McpConfigModal";
-import { getExtensionRenderKey } from "@/lib/extension-render-key";
-import type { ExtensionInfo, SkillInfo, ExtensionDiagnostic } from "@/lib/extensions-config";
+import type {
+  ExtensionInfo,
+  SkillInfo,
+  ExtensionDiagnostic,
+} from "@/lib/extensions-config";
 import { useI18n } from "./I18nProvider";
+import { apiJson } from "./apiJson";
+import { getExtensionRenderKey } from "@/lib/extension-render-key";
 
 export type ExtensionsTab = "mcp" | "extensions" | "skills" | "diagnostics";
 
@@ -40,10 +45,14 @@ export function ExtensionsConfigModal({
     setLoading(true);
     setError(null);
     try {
-      const url = cwd ? `/api/extensions?cwd=${encodeURIComponent(cwd)}` : "/api/extensions";
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const url = cwd
+        ? `/api/extensions?cwd=${encodeURIComponent(cwd)}`
+        : "/api/extensions";
+      const data = await apiJson<{
+        extensions?: ExtensionInfo[];
+        skills?: SkillInfo[];
+        diagnostics?: ExtensionDiagnostic[];
+      }>(url, undefined, { fallback: t("extension.loadFailed") });
       setExtensions(data.extensions || []);
       setSkills(data.skills || []);
       setDiagnostics(data.diagnostics || []);
@@ -65,85 +74,107 @@ export function ExtensionsConfigModal({
 
   const handleToggleExtension = async (ext: ExtensionInfo) => {
     try {
-      const res = await fetch("/api/extensions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "toggle",
-          type: "extension",
-          nameOrPath: ext.id,
-          scope: ext.scope === "global" ? "global" : "project",
-          cwd,
-          enabled: !ext.enabled,
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiJson(
+        "/api/extensions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "toggle",
+            type: "extension",
+            nameOrPath: ext.id,
+            scope: ext.scope === "global" ? "global" : "project",
+            cwd,
+            enabled: !ext.enabled,
+          }),
+        },
+        { fallback: t("extension.toggleFailed") },
+      );
       fetchExtensionsData();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t("extension.toggleFailed"));
+      setError(
+        err instanceof Error ? err.message : t("extension.toggleFailed"),
+      );
     }
   };
 
   const handleRemoveExtension = async (ext: ExtensionInfo) => {
-    if (!confirm(t("extension.removeConfirm", { name: ext.name || ext.id }))) return;
+    if (!confirm(t("extension.removeConfirm", { name: ext.name || ext.id })))
+      return;
     try {
-      const res = await fetch("/api/extensions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "remove",
-          type: "extension",
-          nameOrPath: ext.id,
-          scope: ext.scope === "global" ? "global" : "project",
-          cwd,
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiJson(
+        "/api/extensions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "remove",
+            type: "extension",
+            nameOrPath: ext.id,
+            scope: ext.scope === "global" ? "global" : "project",
+            cwd,
+          }),
+        },
+        { fallback: t("extension.removeFailed") },
+      );
       fetchExtensionsData();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t("extension.removeFailed"));
+      setError(
+        err instanceof Error ? err.message : t("extension.removeFailed"),
+      );
     }
   };
 
   const handleToggleSkill = async (skill: SkillInfo) => {
     try {
-      const res = await fetch("/api/extensions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "toggle",
-          type: "skill",
-          nameOrPath: skill.name,
-          scope: skill.scope === "global" ? "global" : "project",
-          cwd,
-          enabled: skill.disableModelInvocation ? true : false,
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiJson(
+        "/api/extensions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "toggle",
+            type: "skill",
+            nameOrPath: skill.name,
+            scope: skill.scope === "global" ? "global" : "project",
+            cwd,
+            enabled: skill.disableModelInvocation ? true : false,
+          }),
+        },
+        { fallback: t("extension.skillToggleFailed") },
+      );
       fetchExtensionsData();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t("extension.skillToggleFailed"));
+      setError(
+        err instanceof Error ? err.message : t("extension.skillToggleFailed"),
+      );
     }
   };
 
   const handleRemoveSkill = async (skill: SkillInfo) => {
-    if (!confirm(t("extension.skillRemoveConfirm", { name: skill.name }))) return;
+    if (!confirm(t("extension.skillRemoveConfirm", { name: skill.name })))
+      return;
     try {
-      const res = await fetch("/api/extensions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "remove",
-          type: "skill",
-          nameOrPath: skill.name,
-          scope: skill.scope === "global" ? "global" : "project",
-          cwd,
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiJson(
+        "/api/extensions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "remove",
+            type: "skill",
+            nameOrPath: skill.name,
+            scope: skill.scope === "global" ? "global" : "project",
+            cwd,
+          }),
+        },
+        { fallback: t("extension.skillRemoveFailed") },
+      );
       fetchExtensionsData();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t("extension.skillRemoveFailed"));
+      setError(
+        err instanceof Error ? err.message : t("extension.skillRemoveFailed"),
+      );
     }
   };
 
@@ -154,21 +185,21 @@ export function ExtensionsConfigModal({
     setAdding(true);
     setError(null);
     try {
-      const res = await fetch("/api/extensions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "add",
-          type: addType,
-          nameOrPath: addNameOrPath.trim(),
-          scope: addScope,
-          cwd,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${res.status}`);
-      }
+      await apiJson(
+        "/api/extensions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "add",
+            type: addType,
+            nameOrPath: addNameOrPath.trim(),
+            scope: addScope,
+            cwd,
+          }),
+        },
+        { fallback: t("extension.addFailed") },
+      );
       setAddNameOrPath("");
       setShowAddForm(false);
       fetchExtensionsData();
@@ -181,9 +212,17 @@ export function ExtensionsConfigModal({
 
   const tabs: { id: ExtensionsTab; label: string; count?: number }[] = [
     { id: "mcp", label: t("mcp.servers") },
-    { id: "extensions", label: t("extension.extensions"), count: extensions.length },
+    {
+      id: "extensions",
+      label: t("extension.extensions"),
+      count: extensions.length,
+    },
     { id: "skills", label: t("extension.skills"), count: skills.length },
-    { id: "diagnostics", label: t("extension.diagnostics"), count: diagnostics.length },
+    {
+      id: "diagnostics",
+      label: t("extension.diagnostics"),
+      count: diagnostics.length,
+    },
   ];
 
   return (
@@ -196,7 +235,9 @@ export function ExtensionsConfigModal({
       <div className="t-modal is-open ui-dialog-surface w-full max-w-4xl h-[82vh] max-h-[750px] rounded-[14px] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-divider bg-bg-elevated shrink-0">
-          <h3 className="font-semibold text-text text-[14px]">{t("extension.management")}</h3>
+          <h3 className="font-semibold text-text text-[14px]">
+            {t("extension.management")}
+          </h3>
           <button
             onClick={onClose}
             aria-label={t("common.close")}
@@ -222,7 +263,9 @@ export function ExtensionsConfigModal({
               {t.count !== undefined && (
                 <span
                   className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                    activeTab === t.id ? "bg-accent/20 text-accent" : "bg-bg-elevated text-text-dim"
+                    activeTab === t.id
+                      ? "bg-accent/20 text-accent"
+                      : "bg-bg-elevated text-text-dim"
                   }`}
                 >
                   {t.count}
@@ -237,7 +280,10 @@ export function ExtensionsConfigModal({
           {error && (
             <div className="m-4 p-3 rounded-control bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] flex items-center justify-between">
               <span>{error}</span>
-              <button onClick={() => setError(null)} className="text-red-400 font-bold ml-2">
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 font-bold ml-2"
+              >
                 ×
               </button>
             </div>
@@ -267,7 +313,9 @@ export function ExtensionsConfigModal({
                   onSubmit={handleAddSubmit}
                   className="p-3 rounded-panel bg-bg-panel border border-border flex flex-col gap-3"
                 >
-                  <h4 className="text-[12px] font-semibold text-text">{t("extension.add")}</h4>
+                  <h4 className="text-[12px] font-semibold text-text">
+                    {t("extension.add")}
+                  </h4>
                   <div className="grid grid-cols-3 gap-2">
                     <input
                       type="text"
@@ -279,7 +327,9 @@ export function ExtensionsConfigModal({
                     />
                     <select
                       value={addScope}
-                      onChange={(e) => setAddScope(e.target.value as "global" | "project")}
+                      onChange={(e) =>
+                        setAddScope(e.target.value as "global" | "project")
+                      }
                       className="px-2.5 py-1.5 rounded-control bg-bg border border-border text-text text-[12px] focus:outline-none focus:border-accent"
                     >
                       <option value="project">{t("scope.project")}</option>
@@ -322,8 +372,12 @@ export function ExtensionsConfigModal({
                     >
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-text text-[13px]">{ext.name}</span>
-                          <span className="font-mono text-[11px] text-text-dim">({ext.id})</span>
+                          <span className="font-semibold text-text text-[13px]">
+                            {ext.name}
+                          </span>
+                          <span className="font-mono text-[11px] text-text-dim">
+                            ({ext.id})
+                          </span>
                           <span
                             className={`px-1.5 py-0.2 rounded text-[10px] font-mono uppercase ${
                               ext.scope === "global"
@@ -331,11 +385,17 @@ export function ExtensionsConfigModal({
                                 : "bg-amber-500/10 text-amber-400"
                             }`}
                           >
-                            {t(ext.scope === "global" ? "scope.global" : "scope.project")}
+                            {t(
+                              ext.scope === "global"
+                                ? "scope.global"
+                                : "scope.project",
+                            )}
                           </span>
                         </div>
                         {ext.path && (
-                          <span className="font-mono text-[10px] text-text-dim">{ext.path}</span>
+                          <span className="font-mono text-[10px] text-text-dim">
+                            {ext.path}
+                          </span>
                         )}
                       </div>
 
@@ -348,7 +408,9 @@ export function ExtensionsConfigModal({
                               : "bg-bg-elevated text-text-muted border-border"
                           }`}
                         >
-                          {ext.enabled ? t("common.enabled") : t("common.disabled")}
+                          {ext.enabled
+                            ? t("common.enabled")
+                            : t("common.disabled")}
                         </button>
                         <button
                           onClick={() => handleRemoveExtension(ext)}
@@ -386,7 +448,9 @@ export function ExtensionsConfigModal({
                   onSubmit={handleAddSubmit}
                   className="p-3 rounded-panel bg-bg-panel border border-border flex flex-col gap-3"
                 >
-                  <h4 className="text-[12px] font-semibold text-text">{t("extension.addSkill")}</h4>
+                  <h4 className="text-[12px] font-semibold text-text">
+                    {t("extension.addSkill")}
+                  </h4>
                   <div className="grid grid-cols-3 gap-2">
                     <input
                       type="text"
@@ -398,7 +462,9 @@ export function ExtensionsConfigModal({
                     />
                     <select
                       value={addScope}
-                      onChange={(e) => setAddScope(e.target.value as "global" | "project")}
+                      onChange={(e) =>
+                        setAddScope(e.target.value as "global" | "project")
+                      }
                       className="px-2.5 py-1.5 rounded-control bg-bg border border-border text-text text-[12px] focus:outline-none focus:border-accent"
                     >
                       <option value="project">{t("scope.project")}</option>
@@ -441,7 +507,9 @@ export function ExtensionsConfigModal({
                     >
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-text text-[13px]">{skill.name}</span>
+                          <span className="font-semibold text-text text-[13px]">
+                            {skill.name}
+                          </span>
                           <span
                             className={`px-1.5 py-0.2 rounded text-[10px] font-mono uppercase ${
                               skill.scope === "global"
@@ -449,14 +517,22 @@ export function ExtensionsConfigModal({
                                 : "bg-amber-500/10 text-amber-400"
                             }`}
                           >
-                            {t(skill.scope === "global" ? "scope.global" : "scope.project")}
+                            {t(
+                              skill.scope === "global"
+                                ? "scope.global"
+                                : "scope.project",
+                            )}
                           </span>
                         </div>
                         {skill.description && (
-                          <span className="text-[11px] text-text-muted">{skill.description}</span>
+                          <span className="text-[11px] text-text-muted">
+                            {skill.description}
+                          </span>
                         )}
                         {skill.filePath && (
-                          <span className="font-mono text-[10px] text-text-dim">{skill.filePath}</span>
+                          <span className="font-mono text-[10px] text-text-dim">
+                            {skill.filePath}
+                          </span>
                         )}
                       </div>
 
@@ -469,7 +545,9 @@ export function ExtensionsConfigModal({
                               : "bg-bg-elevated text-text-muted border-border"
                           }`}
                         >
-                          {!skill.disableModelInvocation ? t("common.enabled") : t("common.disabled")}
+                          {!skill.disableModelInvocation
+                            ? t("common.enabled")
+                            : t("common.disabled")}
                         </button>
                         <button
                           onClick={() => handleRemoveSkill(skill)}
@@ -508,11 +586,19 @@ export function ExtensionsConfigModal({
                     >
                       <div className="flex items-center gap-2 font-semibold">
                         <span className="uppercase text-[10px] px-1.5 py-0.2 rounded bg-black/20">
-                          {t(diag.type === "error" ? "extension.diagnosticError" : "extension.diagnosticWarning")}
+                          {t(
+                            diag.type === "error"
+                              ? "extension.diagnosticError"
+                              : "extension.diagnosticWarning",
+                          )}
                         </span>
-                        {diag.path && <span className="font-mono">{diag.path}</span>}
+                        {diag.path && (
+                          <span className="font-mono">{diag.path}</span>
+                        )}
                       </div>
-                      <p className="whitespace-pre-wrap leading-relaxed">{diag.message}</p>
+                      <p className="whitespace-pre-wrap leading-relaxed">
+                        {diag.message}
+                      </p>
                     </div>
                   ))}
                 </div>

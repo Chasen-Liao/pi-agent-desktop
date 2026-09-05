@@ -151,14 +151,6 @@ export class MemoryService {
     });
   }
 
-  /** Alias for hooks: same as observeFromCwd (no-ops when disabled). */
-  async safeObserve(
-    cwd: string,
-    input: ObserveFromCwdInput
-  ): Promise<{ observationId: string } | { deduplicated: true }> {
-    return this.observeFromCwd(cwd, input);
-  }
-
   async forgetFromCwd(
     cwd: string,
     input: ForgetFromCwdInput

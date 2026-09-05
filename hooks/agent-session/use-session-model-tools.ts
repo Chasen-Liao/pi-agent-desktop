@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { sendAgentCommand } from "@/lib/agent-client";
-import type { ToolEntry } from "@/components/ToolPanel";
+import {
+  getPresetFromTools,
+  PRESET_NONE,
+  PRESET_DEFAULT,
+  PRESET_FULL,
+  type ToolEntry,
+} from "@/lib/tool-presets";
 import type { ThinkingLevelOption } from "./session-lifecycle-reset";
 
 type ModelListItem = { id: string; name: string; provider: string };
@@ -11,8 +17,6 @@ export type UseSessionModelToolsOptions = {
   isNew: boolean;
   modelsRefreshKey?: number;
   sessionIdRef: React.MutableRefObject<string | null>;
-  setNewSessionModelExternal?: (model: { provider: string; modelId: string } | null) => void;
-  setToolPresetExternal?: (preset: "none" | "default" | "full") => void;
 };
 
 export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
@@ -20,8 +24,6 @@ export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
     isNew,
     modelsRefreshKey,
     sessionIdRef,
-    setNewSessionModelExternal,
-    setToolPresetExternal,
   } = opts;
 
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
@@ -45,26 +47,22 @@ export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
     modelId: string;
   } | null>(null);
 
-  const setNewSessionModel = setNewSessionModelExternal ?? setNewSessionModelState;
-  const setToolPresetState = setToolPresetExternal ?? setToolPreset;
-
   const loadTools = useCallback(async (sid: string) => {
     try {
       const tools = await sendAgentCommand<ToolEntry[]>(sid, { type: "get_tools" });
       if (tools && sessionIdRef.current === sid) {
-        const { getPresetFromTools } = await import("@/components/ToolPanel");
-        setToolPresetState(getPresetFromTools(tools));
+        setToolPreset(getPresetFromTools(tools));
       }
     } catch (e) {
       console.error("Failed to load tools:", e);
     }
-  }, [sessionIdRef, setToolPresetState]);
+  }, [sessionIdRef]);
 
   const handleModelChange = useCallback(
     async (provider: string, modelId: string) => {
       const sid = sessionIdRef.current;
       if (!sid) {
-        setNewSessionModel({ provider, modelId });
+        setNewSessionModelState({ provider, modelId });
         return;
       }
       try {
@@ -74,7 +72,7 @@ export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
         console.error("Failed to set model:", e);
       }
     },
-    [setNewSessionModel, sessionIdRef]
+    [sessionIdRef]
   );
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
@@ -91,10 +89,9 @@ export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
 
   const handleToolPresetChange = useCallback(
     async (preset: "none" | "default" | "full") => {
-      const { PRESET_NONE, PRESET_DEFAULT, PRESET_FULL } = await import("@/components/ToolPanel");
       const toolNames =
         preset === "none" ? PRESET_NONE : preset === "default" ? PRESET_DEFAULT : PRESET_FULL;
-      setToolPresetState(preset);
+      setToolPreset(preset);
       const sid = sessionIdRef.current;
       if (!sid) return;
       try {
@@ -103,7 +100,7 @@ export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
         console.error("Failed to set tools:", e);
       }
     },
-    [sessionIdRef, setToolPresetState]
+    [sessionIdRef]
   );
 
   useEffect(() => {
@@ -129,7 +126,7 @@ export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
               const selected = match
                 ? { provider: match.provider, modelId: match.id }
                 : { provider: d.modelList[0].provider, modelId: d.modelList[0].id };
-              setNewSessionModel(selected);
+              setNewSessionModelState(selected);
             }
           }
         }
@@ -137,7 +134,7 @@ export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
       .catch((err) => {
         console.error("Failed to load model list:", err);
       });
-  }, [isNew, modelsRefreshKey, setNewSessionModel]);
+  }, [isNew, modelsRefreshKey]);
 
   return {
     modelNames,
@@ -153,8 +150,6 @@ export function useSessionModelTools(opts: UseSessionModelToolsOptions) {
     setCurrentModelOverride,
     pendingModel,
     setPendingModel,
-    setNewSessionModel,
-    setToolPresetState,
     loadTools,
     handleModelChange,
     handleThinkingLevelChange,

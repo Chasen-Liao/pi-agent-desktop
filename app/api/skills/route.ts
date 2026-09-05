@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { DefaultResourceLoader, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
-import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const requestId = getRequestId(req);
   const { searchParams } = new URL(req.url);
   const cwd = searchParams.get("cwd");
-  if (!cwd) return NextResponse.json({ error: "cwd required" }, { status: 400, headers: { "x-request-id": requestId } });
+  if (!cwd) return jsonError(req, 400, "cwd required");
 
   try {
     const loader = new DefaultResourceLoader({ cwd, agentDir: getAgentDir() });
@@ -21,10 +21,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ skills, diagnostics });
   } catch (error) {
     logApiError({ route: "/api/skills", method: "GET", requestId, error, params: { cwd } });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }
 
@@ -34,8 +31,8 @@ export async function PATCH(req: Request) {
   try {
     const body = await req.json() as { filePath: string; disableModelInvocation: boolean };
     const { filePath, disableModelInvocation } = body;
-    if (!filePath) return NextResponse.json({ error: "filePath required" }, { status: 400, headers: { "x-request-id": requestId } });
-    if (!existsSync(filePath)) return NextResponse.json({ error: "file not found" }, { status: 404, headers: { "x-request-id": requestId } });
+    if (!filePath) return jsonError(req, 400, "filePath required");
+    if (!existsSync(filePath)) return jsonError(req, 404, "file not found");
 
     const content = readFileSync(filePath, "utf8");
     const key = "disable-model-invocation";
@@ -60,9 +57,6 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ success: true });
   } catch (error) {
     logApiError({ route: "/api/skills", method: "PATCH", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }

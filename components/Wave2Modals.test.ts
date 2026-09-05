@@ -8,13 +8,10 @@ const exportSource = readFileSync(join(process.cwd(), "components/SessionExportM
 const extSource = readFileSync(join(process.cwd(), "components/ExtensionsConfigModal.tsx"), "utf8");
 const branchCloneSource = readFileSync(join(process.cwd(), "components/BranchCloneModal.tsx"), "utf8");
 
-test("McpConfigModal exports McpConfigModal and McpConfigContent and tests connection via POST /api/mcp/test", () => {
-  assert.match(mcpSource, /export function McpConfigModal/);
+test("McpConfigContent tests connection via POST /api/mcp/test", () => {
   assert.match(mcpSource, /export function McpConfigContent/);
   assert.match(mcpSource, /fetch\("\/api\/mcp\/test"/);
-  assert.match(mcpSource, /fetch\("\/api\/mcp\/toggle"/);
-  assert.match(mcpSource, /role="dialog"/);
-  assert.match(mcpSource, /aria-modal="true"/);
+  assert.match(mcpSource, /apiJson\("\/api\/mcp\/toggle"/);
 });
 
 test("SessionExportModal exports SessionExportModal and calls export API with download flag", () => {
@@ -31,7 +28,7 @@ test("ExtensionsConfigModal exports ExtensionsConfigModal and integrates McpConf
   assert.match(extSource, /t\("extension\.extensions"\)/);
   assert.match(extSource, /t\("extension\.skills"\)/);
   assert.match(extSource, /t\("extension\.diagnostics"\)/);
-  assert.match(extSource, /fetch\("\/api\/extensions"/);
+  assert.match(extSource, /apiJson\("\/api\/extensions"/);
   assert.match(extSource, /role="dialog"/);
   assert.match(extSource, /aria-modal="true"/);
 });

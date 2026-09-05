@@ -6,6 +6,7 @@ import type { SessionInfo } from "@/lib/types";
 import { PiAgentTitle } from "./PiAgentTitle";
 import { getRecentCwds, shortenCwd, pickDirectoryFromHost } from "./helpers";
 import { useI18n } from "../I18nProvider";
+import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 
 interface SidebarHeaderProps {
   selectedCwd: string | null;
@@ -82,17 +83,14 @@ export function SidebarHeader({
     }
   }, [selectedCwd, onCwdChange]);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-        setCustomPathOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  useDismissOnOutsideClick(
+    dropdownRef,
+    dropdownOpen || customPathOpen,
+    () => {
+      setDropdownOpen(false);
+      setCustomPathOpen(false);
+    },
+  );
 
   const handleNewSession = useCallback(() => {
     if (!selectedCwd) return;
