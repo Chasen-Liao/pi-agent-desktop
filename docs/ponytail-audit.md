@@ -155,6 +155,8 @@ electron/main.ts 里一层只做转发的 getter。内联掉。
 
 **仍未执行（待决策）**：结构性项 rpc-manager fork/compact 拆分(#26)、pending 对账迁移(#30)。
 
+**产品方向（待单独设计）**：薄 harness——桌面端会话不加载用户级 pi 包。现状：rpc-manager createAgentSession 经 DefaultResourceLoader（agentDir=~/.pi/agent）会连带加载用户/全局 packages（resource-loader.js:258），用户 CLI 装的扩展会进桌面会话。候选方案：noExtensions: true / 独立 agentDir / settings 过滤。属产品行为变更，需单独 PR。
+
 ## #21 执行结果（2026-09-04 追加）
 
 ModalSurface 外壳已落地（46ad6b9）：仅 3 个可证明 class 等价的 Tailwind 站点转换（Extensions/SessionExport/BranchClone），aria-label 升级为 heading id + ariaLabelledBy；5 个内联样式站点与 2 个非 modal 外壳合法豁免（等价性不可证 / 行为改变风险）。**净 +34L**——原估 -80L 基于 10 站点全转换，实际收益是结构性收口（单一位置管理 dialog role/aria/遮罩）而非行数；unused onClose 已删。同期发现并修复批 2 引入的形状断言断链（useAgentSession.test.ts 锚点改为语义锚，8ed8832）——该事故印证“worker 自报绿不可信”，全量门禁必须父会话亲自跑。
