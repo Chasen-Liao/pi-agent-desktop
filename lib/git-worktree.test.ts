@@ -243,7 +243,7 @@ test("createGitWorktree rejects an identity change after checkout", async () => 
 });
 
 test("createGitWorktree rejects an ownership marker change after checkout", async () => {
-  const ownerGitDir = fixturePath(`/workspace/marker-race-${randomUUID()}`);
+  const ownerGitDir = join(tmpdir(), `marker-race-${randomUUID()}`);
   const ownerMarkerPath = join(ownerGitDir, "pi-agent-desktop-worktree-owner");
   mkdirSync(ownerGitDir, { recursive: true });
   let operationCalled = false;
@@ -403,7 +403,7 @@ test("createGitWorktree does not clean up unowned resources after add fails", as
 test("createGitWorktree leaves the branch after unidentified cleanup", async () => {
   const repoRoot = fixturePath(`/workspace/unidentified-cleanup-${randomUUID()}`);
   const targetCwd = fixturePath(`/workspace/unidentified-target-${randomUUID()}`);
-  const ownerGitDir = fixturePath(`/workspace/unidentified-gitdir-${randomUUID()}`);
+  const ownerGitDir = join(tmpdir(), `unidentified-gitdir-${randomUUID()}`);
   mkdirSync(ownerGitDir, { recursive: true });
   const calls: string[][] = [];
   let listCalls = 0;
