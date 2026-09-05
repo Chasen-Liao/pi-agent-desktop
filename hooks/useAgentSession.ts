@@ -194,10 +194,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     messagesEndRef,
     scrollContainerRef,
-    lastUserMsgRef,
+    setScrollContainer,
     pendingScrollToUserRef,
     initialScrollDoneRef,
-  } = useChatScroll({ messageCount: messages.length, agentRunning });
+  } = useChatScroll({
+    messageCount: messages.length,
+    agentRunning,
+    streamingMessage: streamState.streamingMessage,
+  });
 
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
   const {
@@ -664,7 +668,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     eventSourceRef,
     messagesEndRef,
     scrollContainerRef,
-    lastUserMsgRef,
+    setScrollContainer,
     pendingScrollToUserRef,
     initialScrollDoneRef,
     // Actions
