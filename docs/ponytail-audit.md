@@ -151,6 +151,8 @@ electron/main.ts 里一层只做转发的 getter。内联掉。
 
 **已完成追加**：agentmemory 后端已删（344b69b，净 -221L，用户拍板）——生产代码零残留，memory 工具/Sqlite/Noop/observe 通道不动，架构文档同步；恢复命令：`git show fd5bca1 -- lib/ltm/agentmemory-backend.ts`。
 
+**已完成追加**：第二轮评审（Standards/Spec/测试专审三轴，全 OK with notes）后落地 3 项 P2：删三站点冗余 backdropClassName（默认值接管，契约断言收口 ModalSurface 测试）、测试锚点收紧到 prompt 块自身条件（防姊妹块弱化断言）、statsFromCwd 的 instanceof 加“类型收窄”注释（评审员删除方案不编译：stats 不在接口上）。用户已预览桌面端确认无问题。Python/ 缓存残留与 audit/ 评审草稿待确认后清理。
+
 **仍未执行（待决策）**：结构性项 rpc-manager fork/compact 拆分(#26)、pending 对账迁移(#30)。
 
 ## #21 执行结果（2026-09-04 追加）
