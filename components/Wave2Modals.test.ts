@@ -19,7 +19,6 @@ test("SessionExportModal exports SessionExportModal and calls export API with do
   assert.match(exportSource, /export function SessionExportModal/);
   assert.match(exportSource, /\/api\/sessions\/.*\/export\?format=.*&download=true/);
   assert.match(exportSource, /<ModalSurface/);
-  assert.match(exportSource, /backdropClassName="ui-dialog-backdrop fixed inset-0 z-\[1000\] flex items-center justify-center p-4"/);
 });
 
 test("ExtensionsConfigModal exports ExtensionsConfigModal and integrates McpConfigContent and extension/skill tabs", () => {
@@ -47,4 +46,8 @@ test("ModalSurface provides the shared dialog semantics", () => {
   assert.match(modalSurfaceSource, /role="dialog"/);
   assert.match(modalSurfaceSource, /aria-modal="true"/);
   assert.match(modalSurfaceSource, /aria-labelledby=\{ariaLabelledBy\}/);
+  // Shared shell contract lives here, not per-site: sites using the default
+  // backdrop/panel must not re-declare these strings.
+  assert.match(modalSurfaceSource, /"ui-dialog-backdrop fixed inset-0 z-\[1000\] flex items-center justify-center p-4"/);
+  assert.match(modalSurfaceSource, /"t-modal is-open ui-dialog-surface"/);
 });

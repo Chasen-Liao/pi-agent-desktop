@@ -42,7 +42,6 @@ export function SessionExportModal({ isOpen, onClose, sessionId }: SessionExport
 
   return (
     <ModalSurface
-      backdropClassName="ui-dialog-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
       panelClassName="t-modal is-open ui-dialog-surface w-full max-w-md rounded-[14px] flex flex-col overflow-hidden"
       ariaLabelledBy="session-export-modal-title"
     >

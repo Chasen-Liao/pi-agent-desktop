@@ -161,6 +161,9 @@ export class MemoryService {
   ): Promise<{ memoryCount: number; observationCount: number }> {
     this.assertEnabled();
     const projectId = projectIdFromCwd(cwd);
+    // Type narrowing, not dead-code: stats() is Sqlite-specific and absent
+    // from MemoryBackend. Enabled backends are Sqlite-only today, but if one
+    // without stats() ever appears, fail loud instead of TypeError.
     if (this.backend instanceof SqliteBackend) {
       return this.backend.stats(projectId);
     }
