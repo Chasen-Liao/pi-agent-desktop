@@ -224,17 +224,17 @@ test("POST /api/sessions/[id]/clone creates a session in a Git worktree", async 
     const data = await res.json();
     assert.equal(data.success, true);
     assert.equal(data.workspace.mode, "worktree");
-    assert.equal(realpathSync(data.workspace.cwd), realpathSync(targetCwd));
+    assert.equal(realpathSync.native(data.workspace.cwd), realpathSync.native(targetCwd));
     assert.equal(data.workspace.branchName, branchName);
     clonedSessionFile = data.sessionFile;
     worktreeCreated = true;
 
     const clonedSm = SessionManager.open(data.sessionFile, testAgentDir);
     assert.equal(clonedSm.getSessionName(), "Worktree Clone");
-    assert.equal(realpathSync(clonedSm.getCwd()), realpathSync(targetCwd));
+    assert.equal(realpathSync.native(clonedSm.getCwd()), realpathSync.native(targetCwd));
     assert.equal(
-      realpathSync(resolve(runGit(targetCwd, ["rev-parse", "--show-toplevel"]))),
-      realpathSync(targetCwd)
+      realpathSync.native(resolve(runGit(targetCwd, ["rev-parse", "--show-toplevel"]))),
+      realpathSync.native(targetCwd)
     );
     assert.equal(runGit(targetCwd, ["branch", "--show-current"]), branchName);
   } finally {
