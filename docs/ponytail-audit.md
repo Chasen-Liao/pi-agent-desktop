@@ -149,7 +149,9 @@ electron/main.ts 里一层只做转发的 getter。内联掉。
 
 **净变化**：56+24 文件，约 +280/-1050（净约 -770 行），-8 文件，-0 deps。验证：tsc 双工程通过、全量测试 0 fail、lint 通过。
 
-**仍未执行（待决策）**：agentmemory 后端去留（#6）；结构性项 rpc-manager fork/compact 拆分(#26)、pending 对账迁移(#30)。
+**已完成追加**：agentmemory 后端已删（344b69b，净 -221L，用户拍板）——生产代码零残留，memory 工具/Sqlite/Noop/observe 通道不动，架构文档同步；恢复命令：`git show fd5bca1 -- lib/ltm/agentmemory-backend.ts`。
+
+**仍未执行（待决策）**：结构性项 rpc-manager fork/compact 拆分(#26)、pending 对账迁移(#30)。
 
 ## #21 执行结果（2026-09-04 追加）
 
