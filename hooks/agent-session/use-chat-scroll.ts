@@ -41,6 +41,7 @@ export function useChatScroll({
   // Track user scroll position on the active container node
   useEffect(() => {
     if (!containerNode) return;
+    handleScroll();
     containerNode.addEventListener("scroll", handleScroll, { passive: true });
     return () => containerNode.removeEventListener("scroll", handleScroll);
   }, [containerNode, handleScroll]);
@@ -51,7 +52,7 @@ export function useChatScroll({
     if (!initialScrollDoneRef.current) {
       initialScrollDoneRef.current = true;
       isAtBottomRef.current = true;
-      scrollToBottom("instant");
+      scrollToBottom("auto");
     }
   }, [messageCount, containerNode, scrollToBottom]);
 
@@ -68,9 +69,9 @@ export function useChatScroll({
   // During streaming/thinking/tool execution, auto-scroll to bottom if user is at bottom
   useEffect(() => {
     if (agentRunning && isAtBottomRef.current) {
-      scrollToBottom("instant");
+      scrollToBottom("auto");
     }
-  }, [streamingMessage, agentRunning, scrollToBottom]);
+  }, [streamingMessage, messageCount, agentRunning, scrollToBottom]);
 
   // When agent settles, smooth scroll to bottom if at bottom
   useEffect(() => {
