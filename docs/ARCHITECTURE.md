@@ -438,7 +438,7 @@ Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并�
 
 > 完整清单基于 CodeGraph 索引。所有组件**手写，零 UI 库依赖**，通过 CSS 变量实现暗色/亮色主题。
 
-### 顶层组件（27 个）
+### 顶层组件（28 个）
 
 | 组件 | 职责 |
 | --- | --- |
@@ -469,6 +469,7 @@ Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并�
 | `SessionExportModal.tsx` | 会话导出弹窗（支持格式与主题选择、预览与下载） |
 | `ExtensionsConfigModal.tsx` | 扩展、Skill 与 MCP 服务器的多 Tab 统一管理弹窗 |
 | `BranchCloneModal.tsx` | 会话节点分叉 (Branch) 与目录克隆 (Clone) 确认弹窗 |
+| `ModalSurface.tsx` | modal 对话框的 backdrop 与面板外壳 |
 
 ### 子组件目录
 

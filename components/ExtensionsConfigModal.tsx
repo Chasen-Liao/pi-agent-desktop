@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { McpConfigContent } from "./McpConfigModal";
+import { ModalSurface } from "./ModalSurface";
 import type {
   ExtensionInfo,
   SkillInfo,
@@ -226,16 +227,14 @@ export function ExtensionsConfigModal({
   ];
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("extension.title")}
-      className="ui-dialog-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
+    <ModalSurface
+      backdropClassName="ui-dialog-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
+      panelClassName="t-modal is-open ui-dialog-surface w-full max-w-4xl h-[82vh] max-h-[750px] rounded-[14px] flex flex-col overflow-hidden"
+      ariaLabelledBy="extensions-config-modal-title"
     >
-      <div className="t-modal is-open ui-dialog-surface w-full max-w-4xl h-[82vh] max-h-[750px] rounded-[14px] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-divider bg-bg-elevated shrink-0">
-          <h3 className="font-semibold text-text text-[14px]">
+          <h3 id="extensions-config-modal-title" className="font-semibold text-text text-[14px]">
             {t("extension.management")}
           </h3>
           <button
@@ -616,7 +615,6 @@ export function ExtensionsConfigModal({
             {t("common.close")}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalSurface>
   );
 }
