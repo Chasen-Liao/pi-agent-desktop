@@ -149,7 +149,13 @@ electron/main.ts 里一层只做转发的 getter。内联掉。
 
 **净变化**：56+24 文件，约 +280/-1050（净约 -770 行），-8 文件，-0 deps。验证：tsc 双工程通过、全量测试 0 fail、lint 通过。
 
-**仍未执行（待决策）**：agentmemory 后端去留（#6）；结构性项 modal 骨架(#21)、rpc-manager fork/compact 拆分(#26)、pending 对账迁移(#30)——各自独立 PR。
+**仍未执行（待决策）**：agentmemory 后端去留（#6）；结构性项 rpc-manager fork/compact 拆分(#26)、pending 对账迁移(#30)。
+
+## #21 执行结果（2026-09-04 追加）
+
+ModalSurface 外壳已落地（46ad6b9）：仅 3 个可证明 class 等价的 Tailwind 站点转换（Extensions/SessionExport/BranchClone），aria-label 升级为 heading id + ariaLabelledBy；5 个内联样式站点与 2 个非 modal 外壳合法豁免（等价性不可证 / 行为改变风险）。**净 +34L**——原估 -80L 基于 10 站点全转换，实际收益是结构性收口（单一位置管理 dialog role/aria/遮罩）而非行数；unused onClose 已删。同期发现并修复批 2 引入的形状断言断链（useAgentSession.test.ts 锚点改为语义锚，8ed8832）——该事故印证“worker 自报绿不可信”，全量门禁必须父会话亲自跑。
+
+**累计净变化**：c8d2748（-726L）+ 8ed8832/46ad6b9（+34L）≈ **净 -690 行**。
 
 ## 若执行的优先级（历史记录，已按此执行）
 
