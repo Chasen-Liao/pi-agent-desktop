@@ -1,6 +1,5 @@
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { MemoryBackend } from "./backend.ts";
-import { AgentMemoryRestBackend } from "./agentmemory-backend.ts";
 import { getLtmConfig, type LtmConfig } from "./config.ts";
 import { LTM_DISABLED, LTM_STATS_NOT_SUPPORTED } from "./http.ts";
 import { projectIdFromCwd } from "./project-id.ts";
@@ -64,9 +63,6 @@ function createBackend(config: LtmConfig): MemoryBackend {
     // directory from turning a disabled feature into 500s and error logs.
     return new NoopMemoryBackend();
   }
-  if (config.backend === "agentmemory") {
-    return new AgentMemoryRestBackend(config.agentmemoryUrl);
-  }
   return new SqliteBackend(config.dbPath);
 }
 
@@ -74,12 +70,10 @@ function serviceKey(config: LtmConfig): string {
   // JSON.stringify (not join("|")) so a free-text dbPath containing "|" cannot
   // collide with another config (e.g. ".../mem|true" shifting a boolean token).
   return JSON.stringify([
-    config.backend,
     config.dbPath,
     config.enabled,
     config.observeAgentEnd,
     config.observePreCompact,
-    config.agentmemoryUrl,
   ]);
 }
 
@@ -107,7 +101,7 @@ export class MemoryService {
 
   async health(): Promise<{ ok: boolean; backend: string; detail?: string }> {
     if (!this.config.enabled) {
-      return { ok: false, backend: this.config.backend, detail: LTM_DISABLED };
+      return { ok: false, backend: "disabled", detail: LTM_DISABLED };
     }
     return this.backend.health();
   }
@@ -186,8 +180,8 @@ export class MemoryService {
 
 /**
  * Process-wide singleton (HMR-safe via globalThis).
- * Keyed by a JSON encoding of backend|dbPath|enabled|observe flags|agentmemoryUrl
- * so config changes get a fresh instance.
+ * Keyed by a JSON encoding of dbPath|enabled|observe flags so config changes
+ * get a fresh instance.
  */
 export function getMemoryService(agentDir?: string): MemoryService {
   const dir = agentDir ?? getAgentDir();
