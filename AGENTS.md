@@ -87,7 +87,7 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 
 ### 1. Fork 预注册顺序
 
-`send("fork")` → 创建新 `.jsonl` → `startRpcSession(newId)` 预注册 → `destroy()` 旧 wrapper。中途出错旧 wrapper **保持可用**，孤儿 `.jsonl` 会被主动删除并失效路径缓存。
+`send("fork")` → 创建新 `.jsonl` → `startRpcSession(newId)` 预注册 → `destroy()` 旧 wrapper。中途出错旧 wrapper **保持可用**；孤儿 `.jsonl` 删除与路径缓存失效是 **best-effort**（失败不阻断，随后 rethrow）。
 
 ### 2. 分支与工作区别混淆
 

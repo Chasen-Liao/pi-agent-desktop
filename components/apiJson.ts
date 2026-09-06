@@ -13,21 +13,22 @@ export async function apiJson<T>(
   init: RequestInit | undefined,
   options: ApiJsonOptions,
 ): Promise<T> {
+  let response: Response;
   try {
-    const response = await fetch(input, init);
-    let data: unknown;
-    try {
-      data = await response.json();
-    } catch (error) {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      throw error;
-    }
-    if (!response.ok) {
-      throw new Error(responseError(data) ?? `HTTP ${response.status}`);
-    }
-    return data as T;
-  } catch (error) {
-    if (error instanceof Error) throw error;
+    response = await fetch(input, init);
+  } catch {
     throw new Error(options.fallback);
   }
+
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(options.fallback);
+  }
+
+  if (!response.ok) {
+    throw new Error(responseError(data) ?? options.fallback);
+  }
+  return data as T;
 }

@@ -73,7 +73,7 @@ export function SessionSidebar({
         sessionRefreshTimerRef.current = setTimeout(() => setSessionRefreshDone(false), 2000);
       }
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof Error ? e.message : t("common.failed"));
     } finally {
       if (showLoading) setLoading(false);
     }

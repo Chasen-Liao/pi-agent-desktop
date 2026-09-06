@@ -34,7 +34,7 @@ export type JsonErrorInit = Omit<ResponseInit, "status" | "headers"> & {
 export function jsonError(
   req: Request,
   status: number,
-  message: unknown,
+  message: string,
   extra: JsonErrorInit = {},
 ): NextResponse {
   const headers = new Headers(extra.headers);

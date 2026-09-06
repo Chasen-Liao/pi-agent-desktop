@@ -145,7 +145,7 @@ electron/main.ts 里一层只做转发的 getter。内联掉。
 - startup-failure 决策不恢复模块：被删测试是恒真式（shouldQuit: !uiReady 只测了 `!`），基线覆盖本就为零，不因评审压力重建仪式。
 - use-agent-events 并入 useAgentSession：deferred（StrictMode/时序敏感，需单独 PR）。
 - useDismissOnOutsideClick 无单测：DOM hook，无 jsdom 基建，成本>价值。
-- apiJson 的 fallback 仅在非 Error 抛出时生效（网络异常的 TypeError 原样穿透）：与改造前内联代码语义一致，属既有怪癖，测试已钉真实语义。
+- ~~apiJson 的 fallback 仅在非 Error 抛出时生效（网络异常的 TypeError 原样穿透）~~ **已在第三轮评审收口**：transport / JSON parse 失败一律走 `options.fallback`；HTTP 非 JSON 也不再抛 `HTTP ${status}`。
 
 **净变化**：56+24 文件，约 +280/-1050（净约 -770 行），-8 文件，-0 deps。验证：tsc 双工程通过、全量测试 0 fail、lint 通过。
 
@@ -172,3 +172,14 @@ ModalSurface 外壳已落地（46ad6b9）：仅 3 个可证明 class 等价的 T
 5. 样板收敛三件套：jsonError(#19) / apiJson(#20) / useDismissOnOutsideClick(#22)
 6. 决策 agentmemory 后端去留（需确认是否有真实用户）
 7. 结构性项各自独立 PR：modal 骨架(#21)、rpc-manager fork/compact 拆分(#26)、pending 对账迁移(#30)——均需同步 ARCHITECTURE.md/AGENTS.md（neat-freak 收尾）
+
+## 第三轮评审收口（2026-09-06）
+
+PR #41 合入前按人工 COMMENT 评审落地，范围仅限文档与 helper 语义，**不改 prompt/steer `entryIds`（#30）**，也不给 steer 路径加 entryIds slot（CodeRabbit 误报：steer 是 in-place map）。
+
+- **文档**：`ARCHITECTURE.md` 顶层组件 27 / 顶层 Hooks 7（补 `useDismissOnOutsideClick`，`lib/tool-presets.ts` 移出组件表）；`AGENTS.md` Key Trap 1 孤儿 `.jsonl` 删除与路径缓存失效改为 **best-effort**（失败不阻断，随后 rethrow）。
+- **`useDismissOnOutsideClick`**：`onClose` 经 ref，从 effect deps 拿掉，避免父组件每次 render 拆监听；Escape `preventDefault` + `stopPropagation`，keydown 用 capture，让嵌套 picker 先于仍走 bubble 的父 dialog。局限：两个 hook 都挂 document capture 时仍是父先注册先触发，未做 dismiss stack。
+- **`apiJson`**：`fetch` 与 `response.json()` 各自 try/catch，失败抛 `options.fallback`；非 OK 用 `responseError(data) ?? fallback`。测试改为 502 非 JSON / Failed-to-fetch / 空 500 JSON 都走 fallback；403 `{error:"denied"}` 仍是 `denied`。
+- **`jsonError`**：`message` 从 `unknown` 收成 `string`（调用方已是字面量或 `errorMessage()`）。
+- **`Wave2Modals.test.ts`**：不再钉完整 Tailwind `panelClassName`；断言 `ModalSurface` + `panelClassName=` + `max-w-4xl` / `max-w-md` token。
+- **`SessionSidebar`**：`apiJson` 失败用 `e.message`（或 i18n fallback），避免 `String(e)` 带上 `Error: ` 前缀。

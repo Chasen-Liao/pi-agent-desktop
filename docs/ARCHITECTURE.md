@@ -212,6 +212,7 @@ pi-agent-desktop/
 │   ├── useDragDrop.ts            任意文件拖拽（路径 @mention；图片另附）
 │   ├── useFileTabs.ts            文件标签管理
 │   ├── usePanelLayout.ts         侧边栏宽度计算
+│   ├── useDismissOnOutsideClick.ts 点外 / Escape 关闭
 │   └── agent-session/            useAgentSession 拆分出的子 hooks
 │       ├── use-session-loader.ts
 │       ├── use-agent-events.ts
@@ -255,6 +256,7 @@ pi-agent-desktop/
 │   ├── file-paths.ts             跨平台路径归一化（Windows 反斜杠→正斜杠）
 │   ├── npx.ts                    安全 npx 调用（绕过 CVE-2024-27980）
 │   ├── api-error.ts              API 错误格式化
+│   ├── tool-presets.ts           工具预设常量与 getPresetFromTools
 │   ├── custom-path-selection.ts  自定义路径选择
 │   ├── ayu-syntax-theme.ts       ayu 语法高亮主题
 │   └── panel-layout.js           侧边栏宽度计算（CJS，构建兼容）
@@ -438,7 +440,7 @@ Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并�
 
 > 完整清单基于 CodeGraph 索引。所有组件**手写，零 UI 库依赖**，通过 CSS 变量实现暗色/亮色主题。
 
-### 顶层组件（28 个）
+### 顶层组件（27 个）
 
 | 组件 | 职责 |
 | --- | --- |
@@ -453,7 +455,6 @@ Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并�
 | `SessionSidebar.tsx` | 按 cwd 分组的会话树 + 内嵌 `FileExplorer` |
 | `BranchNavigator.tsx` | 会话内分支切换器（线性链自动压缩，支持分叉与克隆按钮） |
 | `ChatMinimap.tsx` | 消息列表右侧的滚动缩略导航 |
-| `lib/tool-presets.ts` | 三档工具预设：`PRESET_NONE` / `PRESET_DEFAULT` / `PRESET_FULL` + `getPresetFromTools`（原 ToolPanel 组件已删，hooks 直接消费） |
 | `ModelsConfig.tsx` | 25+ 提供商配置弹窗 |
 | `SkillsConfig.tsx` | 技能搜索/安装/启用弹窗 |
 | `FileExplorer.tsx` | 懒加载目录浏览，支持 `@` 引用插入 |
@@ -495,7 +496,7 @@ components/models-config/     模型配置弹窗的子组件
 
 ## 11. Hooks 清单
 
-### 顶层 Hooks（6 个）
+### 顶层 Hooks（7 个）
 
 | Hook | 职责 |
 | --- | --- |
@@ -505,6 +506,7 @@ components/models-config/     模型配置弹窗的子组件
 | `useDragDrop.ts` | 任意文件拖到对话区：插入 `@路径`；图片同时作为附件 |
 | `useFileTabs.ts` | 文件标签页状态管理 |
 | `usePanelLayout.ts` | 侧边栏 / 右侧面板宽度持久化 |
+| `useDismissOnOutsideClick.ts` | 点外关闭与 Escape 关闭（onClose 走 ref，避免父组件重渲染拆监听） |
 
 ### `hooks/agent-session/` 子 Hooks / 模块（15 个）
 

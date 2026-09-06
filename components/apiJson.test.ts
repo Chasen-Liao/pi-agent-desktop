@@ -18,7 +18,7 @@ test("apiJson parses successful JSON responses", async () => {
   }
 });
 
-test("apiJson uses API error text and HTTP status for failed responses", async () => {
+test("apiJson uses API error text for failed JSON responses and fallback otherwise", async () => {
   const originalFetch = globalThis.fetch;
   try {
     globalThis.fetch = async () =>
@@ -31,14 +31,21 @@ test("apiJson uses API error text and HTTP status for failed responses", async (
     globalThis.fetch = async () => new Response("not json", { status: 502 });
     await assert.rejects(
       apiJson("/api/example", undefined, { fallback: "Request failed" }),
-      { message: "HTTP 502" },
+      { message: "Request failed" },
+    );
+
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({}), { status: 500 });
+    await assert.rejects(
+      apiJson("/api/example", undefined, { fallback: "Request failed" }),
+      { message: "Request failed" },
     );
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("apiJson propagates Error from fetch verbatim and uses fallback only for non-Error rejections", async () => {
+test("apiJson maps transport failures to fallback", async () => {
   const originalFetch = globalThis.fetch;
   try {
     globalThis.fetch = async () => {
@@ -46,7 +53,7 @@ test("apiJson propagates Error from fetch verbatim and uses fallback only for no
     };
     await assert.rejects(
       apiJson("/api/example", undefined, { fallback: "Request failed" }),
-      { message: "Failed to fetch" },
+      { message: "Request failed" },
     );
 
     globalThis.fetch = () => Promise.reject("network-blip");
