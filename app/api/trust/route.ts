@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 import {
   applyTrustDecision,
   evaluateProjectTrust,
@@ -16,13 +16,10 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { cwd?: string; optionId?: string };
     if (!body.cwd || typeof body.cwd !== "string") {
-      return NextResponse.json({ error: "cwd is required" }, { status: 400, headers: { "x-request-id": requestId } });
+      return jsonError(req, 400, "cwd is required");
     }
     if (!isTrustOptionId(body.optionId)) {
-      return NextResponse.json(
-        { error: "optionId must be trust | trust-parent | trust-session | deny | deny-session" },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, "optionId must be trust | trust-parent | trust-session | deny | deny-session");
     }
     const sessionOnly = getSessionOnlyTrustMap();
     const result = applyTrustDecision(body.cwd, body.optionId as TrustOptionId, {
@@ -34,10 +31,7 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     logApiError({ route: "/api/trust", method: "POST", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }
 
@@ -48,15 +42,12 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const cwd = url.searchParams.get("cwd");
     if (!cwd) {
-      return NextResponse.json({ error: "cwd is required" }, { status: 400, headers: { "x-request-id": requestId } });
+      return jsonError(req, 400, "cwd is required");
     }
     const gate = evaluateProjectTrust(cwd, { sessionOnlyTrust: getSessionOnlyTrustMap() });
     return NextResponse.json(gate, { headers: { "x-request-id": requestId } });
   } catch (error) {
     logApiError({ route: "/api/trust", method: "GET", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }

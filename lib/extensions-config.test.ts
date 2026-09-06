@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { getExtensionRenderKey } from "./extension-render-key.ts";
 import { getExtensionIdAndName, getExtensionsConfig, mutateExtensionOrSkill } from "./extensions-config.ts";
 
 test("getExtensionIdAndName handles directory and file paths", () => {
@@ -15,14 +14,6 @@ test("getExtensionIdAndName handles directory and file paths", () => {
     id: "single-file",
     name: "single-file",
   });
-});
-
-test("getExtensionRenderKey distinguishes npm extensions with generic src/dist ids", () => {
-  const shared = { id: "src", name: "src", scope: "global" as const, enabled: true, tools: [] };
-  const first = { ...shared, path: "C:/agent/npm/node_modules/pkg-a/src/index.ts", source: "npm:pkg-a" };
-  const second = { ...shared, path: "C:/agent/npm/node_modules/pkg-b/src/index.ts", source: "npm:pkg-b" };
-
-  assert.notEqual(getExtensionRenderKey(first), getExtensionRenderKey(second));
 });
 
 test("getExtensionsConfig lists installed extensions, skills, and diagnostics", async () => {

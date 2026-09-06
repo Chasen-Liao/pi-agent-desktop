@@ -42,29 +42,7 @@ export function useAgentEvents({ agentRunning }: UseAgentEventsOptions) {
     managerRef.current?.connect(sid, true, true);
   }, []);
 
-  const eventSourceRef = {
-    get current() {
-      return managerRef.current?.getEventSource() ?? null;
-    },
-    set current(_val) {
-      // no-op, managed internally
-    }
-  };
-
-  const agentRunningRef = {
-    get current() {
-      return managerRef.current?.getAgentRunning() ?? false;
-    },
-    set current(val) {
-      if (managerRef.current) {
-        managerRef.current.setAgentRunning(val);
-      }
-    }
-  };
-
   return {
-    eventSourceRef,
-    agentRunningRef,
     handleAgentEventRef,
     connectEvents,
     connectionStatus,

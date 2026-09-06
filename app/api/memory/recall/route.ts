@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 import { isLtmDisabledError, LTM_DISABLED, parseRecallQuery } from "@/lib/ltm/http";
 import { getMemoryService } from "@/lib/ltm/service";
 
@@ -11,18 +11,12 @@ export async function GET(req: Request) {
   try {
     const parsed = parseRecallQuery(new URL(req.url));
     if (!parsed.ok) {
-      return NextResponse.json(
-        { error: parsed.error },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, parsed.error);
     }
 
     const service = getMemoryService();
     if (!service.isEnabled()) {
-      return NextResponse.json(
-        { error: LTM_DISABLED },
-        { status: 503, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 503, LTM_DISABLED);
     }
 
     const { cwd, query, limit } = parsed.value;
@@ -36,15 +30,9 @@ export async function GET(req: Request) {
     );
   } catch (error) {
     if (isLtmDisabledError(error)) {
-      return NextResponse.json(
-        { error: LTM_DISABLED },
-        { status: 503, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 503, LTM_DISABLED);
     }
     logApiError({ route: "/api/memory/recall", method: "GET", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }

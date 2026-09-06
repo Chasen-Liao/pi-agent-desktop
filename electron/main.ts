@@ -5,7 +5,6 @@ import { appendFileSync, mkdirSync } from "fs";
 import { spawn } from "child_process";
 import net from "net";
 import { createTray } from "./tray";
-import { getStartupFailureDisposition } from "./startup-failure";
 import { waitForNextServerReady } from "./server-wait";
 import { killProcessDescendants, killProcessTree } from "./process-tree";
 import { pickApiKeys } from "./env-filter";
@@ -59,10 +58,6 @@ let activePort: number | null = null;
 let startupUiReady = false;
 let restartAttempts: number[] = [];
 let updateInstallState: UpdateInstallState = createUpdateInstallState();
-
-function nextServerReadyOptions() {
-  return { requireHttpHealth: app.isPackaged };
-}
 
 export function setQuitting(val: boolean) {
   isQuitting = val;
@@ -139,14 +134,6 @@ function reservePort(port: number): Promise<number> {
       server.close(() => resolve(addr && typeof addr === "object" ? addr.port : port));
     });
     server.on("error", reject);
-  });
-}
-
-async function findFreePort(startPort: number, maxAttempts = 10): Promise<number> {
-  return choosePort({
-    startPort,
-    maxAttempts,
-    reservePort,
   });
 }
 
@@ -245,10 +232,10 @@ async function restartNextServer(label: string) {
     serverState = "starting";
     activePort = null;
     showStartupState("starting", "正在重新启动本地服务");
-    const port = await findFreePort(DEFAULT_PORT);
+    const port = await choosePort({ startPort: DEFAULT_PORT, reservePort });
     activePort = port;
     nextProcess = startNextServer(port);
-    await waitForNextServerReady(port, nextProcess, nextServerReadyOptions());
+    await waitForNextServerReady(port, nextProcess, { requireHttpHealth: app.isPackaged });
     await showApp(port);
   } catch (err) {
     logError("Failed to restart Next.js server", err);
@@ -578,7 +565,7 @@ app.whenReady().then(async () => {
   registerIpcHandlers();
 
   try {
-    const port = await findFreePort(DEFAULT_PORT);
+    const port = await choosePort({ startPort: DEFAULT_PORT, reservePort });
     logStartupTiming("port selected", { port });
     serverState = "starting";
     activePort = port;
@@ -593,7 +580,7 @@ app.whenReady().then(async () => {
     logStartupTiming("next process spawned");
     logInfo("Waiting for Next.js server...");
 
-    await waitForNextServerReady(port, nextProcess, nextServerReadyOptions());
+    await waitForNextServerReady(port, nextProcess, { requireHttpHealth: app.isPackaged });
     logStartupTiming("next server ready");
     logInfo("Next.js server is ready");
     await showApp(port);
@@ -715,15 +702,14 @@ app.whenReady().then(async () => {
     cleanup();
     activePort = null;
     const message = err instanceof Error ? err.message : String(err);
-    const disposition = getStartupFailureDisposition({ uiReady: startupUiReady, message });
     logError("Failed to start:", err);
 
-    if (disposition.shouldShowStartupPage) {
-      showStartupState("error", disposition.message);
+    if (startupUiReady) {
+      showStartupState("error", message);
       return;
     }
 
-    dialog.showErrorBox("启动失败", disposition.message);
+    dialog.showErrorBox("启动失败", message);
     app.quit();
   }
 });

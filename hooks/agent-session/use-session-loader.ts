@@ -47,7 +47,7 @@ export function useSessionLoader(isNew: boolean) {
   const [error, setError] = useState<string | null>(null);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
-  const [entryIds, setEntryIds] = useState<string[]>([]);
+  const [entryIds, setEntryIds] = useState<Array<string | undefined>>([]);
 
   // Latest-request-wins guard (M3): when sessions switch quickly, a stale
   // response must not overwrite newer state. The caller's `cancelled` flag

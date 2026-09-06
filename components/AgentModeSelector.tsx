@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import type { AgentMode } from "@/lib/approval-policy";
 import { useI18n } from "./I18nProvider";
+import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 
 const MODE_IDS: AgentMode[] = ["plan", "ask", "full"];
 
@@ -17,13 +18,7 @@ export function AgentModeSelector({ mode, disabled, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  useDismissOnOutsideClick(ref, open, () => setOpen(false));
 
   const modes = MODE_IDS.map((id) => ({
     id,

@@ -60,34 +60,34 @@ function LabelFileIcon({ label, size = 14 }: { label: string; size?: number }) {
 
 // ── Specific icons ────────────────────────────────────────────────────────
 
-export function TypeScriptIcon({ size = 14 }: IconProps) {
+function TypeScriptIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="TS" size={size} />;
 }
-export function TypeScriptReactIcon({ size = 14 }: IconProps) {
+function TypeScriptReactIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="TSX" size={size} />;
 }
-export function JavaScriptIcon({ size = 14 }: IconProps) {
+function JavaScriptIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="JS" size={size} />;
 }
-export function JavaScriptReactIcon({ size = 14 }: IconProps) {
+function JavaScriptReactIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="JSX" size={size} />;
 }
-export function PythonIcon({ size = 14 }: IconProps) {
+function PythonIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="PY" size={size} />;
 }
-export function JsonIcon({ size = 14 }: IconProps) {
+function JsonIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="{}" size={size} />;
 }
-export function CssIcon({ size = 14 }: IconProps) {
+function CssIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="CSS" size={size} />;
 }
-export function ScssIcon({ size = 14 }: IconProps) {
+function ScssIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="SC" size={size} />;
 }
-export function HtmlIcon({ size = 14 }: IconProps) {
+function HtmlIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="HTM" size={size} />;
 }
-export function MarkdownIcon({ size = 14 }: IconProps) {
+function MarkdownIcon({ size = 14 }: IconProps) {
   // file outline + M↓ symbol
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
@@ -100,13 +100,13 @@ export function MarkdownIcon({ size = 14 }: IconProps) {
     </svg>
   );
 }
-export function YamlIcon({ size = 14 }: IconProps) {
+function YamlIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="YML" size={size} />;
 }
-export function TomlIcon({ size = 14 }: IconProps) {
+function TomlIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="TOM" size={size} />;
 }
-export function ShellIcon({ size = 14 }: IconProps) {
+function ShellIcon({ size = 14 }: IconProps) {
   // file outline + > prompt
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
@@ -117,22 +117,22 @@ export function ShellIcon({ size = 14 }: IconProps) {
     </svg>
   );
 }
-export function RustIcon({ size = 14 }: IconProps) {
+function RustIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="RS" size={size} />;
 }
-export function GoIcon({ size = 14 }: IconProps) {
+function GoIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="GO" size={size} />;
 }
-export function SqlIcon({ size = 14 }: IconProps) {
+function SqlIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="SQL" size={size} />;
 }
-export function GraphqlIcon({ size = 14 }: IconProps) {
+function GraphqlIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="GQL" size={size} />;
 }
-export function TerraformIcon({ size = 14 }: IconProps) {
+function TerraformIcon({ size = 14 }: IconProps) {
   return <LabelFileIcon label="TF" size={size} />;
 }
-export function DockerfileIcon({ size = 14 }: IconProps) {
+function DockerfileIcon({ size = 14 }: IconProps) {
   // file outline + container stack
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
@@ -144,7 +144,7 @@ export function DockerfileIcon({ size = 14 }: IconProps) {
     </svg>
   );
 }
-export function EnvIcon({ size = 14 }: IconProps) {
+function EnvIcon({ size = 14 }: IconProps) {
   // file outline + key symbol
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
@@ -155,7 +155,7 @@ export function EnvIcon({ size = 14 }: IconProps) {
     </svg>
   );
 }
-export function GitIcon({ size = 14 }: IconProps) {
+function GitIcon({ size = 14 }: IconProps) {
   // file outline + git branch lines
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
@@ -169,7 +169,7 @@ export function GitIcon({ size = 14 }: IconProps) {
     </svg>
   );
 }
-export function LockFileIcon({ size = 14 }: IconProps) {
+function LockFileIcon({ size = 14 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
       <path d="M2.5 1h6l3 3v9h-9V1Z" stroke={DIM} strokeWidth="0.9" fill={DIM} fillOpacity="0.07" strokeLinejoin="round" />
@@ -179,7 +179,7 @@ export function LockFileIcon({ size = 14 }: IconProps) {
     </svg>
   );
 }
-export function ConfigIcon({ size = 14 }: IconProps) {
+function ConfigIcon({ size = 14 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
       <path d="M2.5 1h6l3 3v9h-9V1Z" stroke={DIM} strokeWidth="0.9" fill={DIM} fillOpacity="0.07" strokeLinejoin="round" />

@@ -2,6 +2,12 @@ import { app, Menu, Tray, BrowserWindow, nativeImage } from "electron";
 import { setQuitting } from "./main";
 import { getAppIconPath } from "./app-icon";
 
+const FALLBACK_ICON_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAFElEQVQ4y2N" +
+    "kwAT/GYYBYwYDAKLuAf8LSXNHAAAAABJRU5ErkJggg==",
+  "base64"
+);
+
 export function createTray(mainWindow: BrowserWindow): Tray {
   const iconPath = getAppIconPath(app.getAppPath());
 
@@ -10,22 +16,10 @@ export function createTray(mainWindow: BrowserWindow): Tray {
     icon = nativeImage.createFromPath(iconPath);
     if (icon.isEmpty()) {
       // Fallback: create a minimal 16x16 transparent PNG
-      icon = nativeImage.createFromBuffer(
-        Buffer.from(
-          "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAFElEQVQ4y2N" +
-            "kwAT/GYYBYwYDAKLuAf8LSXNHAAAAABJRU5ErkJggg==",
-          "base64"
-        )
-      );
+      icon = nativeImage.createFromBuffer(FALLBACK_ICON_PNG);
     }
   } catch {
-    icon = nativeImage.createFromBuffer(
-      Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAFElEQVQ4y2N" +
-          "kwAT/GYYBYwYDAKLuAf8LSXNHAAAAABJRU5ErkJggg==",
-          "base64"
-      )
-    );
+    icon = nativeImage.createFromBuffer(FALLBACK_ICON_PNG);
   }
 
   const tray = new Tray(icon);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
 import { getSessionOnlyTrustMap, startRpcSession } from "@/lib/rpc-manager";
-import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 import { validateAgentCwd } from "@/lib/path-policy";
 import { validateAgentCommand } from "@/lib/agent-commands";
 import { evaluateProjectTrust } from "@/lib/project-trust-desktop";
@@ -17,10 +17,10 @@ export async function POST(req: Request) {
     const { cwd, ...command } = body;
 
     if (!cwd || typeof cwd !== "string") {
-      return NextResponse.json({ error: "cwd is required" }, { status: 400, headers: { "x-request-id": requestId } });
+      return jsonError(req, 400, "cwd is required");
     }
     if (!existsSync(cwd)) {
-      return NextResponse.json({ error: `Directory does not exist: ${cwd}` }, { status: 400, headers: { "x-request-id": requestId } });
+      return jsonError(req, 400, `Directory does not exist: ${cwd}`);
     }
 
     // Reject dangerous cwd values (filesystem root, user home, system dirs)
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     // /api/files requests read/write anywhere on disk.
     const cwdError = validateAgentCwd(cwd);
     if (cwdError) {
-      return NextResponse.json({ error: cwdError }, { status: 400, headers: { "x-request-id": requestId } });
+      return jsonError(req, 400, cwdError);
     }
 
     const trustGate = evaluateProjectTrust(cwd, { sessionOnlyTrust: getSessionOnlyTrustMap() });
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     // unnecessarily consuming session resources.
     const cmdError = validateAgentCommand(promptCommand);
     if (cmdError) {
-      return NextResponse.json({ error: cmdError }, { status: 400, headers: { "x-request-id": requestId } });
+      return jsonError(req, 400, cmdError);
     }
 
     const tempKey = `__new__${Date.now()}__${Math.random().toString(36).slice(2, 8)}`;
@@ -86,9 +86,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, sessionId: realSessionId, data: result });
   } catch (error) {
     logApiError({ route: "/api/agent/new", method: "POST", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }

@@ -10,8 +10,6 @@ import { ExtensionUiDialog } from "./ExtensionUiDialog";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { ExecutePlanBar } from "./ExecutePlanBar";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
-import { ExtensionsConfigModal } from "./ExtensionsConfigModal";
-import { SessionExportModal } from "./SessionExportModal";
 import { BranchCloneModal, type BranchCloneMode } from "./BranchCloneModal";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useAudio } from "@/hooks/useAudio";
@@ -77,8 +75,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     onAgentEndEvent: handleAgentEndEvent,
   });
 
-  const [extensionsModalOpen, setExtensionsModalOpen] = useState(false);
-  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [branchCloneModal, setBranchCloneModal] = useState<{
     isOpen: boolean;
     mode: BranchCloneMode;
@@ -368,17 +364,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       </div>
       </>
       )}
-      {/* Modals mounted inside ChatWindow */}
-      <ExtensionsConfigModal
-        isOpen={extensionsModalOpen}
-        onClose={() => setExtensionsModalOpen(false)}
-        cwd={session?.cwd ?? newSessionCwd ?? undefined}
-      />
-      <SessionExportModal
-        isOpen={exportModalOpen}
-        onClose={() => setExportModalOpen(false)}
-        sessionId={session?.id ?? null}
-      />
       <BranchCloneModal
         isOpen={branchCloneModal.isOpen}
         onClose={() => setBranchCloneModal((prev) => ({ ...prev, isOpen: false }))}
