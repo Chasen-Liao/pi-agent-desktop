@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { AgentMemoryRestBackend } from "./agentmemory-backend.ts";
 import {
   defaultLtmConfig,
   getLtmConfig,
@@ -15,7 +14,6 @@ import {
   MemoryService,
   resetMemoryServiceForTests,
 } from "./service.ts";
-import { LTM_STATS_NOT_SUPPORTED } from "./http.ts";
 import { projectIdFromCwd } from "./project-id.ts";
 
 function withTempAgentDir(
@@ -31,11 +29,9 @@ function withTempAgentDir(
 test("defaultLtmConfig uses agentDir/memory/ltm.sqlite", () => {
   const cfg = defaultLtmConfig("/tmp/agent");
   assert.equal(cfg.enabled, true);
-  assert.equal(cfg.backend, "sqlite");
   assert.equal(cfg.dbPath, join("/tmp/agent", "memory", "ltm.sqlite"));
   assert.equal(cfg.observeAgentEnd, true);
   assert.equal(cfg.observePreCompact, true);
-  assert.equal(cfg.agentmemoryUrl, "http://127.0.0.1:3111");
 });
 
 test("getLtmConfig merges desktop-settings nested ltm", async () => {
@@ -47,19 +43,15 @@ test("getLtmConfig merges desktop-settings nested ltm", async () => {
         defaultToolPreset: "default",
         ltm: {
           enabled: false,
-          backend: "sqlite",
           observePreCompact: false,
-          agentmemoryUrl: "http://127.0.0.1:4000",
         },
       }),
       "utf-8"
     );
     const cfg = getLtmConfig(agentDir);
     assert.equal(cfg.enabled, false);
-    assert.equal(cfg.backend, "sqlite");
     assert.equal(cfg.observePreCompact, false);
     assert.equal(cfg.observeAgentEnd, true);
-    assert.equal(cfg.agentmemoryUrl, "http://127.0.0.1:4000");
     assert.equal(cfg.dbPath, join(agentDir, "memory", "ltm.sqlite"));
   });
 });
@@ -177,66 +169,6 @@ test("observeFromCwd persists when enabled", async () => {
   });
 });
 
-test("AgentMemoryRestBackend health is not_implemented; methods throw", async () => {
-  const backend = new AgentMemoryRestBackend("http://127.0.0.1:3111");
-  const health = await backend.health();
-  assert.equal(health.ok, false);
-  assert.equal(health.backend, "agentmemory");
-  assert.equal(health.detail, "not_implemented");
-
-  await assert.rejects(
-    () =>
-      backend.remember({
-        projectId: "proj_x",
-        content: "hi",
-      }),
-    /not implemented in v1/
-  );
-  await assert.rejects(
-    () => backend.recall({ projectId: "proj_x", query: "hi" }),
-    /not implemented/
-  );
-});
-
-test("MemoryService with agentmemory backend health + throw", async () => {
-  await withTempAgentDir(async (agentDir) => {
-    const cfg = mergeLtmConfig(agentDir, { backend: "agentmemory" });
-    const svc = MemoryService.create(cfg);
-    try {
-      const health = await svc.health();
-      assert.equal(health.ok, false);
-      assert.equal(health.detail, "not_implemented");
-      await assert.rejects(
-        () =>
-          svc.rememberFromCwd(agentDir, {
-            content: "x",
-          }),
-        /not implemented/
-      );
-    } finally {
-      await svc.close();
-    }
-  });
-});
-
-test("statsFromCwd on agentmemory backend throws structured not-supported (LTM-7)", async () => {
-  await withTempAgentDir(async (agentDir) => {
-    const cfg = mergeLtmConfig(agentDir, { backend: "agentmemory" });
-    const svc = MemoryService.create(cfg);
-    try {
-      await assert.rejects(
-        () => svc.statsFromCwd(agentDir),
-        (err: unknown) => {
-          assert.ok(err instanceof Error);
-          assert.equal(err.message, LTM_STATS_NOT_SUPPORTED);
-          return true;
-        }
-      );
-    } finally {
-      await svc.close();
-    }
-  });
-});
 
 test("getMemoryService singleton reuses same instance for same agentDir", async () => {
   await withTempAgentDir(async (agentDir) => {
@@ -287,12 +219,12 @@ test("getMemoryService rebuilds when observe flags change (LTM-1)", async () => 
         "utf-8"
       );
 
-    writeSettings({ observeAgentEnd: true, agentmemoryUrl: "http://127.0.0.1:3111" });
+    writeSettings({ observeAgentEnd: true });
     const a = getMemoryService(agentDir);
 
     // Runtime toggle of observeAgentEnd must invalidate the cached singleton;
     // otherwise hooks read a stale config and the switch silently no-ops.
-    writeSettings({ observeAgentEnd: false, agentmemoryUrl: "http://127.0.0.1:3111" });
+    writeSettings({ observeAgentEnd: false });
     const b = getMemoryService(agentDir);
 
     assert.notEqual(a, b, "observeAgentEnd change should rebuild the service");
@@ -370,46 +302,6 @@ test("getMemoryService closes the previous instance when construction fails (LTM
     await assert.rejects(
       () => a.rememberFromCwd(join(agentDir, "proj"), { content: "x" })
     );
-  });
-});
-
-test("getMemoryService rebuilds when old join(|) key collides on different dbPaths (P2-1)", async () => {
-  await withTempAgentDir(async (agentDir) => {
-    resetMemoryServiceForTests();
-    const writeSettings = (ltm: Record<string, unknown>) =>
-      writeFileSync(
-        join(agentDir, "desktop-settings.json"),
-        JSON.stringify({ ltm }),
-        "utf-8"
-      );
-
-    // Two different dbPaths that the old join("|") encoding maps to the SAME
-    // key: dbPath ".../mem|true" shifts a boolean token and agentmemoryUrl
-    // "true|http://..." shifts it back, so the concatenated string is
-    // identical. agentmemory backend never touches disk, so both constructions
-    // succeed on every platform.
-    writeSettings({
-      backend: "agentmemory",
-      dbPath: join(agentDir, "mem|true"),
-      enabled: true,
-      agentmemoryUrl: "http://127.0.0.1:3111",
-    });
-    const a = getMemoryService(agentDir);
-
-    writeSettings({
-      backend: "agentmemory",
-      dbPath: join(agentDir, "mem"),
-      enabled: true,
-      agentmemoryUrl: "true|http://127.0.0.1:3111",
-    });
-    const b = getMemoryService(agentDir);
-
-    assert.notEqual(
-      a,
-      b,
-      "different dbPath must rebuild the service despite the old key collision"
-    );
-    assert.equal(b.getConfig().dbPath, join(agentDir, "mem"));
   });
 });
 

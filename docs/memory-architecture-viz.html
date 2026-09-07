@@ -132,7 +132,7 @@
 
   <header>
     <h1>Pi Agent · 记忆架构</h1>
-    <p class="lede">会话级 JSONL 流水账 + 项目级 SQLite 长期记忆，两层互补。LTM 是可插拔后端，经
+    <p class="lede">会话级 JSONL 流水账 + 项目级 SQLite 长期记忆，两层互补。LTM 经
       <code>MemoryService</code> 门面对外统一暴露（工具 / HTTP API / 自动观察），best-effort 不阻塞对话。</p>
     <div class="legend">
       <div class="item"><span class="swatch t1"></span> L1 会话 JSONL（episodic）</div>
@@ -161,7 +161,7 @@
   <!-- 02 LTM 分层 -->
   <section>
     <h2>02 · LTM 内部分层</h2>
-    <p class="sec-sub">所有入口只调用 MemoryService，绝不直接碰 SQL 或具体后端——这是未来切换 agentmemory 的干净接缝。</p>
+    <p class="sec-sub">所有入口只调用 MemoryService，绝不直接碰 SQL；启用与禁用统一由服务门面处理。</p>
     <div class="panel">
       <div class="flow">
         <div class="layer b2 t2">
@@ -175,17 +175,17 @@
         </div>
         <div class="arrow"></div>
         <div class="layer b3 t3">
-          <div class="name">MemoryBackend <span class="dot-s3">●</span> 可插拔接口</div>
-          <div class="desc">remember / recall / observe / forget / health；实现可替换</div>
+          <div class="name">MemoryBackend <span class="dot-s3">●</span> 统一接口</div>
+          <div class="desc">remember / recall / observe / forget / health；由启用态 SQLite 或禁用态 NoopMemoryBackend 实现</div>
         </div>
         <div class="duo" style="margin-top:12px">
           <div class="layer b3 t3">
-            <div class="name">SqliteBackend <span class="badge">当前默认</span></div>
+            <div class="name">SqliteBackend <span class="badge">启用</span></div>
             <div class="desc">node:sqlite · FTS5 · WAL + busy_timeout · 事务原子 · 60s 去重</div>
           </div>
           <div class="layer b3 t3">
-            <div class="name">AgentMemoryRestBackend <span class="badge">stub</span></div>
-            <div class="desc">连 agentmemory 服务器；v1 未实现，health 报 not_implemented</div>
+            <div class="name">NoopMemoryBackend <span class="badge">禁用</span></div>
+            <div class="desc">LTM 禁用时使用；不访问磁盘，observe 静默返回去重结果</div>
           </div>
         </div>
         <div class="arrow"></div>
@@ -283,7 +283,7 @@
       </div>
       <div class="card">
         <h3><span class="swatch t4" style="border-radius:3px"></span> config 热更新</h3>
-        <p>serviceKey 覆盖全部 6 个配置字段（JSON 编码），改 observe 开关 / agentmemoryUrl 即重建单例。</p>
+        <p>serviceKey 覆盖 dbPath、enabled 与 observe 开关（JSON 编码），配置变化即重建单例。</p>
       </div>
       <div class="card">
         <h3><span class="swatch t4" style="border-radius:3px"></span> 权限语义</h3>
@@ -302,11 +302,9 @@
           <thead><tr><th>键</th><th>默认</th></tr></thead>
           <tbody>
             <tr><td><code>enabled</code></td><td><code>true</code></td></tr>
-            <tr><td><code>backend</code></td><td><code>sqlite</code></td></tr>
             <tr><td><code>dbPath</code></td><td><code>~/.pi/agent/memory/ltm.sqlite</code></td></tr>
             <tr><td><code>observeAgentEnd</code></td><td><code>true</code></td></tr>
             <tr><td><code>observePreCompact</code></td><td><code>true</code></td></tr>
-            <tr><td><code>agentmemoryUrl</code></td><td><code>http://127.0.0.1:3111</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -319,7 +317,7 @@
             <tr><td><code>GET /api/memory/recall</code></td><td><code>cwd&q&limit</code> → hits</td></tr>
             <tr><td><code>POST /api/memory/remember</code></td><td><code>cwd,content,type…</code> → id</td></tr>
             <tr><td><code>POST /api/memory/forget</code></td><td>memoryIds / observationIds</td></tr>
-            <tr><td><code>GET /api/memory/stats</code></td><td>counts（调试）；agentmemory 下 501</td></tr>
+            <tr><td><code>GET /api/memory/stats</code></td><td>counts（调试）</td></tr>
           </tbody>
         </table>
         <p style="font-size:12px;color:var(--ink-3);margin:8px 0 0">disabled → 503 <code>ltm_disabled</code>；缺参 → 400。</p>
@@ -337,7 +335,7 @@
       </div>
       <div class="layer b4 t4">
         <div class="name">v1 明确非目标</div>
-        <div class="desc">无向量检索、无自动上下文注入、无记忆管理 UI、不依赖常驻 agentmemory 进程、不把 JSONL 当 LTM 源。</div>
+        <div class="desc">无向量检索、无自动上下文注入、无记忆管理 UI、不把 JSONL 当 LTM 源。</div>
       </div>
     </div>
   </section>

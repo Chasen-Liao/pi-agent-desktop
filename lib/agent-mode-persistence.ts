@@ -1,15 +1,8 @@
-import type { CustomEntry, SessionEntry } from "./types.ts";
-
-export type AgentMode = "plan" | "ask" | "full";
+import { isAgentMode, type AgentMode } from "./approval-policy.ts";
+import type { SessionEntry } from "./types.ts";
 
 export interface AgentModeCustomData {
   mode: AgentMode;
-}
-
-const VALID_MODES: AgentMode[] = ["plan", "ask", "full"];
-
-export function isValidAgentMode(mode: unknown): mode is AgentMode {
-  return typeof mode === "string" && (VALID_MODES as string[]).includes(mode);
 }
 
 export function findLastAgentMode(entries: SessionEntry[]): AgentMode | undefined {
@@ -19,29 +12,11 @@ export function findLastAgentMode(entries: SessionEntry[]): AgentMode | undefine
     const entry = entries[i];
     if (entry && entry.type === "custom" && entry.customType === "desktop_agent_mode") {
       const data = entry.data as AgentModeCustomData | undefined;
-      if (data && isValidAgentMode(data.mode)) {
+      if (data && isAgentMode(data.mode)) {
         return data.mode;
       }
     }
   }
 
   return undefined;
-}
-
-export function createAgentModeCustomEntry(
-  mode: AgentMode,
-  parentId: string | null = null
-): CustomEntry {
-  if (!isValidAgentMode(mode)) {
-    throw new Error(`Invalid agent mode: ${String(mode)}`);
-  }
-
-  return {
-    type: "custom",
-    customType: "desktop_agent_mode",
-    id: crypto.randomUUID(),
-    parentId,
-    timestamp: new Date().toISOString(),
-    data: { mode },
-  };
 }

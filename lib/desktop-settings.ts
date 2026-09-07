@@ -16,11 +16,9 @@ import {
 /** Optional nested LTM overrides in desktop-settings.json (`ltm`). */
 export interface DesktopLtmSettings {
   enabled?: boolean;
-  backend?: "sqlite" | "agentmemory";
   dbPath?: string;
   observeAgentEnd?: boolean;
   observePreCompact?: boolean;
-  agentmemoryUrl?: string;
 }
 
 export interface DesktopSettings {
@@ -30,7 +28,7 @@ export interface DesktopSettings {
   ltm?: DesktopLtmSettings;
 }
 
-export const DESKTOP_SETTINGS_FILENAME = "desktop-settings.json";
+const DESKTOP_SETTINGS_FILENAME = "desktop-settings.json";
 
 export function defaultDesktopSettings(): DesktopSettings {
   return {
@@ -39,7 +37,7 @@ export function defaultDesktopSettings(): DesktopSettings {
   };
 }
 
-export function desktopSettingsPath(agentDir: string): string {
+function desktopSettingsPath(agentDir: string): string {
   return join(agentDir, DESKTOP_SETTINGS_FILENAME);
 }
 
@@ -48,11 +46,9 @@ function mergeDesktopLtmSettings(raw: unknown): DesktopLtmSettings | undefined {
   const o = raw as Record<string, unknown>;
   const out: DesktopLtmSettings = {};
   if (typeof o.enabled === "boolean") out.enabled = o.enabled;
-  if (o.backend === "sqlite" || o.backend === "agentmemory") out.backend = o.backend;
   if (typeof o.dbPath === "string") out.dbPath = o.dbPath;
   if (typeof o.observeAgentEnd === "boolean") out.observeAgentEnd = o.observeAgentEnd;
   if (typeof o.observePreCompact === "boolean") out.observePreCompact = o.observePreCompact;
-  if (typeof o.agentmemoryUrl === "string") out.agentmemoryUrl = o.agentmemoryUrl;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -110,13 +106,6 @@ export function validateDesktopSettingsBody(body: unknown): string | null {
     if (ltm.enabled !== undefined && typeof ltm.enabled !== "boolean") {
       return "ltm.enabled must be a boolean";
     }
-    if (
-      ltm.backend !== undefined &&
-      ltm.backend !== "sqlite" &&
-      ltm.backend !== "agentmemory"
-    ) {
-      return "ltm.backend must be sqlite | agentmemory";
-    }
     if (ltm.dbPath !== undefined && typeof ltm.dbPath !== "string") {
       return "ltm.dbPath must be a string";
     }
@@ -128,9 +117,6 @@ export function validateDesktopSettingsBody(body: unknown): string | null {
       typeof ltm.observePreCompact !== "boolean"
     ) {
       return "ltm.observePreCompact must be a boolean";
-    }
-    if (ltm.agentmemoryUrl !== undefined && typeof ltm.agentmemoryUrl !== "string") {
-      return "ltm.agentmemoryUrl must be a string";
     }
   }
   return null;

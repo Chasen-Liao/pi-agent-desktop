@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server.js";
-import { errorMessage, getRequestId, logApiError } from "../../../lib/api-error.ts";
+import { errorMessage, getRequestId, jsonError, logApiError } from "../../../lib/api-error.ts";
 import { getMcpServers, removeMcpServer, saveMcpServer, type McpServerConfig } from "../../../lib/mcp-config.ts";
 
 export const dynamic = "force-dynamic";
@@ -13,10 +13,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ servers }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     logApiError({ route: "/api/mcp", method: "GET", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }
 
@@ -30,16 +27,10 @@ export async function POST(req: Request) {
     };
     const { scope, cwd, server } = body ?? {};
     if (!scope || (scope !== "global" && scope !== "project")) {
-      return NextResponse.json(
-        { error: "scope must be 'global' or 'project'" },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, "scope must be 'global' or 'project'");
     }
     if (!server || typeof server !== "object" || !server.id || typeof server.id !== "string") {
-      return NextResponse.json(
-        { error: "server configuration with valid id is required" },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, "server configuration with valid id is required");
     }
 
     const saved = saveMcpServer(scope, server, cwd);
@@ -49,10 +40,7 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     logApiError({ route: "/api/mcp", method: "POST", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }
 
@@ -66,16 +54,10 @@ export async function DELETE(req: Request) {
     };
     const { id, scope, cwd } = body ?? {};
     if (!id || typeof id !== "string") {
-      return NextResponse.json(
-        { error: "id is required" },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, "id is required");
     }
     if (!scope || (scope !== "global" && scope !== "project")) {
-      return NextResponse.json(
-        { error: "scope must be 'global' or 'project'" },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, "scope must be 'global' or 'project'");
     }
 
     const success = removeMcpServer(scope, id, cwd);
@@ -89,9 +71,6 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ success: true }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     logApiError({ route: "/api/mcp", method: "DELETE", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }

@@ -7,21 +7,18 @@ const mcpSource = readFileSync(join(process.cwd(), "components/McpConfigModal.ts
 const exportSource = readFileSync(join(process.cwd(), "components/SessionExportModal.tsx"), "utf8");
 const extSource = readFileSync(join(process.cwd(), "components/ExtensionsConfigModal.tsx"), "utf8");
 const branchCloneSource = readFileSync(join(process.cwd(), "components/BranchCloneModal.tsx"), "utf8");
+const modalSurfaceSource = readFileSync(join(process.cwd(), "components/ModalSurface.tsx"), "utf8");
 
-test("McpConfigModal exports McpConfigModal and McpConfigContent and tests connection via POST /api/mcp/test", () => {
-  assert.match(mcpSource, /export function McpConfigModal/);
+test("McpConfigContent tests connection via POST /api/mcp/test", () => {
   assert.match(mcpSource, /export function McpConfigContent/);
   assert.match(mcpSource, /fetch\("\/api\/mcp\/test"/);
-  assert.match(mcpSource, /fetch\("\/api\/mcp\/toggle"/);
-  assert.match(mcpSource, /role="dialog"/);
-  assert.match(mcpSource, /aria-modal="true"/);
+  assert.match(mcpSource, /apiJson\("\/api\/mcp\/toggle"/);
 });
 
 test("SessionExportModal exports SessionExportModal and calls export API with download flag", () => {
   assert.match(exportSource, /export function SessionExportModal/);
   assert.match(exportSource, /\/api\/sessions\/.*\/export\?format=.*&download=true/);
-  assert.match(exportSource, /role="dialog"/);
-  assert.match(exportSource, /aria-modal="true"/);
+  assert.match(exportSource, /<ModalSurface/);
 });
 
 test("ExtensionsConfigModal exports ExtensionsConfigModal and integrates McpConfigContent and extension/skill tabs", () => {
@@ -31,9 +28,10 @@ test("ExtensionsConfigModal exports ExtensionsConfigModal and integrates McpConf
   assert.match(extSource, /t\("extension\.extensions"\)/);
   assert.match(extSource, /t\("extension\.skills"\)/);
   assert.match(extSource, /t\("extension\.diagnostics"\)/);
-  assert.match(extSource, /fetch\("\/api\/extensions"/);
-  assert.match(extSource, /role="dialog"/);
-  assert.match(extSource, /aria-modal="true"/);
+  assert.match(extSource, /apiJson\(\s*["']\/api\/extensions["']/);
+  assert.match(extSource, /<ModalSurface/);
+  assert.match(extSource, /panelClassName=/);
+  assert.match(extSource, /max-w-4xl/);
 });
 
 test("BranchCloneModal exports BranchCloneModal supporting branch and clone operations", () => {
@@ -41,6 +39,17 @@ test("BranchCloneModal exports BranchCloneModal supporting branch and clone oper
   assert.match(branchCloneSource, /\/api\/sessions\/.*\/branch/);
   assert.match(branchCloneSource, /\/api\/sessions\/.*\/clone/);
   assert.match(branchCloneSource, /targetEntryId/);
-  assert.match(branchCloneSource, /role="dialog"/);
-  assert.match(branchCloneSource, /aria-modal="true"/);
+  assert.match(branchCloneSource, /<ModalSurface/);
+  assert.match(branchCloneSource, /panelClassName=/);
+  assert.match(branchCloneSource, /max-w-md/);
+});
+
+test("ModalSurface provides the shared dialog semantics", () => {
+  assert.match(modalSurfaceSource, /role="dialog"/);
+  assert.match(modalSurfaceSource, /aria-modal="true"/);
+  assert.match(modalSurfaceSource, /aria-labelledby=\{ariaLabelledBy\}/);
+  // Shared shell contract lives here, not per-site: sites using the default
+  // backdrop/panel must not re-declare these strings.
+  assert.match(modalSurfaceSource, /ui-dialog-backdrop/);
+  assert.match(modalSurfaceSource, /t-modal is-open ui-dialog-surface/);
 });

@@ -5,7 +5,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { resolveSessionPath, getSessionEntriesAsync } from "../../../../../lib/session-reader.ts";
 import { exportSessionToHtml, formatEntriesToMarkdown } from "../../../../../lib/session-export.ts";
-import { errorMessage, getRequestId, logApiError } from "../../../../../lib/api-error.ts";
+import { errorMessage, getRequestId, jsonError, logApiError } from "../../../../../lib/api-error.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +18,7 @@ export async function GET(
   try {
     const sessionFile = await resolveSessionPath(id);
     if (!sessionFile || !existsSync(sessionFile)) {
-      return NextResponse.json(
-        { error: "Session not found" },
-        { status: 404, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 404, "Session not found");
     }
 
     const url = new URL(req.url);
@@ -31,10 +28,7 @@ export async function GET(
     const theme = url.searchParams.get("theme") || undefined;
 
     if (format !== "html" && format !== "markdown") {
-      return NextResponse.json(
-        { error: "Invalid export format. Must be 'html' or 'markdown'." },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, "Invalid export format. Must be 'html' or 'markdown'.");
     }
 
     if (format === "html") {
@@ -77,9 +71,6 @@ export async function GET(
     }
   } catch (error) {
     logApiError({ route: `/api/sessions/${id}/export`, method: "GET", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }

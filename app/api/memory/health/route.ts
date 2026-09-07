@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 import { getMemoryService } from "@/lib/ltm/service";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +19,6 @@ export async function GET(req: Request) {
     );
   } catch (error) {
     logApiError({ route: "/api/memory/health", method: "GET", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }

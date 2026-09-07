@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server.js";
-import { errorMessage, getRequestId, logApiError } from "../../../../lib/api-error.ts";
+import { errorMessage, getRequestId, jsonError, logApiError } from "../../../../lib/api-error.ts";
 import { toggleMcpServer } from "../../../../lib/mcp-config.ts";
 
 export const dynamic = "force-dynamic";
@@ -15,22 +15,13 @@ export async function POST(req: Request) {
     };
     const { id, scope, disabled, cwd } = body ?? {};
     if (!id || typeof id !== "string") {
-      return NextResponse.json(
-        { error: "id is required" },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, "id is required");
     }
     if (!scope || (scope !== "global" && scope !== "project")) {
-      return NextResponse.json(
-        { error: "scope must be 'global' or 'project'" },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, "scope must be 'global' or 'project'");
     }
     if (typeof disabled !== "boolean") {
-      return NextResponse.json(
-        { error: "disabled must be a boolean" },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, "disabled must be a boolean");
     }
 
     const success = toggleMcpServer(scope, id, disabled, cwd);
@@ -44,9 +35,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     logApiError({ route: "/api/mcp/toggle", method: "POST", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }

@@ -73,12 +73,13 @@ export function useChatScroll({
     }
   }, [streamingMessage, messageCount, agentRunning, scrollToBottom]);
 
-  // When agent settles, smooth scroll to bottom if at bottom
+  // When the agent settles or the transcript changes while at the bottom,
+  // smoothly follow the new context without interrupting manual history review.
   useEffect(() => {
     if (!agentRunning && initialScrollDoneRef.current && isAtBottomRef.current) {
       scrollToBottom("smooth");
     }
-  }, [agentRunning, scrollToBottom]);
+  }, [agentRunning, messageCount, scrollToBottom]);
 
   return {
     messagesEndRef,

@@ -15,6 +15,7 @@ import { QueuedMessageList } from "./chat-input/QueuedMessageList";
 import type { AgentMode } from "@/lib/approval-policy";
 import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
 import { useI18n } from "./I18nProvider";
+import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 
 interface Props {
   onSend: (message: string, images?: AttachedImage[]) => void;
@@ -353,27 +354,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [isStreaming]);
 
   // Close composer popovers on outside click or Escape.
-  useEffect(() => {
-    const handlePointerDown = (e: MouseEvent) => {
-      if (thinkingDropdownRef.current && !thinkingDropdownRef.current.contains(e.target as Node)) {
-        setThinkingDropdownOpen(false);
-      }
-      if (secondaryControlsRef.current && !secondaryControlsRef.current.contains(e.target as Node)) {
-        setSecondaryControlsOpen(false);
-      }
-    };
-    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setThinkingDropdownOpen(false);
-      setSecondaryControlsOpen(false);
-    };
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
+  useDismissOnOutsideClick(thinkingDropdownRef, thinkingDropdownOpen, () => setThinkingDropdownOpen(false));
+  useDismissOnOutsideClick(secondaryControlsRef, secondaryControlsOpen, () => setSecondaryControlsOpen(false));
 
   return (
     <div

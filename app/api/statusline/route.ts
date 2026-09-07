@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { isPathAllowedAsync } from "@/lib/allowed-roots";
+import { jsonError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 4000;
 
-export interface StatuslineResponse {
+interface StatuslineResponse {
   cwd: string;
   isRepo: boolean;
   branch?: string;
@@ -130,12 +131,12 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const cwd = searchParams.get("cwd");
   if (!cwd) {
-    return NextResponse.json({ error: "cwd required" }, { status: 400 });
+    return jsonError(req, 400, "cwd required");
   }
 
   const cwdAllowed = await isPathAllowedAsync(cwd);
   if (!cwdAllowed) {
-    return NextResponse.json({ error: "cwd not in allowed roots" }, { status: 403 });
+    return jsonError(req, 403, "cwd not in allowed roots");
   }
 
   try {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 import { getAllowedRoots, isPathAllowed, isWindowsAbsolutePath, normalizeSlashes } from "@/lib/allowed-roots";
 import { validateWritablePath } from "@/lib/path-policy";
 import {
@@ -140,28 +140,28 @@ export async function GET(
     try {
       realPath = await resolveAuthorizedPath(filePath, allowedRoots);
     } catch {
-      return NextResponse.json({ error: "Access denied" }, { status: 403, headers: { "x-request-id": requestId } });
+      return jsonError(request, 403, "Access denied");
     }
 
     let stat: fs.Stats;
     try {
       stat = await fs.promises.lstat(realPath);
     } catch {
-      return NextResponse.json({ error: "Not found" }, { status: 404, headers: { "x-request-id": requestId } });
+      return jsonError(request, 404, "Not found");
     }
 
     if (stat.isSymbolicLink()) {
-      return NextResponse.json({ error: "Symlinks are not accessible" }, { status: 403, headers: { "x-request-id": requestId } });
+      return jsonError(request, 403, "Symlinks are not accessible");
     }
 
     if (type === "read") {
       if (!stat.isFile()) {
-        return NextResponse.json({ error: "Not a file" }, { status: 400, headers: { "x-request-id": requestId } });
+        return jsonError(request, 400, "Not a file");
       }
       const imageMime = getImageMime(realPath);
       if (imageMime) {
         if (stat.size > IMAGE_PREVIEW_MAX_BYTES) {
-          return NextResponse.json({ error: "Image too large (>10MB)" }, { status: 413, headers: { "x-request-id": requestId } });
+          return jsonError(request, 413, "Image too large (>10MB)");
         }
         return streamFile(realPath, stat, imageMime, request.headers.get("range"));
       }
@@ -170,7 +170,7 @@ export async function GET(
         return streamFile(realPath, stat, audioMime, request.headers.get("range"));
       }
       if (stat.size > TEXT_PREVIEW_MAX_BYTES) {
-        return NextResponse.json({ error: "File too large for preview (>256KB)" }, { status: 413, headers: { "x-request-id": requestId } });
+        return jsonError(request, 413, "File too large for preview (>256KB)");
       }
       const content = await fs.promises.readFile(realPath, "utf-8");
       const language = getLanguage(realPath);
@@ -179,7 +179,7 @@ export async function GET(
 
     if (type === "watch") {
       if (!stat.isFile()) {
-        return NextResponse.json({ error: "Not a file" }, { status: 400, headers: { "x-request-id": requestId } });
+        return jsonError(request, 400, "Not a file");
       }
       let watcher: fs.FSWatcher | null = null;
       const stream = new ReadableStream({
@@ -228,7 +228,7 @@ export async function GET(
 
     // type === "list"
     if (!stat.isDirectory()) {
-      return NextResponse.json({ error: "Not a directory" }, { status: 400, headers: { "x-request-id": requestId } });
+      return jsonError(request, 400, "Not a directory");
     }
 
     const names = await fs.promises.readdir(realPath);
@@ -262,10 +262,7 @@ export async function GET(
     return NextResponse.json({ entries, path: realPath, truncated });
   } catch (error) {
     logApiError({ route: "/api/files/[...path]", method: "GET", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(request, 500, errorMessage(error));
   }
 }
 
@@ -286,7 +283,7 @@ export async function PUT(
     try {
       realPath = await resolveAuthorizedPath(filePath, allowedRoots);
     } catch {
-      return NextResponse.json({ error: "Access denied" }, { status: 403, headers: { "x-request-id": requestId } });
+      return jsonError(request, 403, "Access denied");
     }
 
     // Reject writes to version-control metadata, node_modules internals, and
@@ -295,35 +292,32 @@ export async function PUT(
     // .git/config to establish persistence. (GET intentionally not restricted.)
     const writeError = validateWritablePath(realPath);
     if (writeError) {
-      return NextResponse.json({ error: writeError }, { status: 403, headers: { "x-request-id": requestId } });
+      return jsonError(request, 403, writeError);
     }
 
     let stat: fs.Stats;
     try {
       stat = await fs.promises.lstat(realPath);
     } catch {
-      return NextResponse.json({ error: "Not found" }, { status: 404, headers: { "x-request-id": requestId } });
+      return jsonError(request, 404, "Not found");
     }
 
     if (stat.isSymbolicLink()) {
-      return NextResponse.json({ error: "Symlink targets are not writable" }, { status: 403, headers: { "x-request-id": requestId } });
+      return jsonError(request, 403, "Symlink targets are not writable");
     }
 
     if (!stat.isFile()) {
-      return NextResponse.json({ error: "Not a file" }, { status: 400, headers: { "x-request-id": requestId } });
+      return jsonError(request, 400, "Not a file");
     }
 
     const body = await request.json() as { content?: string };
     if (typeof body.content !== "string") {
-      return NextResponse.json({ error: "content required" }, { status: 400, headers: { "x-request-id": requestId } });
+      return jsonError(request, 400, "content required");
     }
 
     const contentBytes = Buffer.byteLength(body.content, "utf-8");
     if (contentBytes > TEXT_WRITE_MAX_BYTES) {
-      return NextResponse.json(
-        { error: `File too large (>${TEXT_WRITE_MAX_BYTES / 1024}KB)` },
-        { status: 413, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(request, 413, `File too large (>${TEXT_WRITE_MAX_BYTES / 1024}KB)`);
     }
 
     await fs.promises.writeFile(realPath, body.content, "utf-8");
@@ -332,9 +326,6 @@ export async function PUT(
     return NextResponse.json({ success: true, size: newStat.size });
   } catch (error) {
     logApiError({ route: "/api/files/[...path]", method: "PUT", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(request, 500, errorMessage(error));
   }
 }

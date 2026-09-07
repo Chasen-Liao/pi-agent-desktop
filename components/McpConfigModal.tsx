@@ -3,12 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { McpServerStatus, McpServerConfig } from "@/lib/mcp-config";
 import { useI18n } from "./I18nProvider";
-
-export interface McpConfigModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  cwd?: string;
-}
+import { apiJson } from "./apiJson";
 
 export interface McpConfigContentProps {
   cwd?: string;
@@ -46,9 +41,11 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
     setError(null);
     try {
       const url = cwd ? `/api/mcp?cwd=${encodeURIComponent(cwd)}` : "/api/mcp";
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await apiJson<{ servers?: McpServerStatus[] }>(
+        url,
+        undefined,
+        { fallback: t("mcp.loadFailed") },
+      );
       setServers(data.servers || []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t("mcp.loadFailed"));
@@ -63,7 +60,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
 
   const handleToggle = async (server: McpServerStatus) => {
     try {
-      const res = await fetch("/api/mcp/toggle", {
+      await apiJson("/api/mcp/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -72,8 +69,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
           disabled: !server.disabled,
           cwd,
         }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      }, { fallback: t("mcp.toggleFailed") });
       fetchServers();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t("mcp.toggleFailed"));
@@ -83,7 +79,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
   const handleDelete = async (server: McpServerStatus) => {
     if (!confirm(t("mcp.deleteConfirm", { name: server.name || server.id }))) return;
     try {
-      const res = await fetch("/api/mcp", {
+      await apiJson("/api/mcp", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -91,8 +87,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
           scope: server.scope,
           cwd,
         }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      }, { fallback: t("mcp.deleteFailed") });
       fetchServers();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t("mcp.deleteFailed"));
@@ -242,7 +237,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
     };
 
     try {
-      const res = await fetch("/api/mcp", {
+      await apiJson("/api/mcp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -250,11 +245,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
           cwd,
           server: serverConfig,
         }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${res.status}`);
-      }
+      }, { fallback: t("mcp.saveFailed") });
       setEditingServer(null);
       fetchServers();
     } catch (err: unknown) {
@@ -614,36 +605,6 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
             })}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-export function McpConfigModal({ isOpen, onClose, cwd }: McpConfigModalProps) {
-  const { t } = useI18n();
-  if (!isOpen) return null;
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("mcp.configuration")}
-      className="ui-dialog-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
-    >
-      <div className="t-modal is-open ui-dialog-surface w-full max-w-3xl h-[80vh] max-h-[700px] rounded-[14px] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-divider bg-bg-elevated shrink-0">
-          <span className="font-semibold text-text text-[14px]">{t("mcp.settings")}</span>
-          <button
-            onClick={onClose}
-            aria-label={t("common.close")}
-            className="text-text-muted hover:text-text text-[18px] leading-none px-2 py-1 cursor-pointer"
-          >
-            ✕
-          </button>
-        </div>
-        <div className="flex-1 min-h-0">
-          <McpConfigContent cwd={cwd} />
-        </div>
       </div>
     </div>
   );

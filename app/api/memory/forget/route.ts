@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { errorMessage, getRequestId, logApiError } from "@/lib/api-error";
+import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 import { isLtmDisabledError, LTM_DISABLED, parseForgetBody } from "@/lib/ltm/http";
 import { getMemoryService } from "@/lib/ltm/service";
 
@@ -13,26 +13,17 @@ export async function POST(req: Request) {
     try {
       body = await req.json();
     } catch {
-      return NextResponse.json(
-        { error: "JSON body is required" },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, "JSON body is required");
     }
 
     const parsed = parseForgetBody(body);
     if (!parsed.ok) {
-      return NextResponse.json(
-        { error: parsed.error },
-        { status: 400, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 400, parsed.error);
     }
 
     const service = getMemoryService();
     if (!service.isEnabled()) {
-      return NextResponse.json(
-        { error: LTM_DISABLED },
-        { status: 503, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 503, LTM_DISABLED);
     }
 
     const { cwd, memoryIds, observationIds } = parsed.value;
@@ -43,10 +34,7 @@ export async function POST(req: Request) {
     return NextResponse.json(result, { headers: { "x-request-id": requestId } });
   } catch (error) {
     if (isLtmDisabledError(error)) {
-      return NextResponse.json(
-        { error: LTM_DISABLED },
-        { status: 503, headers: { "x-request-id": requestId } }
-      );
+      return jsonError(req, 503, LTM_DISABLED);
     }
     logApiError({
       route: "/api/memory/forget",
@@ -54,9 +42,6 @@ export async function POST(req: Request) {
       requestId,
       error,
     });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }

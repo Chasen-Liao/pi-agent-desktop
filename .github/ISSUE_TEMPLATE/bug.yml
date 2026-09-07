@@ -6,7 +6,7 @@ body:
     id: version
     attributes:
       label: 版本
-      placeholder: v0.8.5 或 main @ commit
+      placeholder: v0.8.6 或 main @ commit
     validations:
       required: true
   - type: dropdown

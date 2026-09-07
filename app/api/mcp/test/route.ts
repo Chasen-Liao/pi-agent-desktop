@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server.js";
-import { errorMessage, getRequestId, logApiError } from "../../../../lib/api-error.ts";
+import { errorMessage, getRequestId, jsonError, logApiError } from "../../../../lib/api-error.ts";
 import { validateRequestOrigin } from "../../../../lib/auth-policy.ts";
 import { testMcpServerConnection, type TestMcpServerOptions } from "../../../../lib/mcp-config.ts";
 
@@ -9,10 +9,7 @@ export async function POST(req: Request) {
   const requestId = getRequestId(req);
   const originError = validateRequestOrigin(req);
   if (originError) {
-    return NextResponse.json(
-      { error: originError },
-      { status: 403, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 403, originError);
   }
   try {
     const body = (await req.json()) as TestMcpServerOptions;
@@ -27,9 +24,6 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     logApiError({ route: "/api/mcp/test", method: "POST", requestId, error });
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500, headers: { "x-request-id": requestId } }
-    );
+    return jsonError(req, 500, errorMessage(error));
   }
 }

@@ -16,6 +16,7 @@ import { useTheme } from "@/hooks/useTheme";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import { usePanelLayout } from "@/hooks/usePanelLayout";
+import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 import { useFileTabs } from "@/hooks/useFileTabs";
 import { StatsBar } from "./StatsBar";
 import { useI18n } from "./I18nProvider";
@@ -142,25 +143,10 @@ export function AppShell() {
     setActiveTopPanel((cur) => (cur === panel ? null : panel));
   }, []);
 
-  useEffect(() => {
-    const closeShellMenu = (event: PointerEvent) => {
-      if (shellMenuRef.current && !shellMenuRef.current.contains(event.target as Node)) {
-        setShellMenuOpen(false);
-      }
-    };
-    const closeShellMenuWithKeyboard = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || !shellMenuOpen) return;
-      event.preventDefault();
-      setShellMenuOpen(false);
-      shellMenuButtonRef.current?.focus();
-    };
-    document.addEventListener("pointerdown", closeShellMenu);
-    document.addEventListener("keydown", closeShellMenuWithKeyboard);
-    return () => {
-      document.removeEventListener("pointerdown", closeShellMenu);
-      document.removeEventListener("keydown", closeShellMenuWithKeyboard);
-    };
-  }, [shellMenuOpen]);
+  useDismissOnOutsideClick(shellMenuRef, shellMenuOpen, (reason) => {
+    setShellMenuOpen(false);
+    if (reason === "escape") shellMenuButtonRef.current?.focus();
+  });
 
   const updateShellMenuPosition = useCallback(() => {
     const button = shellMenuButtonRef.current;

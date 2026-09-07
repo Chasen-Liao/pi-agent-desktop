@@ -13,15 +13,10 @@ export type ThinkingLevelOption =
   | "xhigh";
 
 export type SessionScopedResetPatch = {
-  clearData: true;
-  clearActiveLeafId: true;
-  clearMessages: true;
-  clearEntryIds: true;
   toolPreset: "default";
   thinkingLevel: "auto";
   agentRunning: false;
   agentPhase: null;
-  streamReset: true;
   retryInfo: null;
   contextUsage: null;
   systemPrompt: null;
@@ -35,15 +30,10 @@ export type SessionScopedResetPatch = {
 /** Values to apply when switching to another session id (bleed prevention). */
 export function sessionScopedResetPatch(): SessionScopedResetPatch {
   return {
-    clearData: true,
-    clearActiveLeafId: true,
-    clearMessages: true,
-    clearEntryIds: true,
     toolPreset: "default",
     thinkingLevel: "auto",
     agentRunning: false,
     agentPhase: null,
-    streamReset: true,
     retryInfo: null,
     contextUsage: null,
     systemPrompt: null,
