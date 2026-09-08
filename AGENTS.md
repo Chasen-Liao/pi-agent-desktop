@@ -45,6 +45,7 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 | 功能 | 路径 |
 | --- | --- |
 | 发送消息 | `POST /api/agent/[id]` → `startRpcSession()` → `AgentSessionWrapper` |
+| 模型 / 认证 | `createPiRuntime()` → `createAgentSessionServices`（含扩展注册的 provider） |
 | 历史浏览 | `GET /api/sessions/*` → `session-reader.ts`（只读，不建 Session） |
 | 会话克隆 | `POST /api/sessions/[id]/clone` → 普通目录或 Git Worktree |
 | SSE 流 | `GET /api/agent/[id]/events`（30s 心跳） |
@@ -98,6 +99,10 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 ### 3. ToolCall 字段归一化
 
 SDK 存 `{id, name, arguments}`，前端用 `{toolCallId, toolName, input}`。`normalizeToolCalls()` 在文件加载和 SSE 流两处都转换。
+
+### 3b. 模型列表不要退回 ModelRuntime.create-only
+
+`createPiRuntime` 必须再走 `createAgentSessionServices`，否则扩展注册的模型从选择器消失。详见 [ARCHITECTURE.md §14.17](docs/ARCHITECTURE.md#1417-模型列表必须走-createagentsessionservices2026-09-08-34)。
 
 ### 4–6. 打包陷阱（摘要）
 
