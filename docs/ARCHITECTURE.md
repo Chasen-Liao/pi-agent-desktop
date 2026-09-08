@@ -3,9 +3,9 @@
 > 本文档是项目的**权威架构参考**，由 CodeGraph 静态分析 + 源码核对生成。
 > 若与 `AGENTS.md` / `CLAUDE.md` 中的简要描述冲突，以本文档为准。
 >
-- **项目**：`@chasen-liao/pi-agent-desktop` v0.8.6
+- **项目**：`@chasen-liao/pi-agent-desktop` v0.8.7
 - **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.84.3 / `@earendil-works/pi-ai` ^0.84.3
-- **更新日期**：2026-09-06
+- **更新日期**：2026-09-08
 
 ---
 
@@ -111,7 +111,7 @@ flowchart TD
         A1[AgentSession]
         A2[SessionManager]
         A3[ModelRegistry]
-        A4[AuthStorage]
+        A4[ModelRuntime]
         A5[DefaultResourceLoader]
     end
 
@@ -143,7 +143,7 @@ flowchart TD
 
 ```text
 pi-agent-desktop/
-├── package.json                  @chasen-liao/pi-agent-desktop v0.8.6
+├── package.json                  @chasen-liao/pi-agent-desktop v0.8.7
 ├── next.config.ts                output:"standalone" + server external packages
 ├── tailwind.config.ts            Tailwind 4 配置
 ├── tsconfig.json                 strict + bundler resolution
@@ -230,6 +230,7 @@ pi-agent-desktop/
 ├── lib/                          服务端 / 共享库
 │   ├── i18n/                     界面文案：en / zh-CN 词典与 locale 解析
 │   ├── rpc-manager.ts            ★ AgentSessionWrapper + 注册表 + startRpcSession
+│   ├── pi-runtime.ts             ★ ModelRuntime + 扩展 provider 绑定（/api/models、/api/auth）
 │   ├── follow-up-queue.ts        可重排 Follow-up Queue 与 revision 并发控制
 │   ├── session-reader.ts         ★ .jsonl 解析 + 路径缓存 + 会话树
 │   ├── approval-policy.ts        Ask 拦截规则与 AgentMode 校验
@@ -605,7 +606,7 @@ components/models-config/     模型配置弹窗的子组件
 
 | 路由 | 方法 | 用途 |
 | --- | --- | --- |
-| `app/api/models/route.ts` | GET | 模型列表 + thinking levels + `defaultModel` |
+| `app/api/models/route.ts` | GET | 经 `createPiRuntime()` 列出内置 + 扩展注册的模型、thinking levels、`defaultModel` |
 | `app/api/models-config/route.ts` | GET / PUT | 读写 `~/.pi/agent/models.json` |
 | `app/api/models-config/test/route.ts` | POST | 测试模型连接 |
 
@@ -614,7 +615,7 @@ components/models-config/     模型配置弹窗的子组件
 | 路由 | 方法 | 用途 |
 | --- | --- | --- |
 | `app/api/auth/providers/route.ts` | GET | 列出已配置的提供商 |
-| `app/api/auth/all-providers/route.ts` | GET | 列出所有支持的提供商 |
+| `app/api/auth/all-providers/route.ts` | GET | 列出所有支持的提供商（含扩展注册） |
 | `app/api/auth/login/[provider]/route.ts` | GET / POST | OAuth 登录 |
 | `app/api/auth/logout/[provider]/route.ts` | POST | 登出 |
 | `app/api/auth/api-key/[provider]/route.ts` | GET / POST / DELETE | API Key 状态查询 / 保存 / 删除 |
@@ -884,6 +885,12 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 
 边界与残余风险：`error.tsx` 不包裹根 layout（Next 约定需 `global-error.tsx`，根 layout 为静态、风险低，暂未加）；上游 pi-ai 0.84.3 的 O(n²) reasoning_details 冻结（上游 issue #8648）症状是“卡住”非白屏，待上游发修复版升级。
 
+### 14.17 模型列表必须走 createAgentSessionServices（2026-09-08，#34）
+
+桌面端是本地 Pi Agent 的界面，不是另做一套模型发现。`createPiRuntime`（`lib/pi-runtime.ts`）不能只调用 `ModelRuntime.create()`：那样 `/api/models` 与 `/api/auth/*` 只看到内置 provider + `models.json`，扩展动态注册的模型进不了选择器。
+
+正确路径：先 `ModelRuntime.create`（保留 `modelsPath` / `authPath` 覆盖），再 `createAgentSessionServices({ cwd, agentDir, modelRuntime })` 把 pending provider 绑到 runtime。默认 `cwd` 是 `process.cwd()`；项目级扩展是否出现取决于进程启动目录。扩展加载失败进 `diagnostics`，当前调用方丢弃，列表会静默缺项。
+
 ---
 
 ## 15. 技术栈
@@ -925,6 +932,10 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 - **会话导出 (HTML / Markdown)**：一键导出会话内容为原生 HTML 或 Markdown。
 - **AgentMode `.jsonl` 持久化**：写入 `desktop_agent_mode` 自定义节点并在加载时自后向前恢复历史模式。
 - **扩展与 Skill 统一管理**：Tab 化管理已配置的 Extensions、Skills 与 MCP 服务。
+
+### v0.8.7（2026-09-08，已发布）
+
+- **扩展模型进选择器**（#34）：`createPiRuntime` 经 `createAgentSessionServices` 加载本机 Pi 扩展注册的 provider/model，`/api/models` 与 `/api/auth/*` 与终端对齐。
 
 ### 后续规划
 

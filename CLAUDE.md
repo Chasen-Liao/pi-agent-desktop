@@ -62,6 +62,7 @@ npm run dist:mac
 - **Project Trust 409 握手**：对未信任的项目路径在创建/载入 Session 时触发 409 `needsTrust` 响应并弹出 Trust 授权对话框。
 - **MCP 服务器管理**：读写全局 (`~/.pi/agent/mcp.json`) 和项目级 (`<cwd>/.pi/mcp.json`) MCP 配置，支持连接测试、开关与工具计数管理。
 - **扩展与 Skill 管理**：统一配置面板管理已加载 Extension、Skill 启用状态与诊断信息。
+- **扩展模型进选择器（v0.8.7）**：`createPiRuntime` 经 `createAgentSessionServices` 加载本机 Pi 扩展注册的 provider，`/api/models` 与 `/api/auth/*` 与终端对齐。
 - **会话 Branching & Cloning**：支持从会话节点分叉新分支 (`/api/sessions/[id]/branch`)，或通过 `/api/sessions/[id]/clone` Clone 到普通目录或 Git Worktree（可指定新分支）。
 - **会话导出 (HTML/MD)**：支持将会话流式或静态导出为独立的 HTML（含语法高亮）或 Markdown 文件 (`/api/sessions/[id]/export`)。
 - **AgentMode `.jsonl` 持久化**：在模式切换时向 Session `.jsonl` 追加 `desktop_agent_mode` Custom Entry，Session 重载时自动恢复历史模式。

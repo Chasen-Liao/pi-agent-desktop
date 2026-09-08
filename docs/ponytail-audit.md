@@ -155,7 +155,7 @@ electron/main.ts 里一层只做转发的 getter。内联掉。
 
 **仍未执行（待决策）**：结构性项 rpc-manager fork/compact 拆分(#26)、pending 对账迁移(#30)。
 
-**产品方向（待单独设计）**：薄 harness——桌面端会话不加载用户级 pi 包。现状：rpc-manager createAgentSession 经 DefaultResourceLoader（agentDir=~/.pi/agent）会连带加载用户/全局 packages（resource-loader.js:258），用户 CLI 装的扩展会进桌面会话。候选方案：noExtensions: true / 独立 agentDir / settings 过滤。属产品行为变更，需单独 PR。
+**产品方向（2026-09-08 已拍板模型列表）**：桌面端是本地 Pi Agent 的界面。`createPiRuntime`（#34 / v0.8.7）经 `createAgentSessionServices` 加载用户/全局扩展注册的 provider，供 `/api/models` 与 `/api/auth/*` 使用。会话进程（rpc-manager `createAgentSession`）同样会加载用户扩展；是否再用 `noExtensions` / 独立 agentDir 把桌面会话与 CLI 包隔离，仍待单独设计。
 
 ## #21 执行结果（2026-09-04 追加）
 
