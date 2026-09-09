@@ -12,6 +12,7 @@ import { PresetSelector } from "./chat-input/PresetSelector";
 import { AgentModeSelector } from "./AgentModeSelector";
 import { resolveComposerSubmitAction } from "./chat-input/submit-action";
 import { QueuedMessageList } from "./chat-input/QueuedMessageList";
+import { getThinkingLevelsForModel } from "./chat-input/thinking-levels";
 import type { AgentMode } from "@/lib/approval-policy";
 import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
 import { useI18n } from "./I18nProvider";
@@ -36,8 +37,8 @@ interface Props {
   onToolPresetChange?: (preset: "none" | "default" | "full") => void;
   agentMode?: AgentMode;
   onAgentModeChange?: (mode: AgentMode) => void;
-  thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
-  onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
+  thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+  onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max") => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
@@ -48,7 +49,6 @@ interface Props {
   onReorderFollowUps?: (orderedIds: string[]) => void;
 }
 
-const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
   currentCwd,
@@ -765,11 +765,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     borderRadius: "var(--radius-panel)", boxShadow: "var(--shadow-popover)",
                     overflow: "hidden", minWidth: 180,
                   }}>
-                    {THINKING_LEVELS.filter((lvl) => {
-                      if (!availableThinkingLevels) return true;
-                      if (lvl === "auto") return true;
-                      return availableThinkingLevels.includes(lvl);
-                    }).map((lvl) => {
+                    {getThinkingLevelsForModel(availableThinkingLevels).map((lvl) => {
                       const isActive = (thinkingLevel ?? "auto") === lvl;
                       const desc = t(`thinking.${lvl}.desc`);
                       const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;

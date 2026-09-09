@@ -3,7 +3,7 @@
 
 
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 type ThinkingLevel = typeof THINKING_LEVELS[number];
 
 const LEVEL_COLORS: Record<ThinkingLevel, string> = {
@@ -13,6 +13,7 @@ const LEVEL_COLORS: Record<ThinkingLevel, string> = {
   medium:  "#a78bfa",
   high:    "#f472b6",
   xhigh:   "#fb923c",
+  max:     "#f97316",
 };
 
 export function ThinkingLevelMapEditor({

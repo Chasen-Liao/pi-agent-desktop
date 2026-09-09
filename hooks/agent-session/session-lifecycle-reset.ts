@@ -10,7 +10,8 @@ export type ThinkingLevelOption =
   | "low"
   | "medium"
   | "high"
-  | "xhigh";
+  | "xhigh"
+  | "max";
 
 export type SessionScopedResetPatch = {
   toolPreset: "default";
