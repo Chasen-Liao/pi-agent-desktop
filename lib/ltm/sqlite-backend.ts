@@ -132,7 +132,11 @@ type ResolvedBusyRetry = Required<
 /** SQLITE_BUSY=5 / SQLITE_LOCKED=6 primary codes; extended codes share the low byte. */
 const SQLITE_BUSY_PRIMARY_CODES = new Set([5, 6]);
 
-/** True for SQLITE_BUSY / SQLITE_LOCKED errors ("database is locked"). */
+/**
+ * True for SQLITE_BUSY / SQLITE_LOCKED errors ("database is locked").
+ * SQLITE_LOCKED (table-level lock) is included because it also clears on its
+ * own once the other connection relents, so the same bounded retry applies.
+ */
 export function isBusyError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const e = err as { errcode?: unknown; errstr?: unknown; message?: unknown };
