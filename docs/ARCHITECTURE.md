@@ -883,7 +883,9 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 - `app/error.tsx`：全局错误边界（Next 16 约定，注意 prop 是 `retry` 不是旧版 `reset`），渲染异常降级为可重试错误卡片；`app/error.test.ts` 用源码断言锁住该约定（仿 `components/MessageView.test.ts`）。
 - `electron/crash-recovery.ts`：崩溃自动重载策略 —— 60s 窗口最多 3 次，`clean-exit`/退出中跳过，镜像 `restart-policy.ts` 的纯逻辑+同名测试模式；`main.ts` 仅装配（`installCrashRecovery`）。
 
-边界与残余风险：`error.tsx` 不包裹根 layout（Next 约定需 `global-error.tsx`，根 layout 为静态、风险低，暂未加）；上游 pi-ai 0.84.3 的 O(n²) reasoning_details 冻结（上游 issue #8648）症状是“卡住”非白屏，待上游发修复版升级。
+2026-09-12 加固（#20/#33，实验与证据见 [docs/investigations/white-screen.md](investigations/white-screen.md)）：① 崩溃达自动重载上限后 `main.ts` 加载 `startup.html` 错误页（"页面多次崩溃，已停止自动恢复"），不再永久白屏；`child-process-gone` 仅记日志（GPU 崩溃由 Electron 回退软件渲染，盲目 reload 有死循环风险）。② 新增 `app/global-error.tsx` 补齐 layout 层兜底（替换整个根布局，自包含文档/样式，用 context-free 的 `translate()` 取词）与 `components/GlobalRuntimeErrorReporter`（`unhandledrejection`/`error` 全局收口，节流提示）。③ `lib/atomic-write.ts` 原子化 settings/desktop-settings 写盘——Windows 上 rename 会被并发读者 EPERM 阻塞，必须带界重试、预算耗尽降级直写。④ `lib/ltm/sqlite-backend.ts` 对 SQLITE_BUSY 做有界重试（快失败重试满额、慢失败最多一次，实验依据：跨进程持锁时写路径 ~0.3s 快速失败、busy_timeout 只对部分语句生效）。
+
+残余：上游 pi-ai 0.84.3 的 O(n²) reasoning_details 冻结（上游 issue #8648）症状是"卡住"非白屏，待上游发修复版升级；#33「另一终端致白屏」的最终触发机制仍待用户 `main.log`（跨进程共享面中唯一实锤破坏链是 LTM 的 SQLITE_BUSY，settings/.jsonl 撕裂已被实验否定）。
 
 ### 14.17 模型列表必须走 createAgentSessionServices（2026-09-08，#34）
 
