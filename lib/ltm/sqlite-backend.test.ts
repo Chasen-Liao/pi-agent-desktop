@@ -609,10 +609,12 @@ test("isBusyError matches busy/locked errors by errcode and message", () => {
     isBusyError(Object.assign(new Error("x"), { errcode: 6, errstr: "SQLITE_LOCKED" })),
     true
   );
+  // Wrapped error that lost its errcode: recognized via text (node:sqlite's
+  // errstr for SQLITE_LOCKED is "database table is locked").
   assert.equal(
     isBusyError(
       Object.assign(new Error("table memories is locked"), {
-        errstr: "SQLITE_LOCKED",
+        errstr: "database table is locked",
       })
     ),
     true

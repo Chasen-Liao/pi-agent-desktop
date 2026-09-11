@@ -22,11 +22,10 @@ function defaultSleepSync(ms: number): void {
 // Windows blocks rename with EPERM/EACCES while another process holds the
 // target open (measured: a tight reader loop required hundreds of retries).
 // Readers here are short-lived request-path reads, so a bounded retry clears
-// them without giving up atomicity. EAGAIN covers share conflicts surfaced by
-// non-local filesystems.
+// them without giving up atomicity.
 function isRenameSharedConflict(err: unknown): boolean {
   const code = (err as NodeJS.ErrnoException | null)?.code;
-  return code === "EPERM" || code === "EACCES" || code === "EAGAIN";
+  return code === "EPERM" || code === "EACCES";
 }
 
 export function writeFileAtomic(
@@ -54,7 +53,8 @@ export function writeFileAtomic(
     }
   } catch (err) {
     // Last resort: a stuck reader must not block persistence. Direct write
-    // matches the pre-atomic behavior (torn reads possible, write delivered).
+    // matches the pre-atomic behavior (torn reads possible); it can still
+    // throw (e.g. disk full), which then surfaces to the caller.
     console.error(`writeFileAtomic: rename to ${filePath} failed, falling back to direct write`, err);
     writeFileSync(filePath, data);
   } finally {

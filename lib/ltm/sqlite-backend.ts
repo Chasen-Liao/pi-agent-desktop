@@ -149,10 +149,9 @@ export function isBusyError(err: unknown): boolean {
   const text = [e.errstr, e.message]
     .filter((part): part is string => typeof part === "string")
     .join(" ");
-  return (
-    /database(?: table)? is locked/i.test(text) ||
-    /SQLITE_(?:BUSY|LOCKED)/.test(text)
-  );
+  // Text fallback for wrapped errors that lost their errcode (e.g.
+  // `new Error(err.message)` re-thrown by an intermediate layer).
+  return /database(?: table)? is locked/i.test(text);
 }
 
 /** 1st retry waits backoffMs, 2nd waits double, capped at backoffMaxMs. */

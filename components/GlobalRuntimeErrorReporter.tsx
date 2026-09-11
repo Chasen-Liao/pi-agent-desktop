@@ -10,7 +10,6 @@ const TOAST_VISIBLE_MS = 5000;
 const REASON_MAX_CHARS = 160;
 
 interface RuntimeNotice {
-  id: number;
   reason: string;
 }
 
@@ -48,7 +47,6 @@ export default function GlobalRuntimeErrorReporter() {
   const { t } = useI18n();
   const [notice, setNotice] = useState<RuntimeNotice | null>(null);
   const lastToastAtRef = useRef(0);
-  const nextIdRef = useRef(0);
   const hideTimerRef = useRef<number | null>(null);
 
   const showNotice = useCallback((reason: string) => {
@@ -57,8 +55,7 @@ export default function GlobalRuntimeErrorReporter() {
       return;
     }
     lastToastAtRef.current = now;
-    nextIdRef.current += 1;
-    setNotice({ id: nextIdRef.current, reason: truncateReason(reason) });
+    setNotice({ reason: truncateReason(reason) });
   }, []);
 
   useEffect(() => {
@@ -84,8 +81,8 @@ export default function GlobalRuntimeErrorReporter() {
     };
   }, [showNotice]);
 
-  // Auto-dismiss the current toast; re-arming per notice id means a newer
-  // toast replaces an older one and gets its own full visibility window.
+  // Auto-dismiss the current toast; a newer toast replaces the state object
+  // (new reference), which re-arms this effect for its own full window.
   useEffect(() => {
     if (!notice) {
       return;
