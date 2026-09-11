@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join, isAbsolute, relative, resolve } from "path";
+import { writeFileAtomic } from "./atomic-write.ts";
 import { DefaultResourceLoader, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 
 export type ExtensionScope = "global" | "project" | "user" | "system";
@@ -189,7 +190,7 @@ function readSettingsFile(settingsPath: string): Record<string, unknown> {
 
 function writeSettingsFile(settingsPath: string, data: Record<string, unknown>): void {
   mkdirSync(dirname(settingsPath), { recursive: true });
-  writeFileSync(settingsPath, JSON.stringify(data, null, 2), "utf8");
+  writeFileAtomic(settingsPath, JSON.stringify(data, null, 2));
 }
 
 export async function mutateExtensionOrSkill(

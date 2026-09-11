@@ -2,8 +2,9 @@
  * Desktop-only defaults stored at ~/.pi/agent/desktop-settings.json
  * (separate from pi settings.json).
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
+import { writeFileAtomic } from "./atomic-write.ts";
 import {
   DEFAULT_AGENT_MODE,
   DEFAULT_TOOL_PRESET,
@@ -82,7 +83,7 @@ export function writeDesktopSettings(agentDir: string, settings: DesktopSettings
   const merged = mergeDesktopSettings(settings);
   const path = desktopSettingsPath(agentDir);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(merged, null, 2)}\n`, "utf-8");
+  writeFileAtomic(path, `${JSON.stringify(merged, null, 2)}\n`);
   return merged;
 }
 

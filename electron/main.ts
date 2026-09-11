@@ -477,6 +477,14 @@ function installCrashRecovery(window: BrowserWindow) {
     reloadAttempts = next.attempts;
     if (!next.shouldReload) {
       logError("Renderer crash auto-reload skipped", { reason: details.reason });
+      // 达到自动 reload 上限后窗口会一直白屏；复用 startup.html 给出可见提示
+      // （与 server 退出路径的 showStartupState("stopped", …) 兜底一致）。
+      // clean-exit / isQuitting 属于正常退出流程，不应展示"已停止"错误页；
+      // 纯函数对这两种情况在达到上限判断之前就直接返回 false，因此这里的
+      // 条件恰好只命中"崩溃次数达上限"这一种情况。
+      if (details.reason !== "clean-exit" && !isQuitting && !window.isDestroyed()) {
+        showStartupState("stopped", "页面多次崩溃，已停止自动恢复");
+      }
       return;
     }
     if (window.isDestroyed()) {
@@ -542,6 +550,18 @@ function registerIpcHandlers() {
 // ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
+// Observability only: record child process deaths (GPU, utility, ...).
+// No auto-reload here — Electron already falls back to software rendering
+// when the GPU process dies, and blindly reloading risks crash loops;
+// renderer crashes have their own bounded recovery in installCrashRecovery.
+app.on("child-process-gone", (_event, details) => {
+  logError("Child process gone", {
+    type: details.type,
+    reason: details.reason,
+    exitCode: details.exitCode,
+  });
+});
+
 app.on("before-quit", () => {
   logInfo("before-quit");
   isQuitting = true;

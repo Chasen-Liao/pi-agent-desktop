@@ -5,9 +5,13 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   SqliteBackend,
+  isBusyError,
   sanitizeFtsQuery,
   truncateContent,
+  withBusyRetry,
+  withBusyRetrySync,
 } from "./sqlite-backend.ts";
+import { DatabaseSync } from "node:sqlite";
 
 function withTempBackend(
   fn: (backend: SqliteBackend, dir: string) => Promise<void>
@@ -261,8 +265,12 @@ test("constructor sets a busy_timeout to avoid SQLITE_BUSY (LTM-5)", () => {
   // WAL is enabled but a second handle (HMR-stale instance, concurrent test
   // open) writing at the same time would immediately throw SQLITE_BUSY
   // without a busy_timeout. Asserted structurally: no injectable timing
-  // trigger exists in a single synchronous connection.
-  assert.match(source, /PRAGMA busy_timeout\s*=\s*\d+/i);
+  // trigger exists in a single synchronous connection. The value is
+  // injectable via SqliteBackendOptions.busyTimeoutMs (tests use small
+  // values), so the applied pragma is a template over that option and the
+  // production default lives in DEFAULT_BUSY_TIMEOUT_MS.
+  assert.match(source, /PRAGMA busy_timeout\s*=\s*\$\{busyTimeoutMs\}/);
+  assert.match(source, /DEFAULT_BUSY_TIMEOUT_MS\s*=\s*\d+/);
 });
 
 test("remember truncates oversized content (LTM-6)", async () => {
@@ -291,9 +299,11 @@ test("busy_timeout is set before journal_mode=WAL (LTM-8)", () => {
   // The WAL switch needs a brief exclusive lock; when busy_timeout is applied
   // only after journal_mode=WAL, a concurrent writer can still hit SQLITE_BUSY
   // during the mode change. Asserted structurally (no injectable timing
-  // trigger exists in a single synchronous connection).
-  const busy = source.indexOf("PRAGMA busy_timeout");
-  const wal = source.indexOf("PRAGMA journal_mode");
+  // trigger exists in a single synchronous connection). The needles are
+  // anchored to the exec(...) statements, not the doc comments above them,
+  // which mention the pragmas in a different order.
+  const busy = source.indexOf("exec(`PRAGMA busy_timeout");
+  const wal = source.indexOf('exec("PRAGMA journal_mode');
   assert.ok(busy !== -1 && wal !== -1);
   assert.ok(busy < wal, "busy_timeout must be set before journal_mode=WAL");
 });
@@ -561,6 +571,306 @@ test("migration rebuilds a legacy unicode61 FTS index with trigram (CJK-5)", asy
       assert.ok(hits.length > 0, "legacy row should be recallable after migration");
     } finally {
       await backend.close?.();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Bounded SQLITE_BUSY retry ("database is locked")
+//
+// Experimentally, when the pi CLI holds `BEGIN IMMEDIATE` on the same
+// ~/.pi/agent directory, contended statements fail in two shapes: fast
+// (< ~1s, e.g. PRAGMA journal_mode = WAL or a reader-to-writer lock upgrade,
+// neither of which honors busy_timeout) and slow (~busy_timeout already
+// burned by a long transaction). Fast fails are transient — retry; slow
+// fails mean the holder runs a long transaction — retry at most once.
+// ---------------------------------------------------------------------------
+
+function busyError(message = "database is locked"): Error {
+  return Object.assign(new Error(message), {
+    errcode: 5,
+    errstr: "SQLITE_BUSY",
+  });
+}
+
+test("isBusyError matches busy/locked errors by errcode and message", () => {
+  assert.equal(isBusyError(busyError()), true);
+  // Extended codes keep the primary code in the low byte
+  // (SQLITE_BUSY_SNAPSHOT = 5 | (2 << 8) = 517).
+  assert.equal(
+    isBusyError(
+      Object.assign(new Error("x"), { errcode: 517, errstr: "SQLITE_BUSY_SNAPSHOT" })
+    ),
+    true
+  );
+  assert.equal(
+    isBusyError(Object.assign(new Error("x"), { errcode: 6, errstr: "SQLITE_LOCKED" })),
+    true
+  );
+  assert.equal(
+    isBusyError(
+      Object.assign(new Error("table memories is locked"), {
+        errstr: "SQLITE_LOCKED",
+      })
+    ),
+    true
+  );
+  assert.equal(isBusyError(new Error("SQLITE_BUSY: database is locked")), true);
+  assert.equal(isBusyError(new Error("boom")), false);
+  assert.equal(isBusyError(new Error("UNIQUE constraint failed")), false);
+  assert.equal(isBusyError(null), false);
+  assert.equal(isBusyError(undefined), false);
+  assert.equal(isBusyError("database is locked"), false);
+});
+
+test("withBusyRetry retries fast busy failures with doubling backoff", async () => {
+  const sleeps: number[] = [];
+  let attempts = 0;
+  const result = await withBusyRetry(() => {
+    attempts++;
+    if (attempts < 3) throw busyError();
+    return "ok";
+  }, {
+    maxAttempts: 4,
+    backoffMs: 10,
+    backoffMaxMs: 25,
+    fastFailMs: 1000,
+    sleep: (ms) => {
+      sleeps.push(ms);
+    },
+  });
+  assert.equal(result, "ok");
+  assert.equal(attempts, 3);
+  // First retry waits backoffMs, the second doubles but stays under the cap.
+  assert.deepEqual(sleeps, [10, 20]);
+});
+
+test("withBusyRetry gives up after maxAttempts and rethrows the busy error", async () => {
+  const sleeps: number[] = [];
+  let attempts = 0;
+  await assert.rejects(
+    withBusyRetry(() => {
+      attempts++;
+      throw busyError();
+    }, {
+      maxAttempts: 3,
+      backoffMs: 1,
+      fastFailMs: 1000,
+      sleep: (ms) => {
+        sleeps.push(ms);
+      },
+    }),
+    /database is locked/
+  );
+  assert.equal(attempts, 3);
+  assert.equal(sleeps.length, 2);
+});
+
+test("withBusyRetry rethrows non-busy errors without retrying", async () => {
+  let attempts = 0;
+  await assert.rejects(
+    withBusyRetry(() => {
+      attempts++;
+      throw new Error("UNIQUE constraint failed: memories.id");
+    }, {
+      maxAttempts: 5,
+      backoffMs: 1,
+      sleep: () => {},
+    }),
+    /UNIQUE constraint failed/
+  );
+  assert.equal(attempts, 1);
+});
+
+test("withBusyRetry retries a slow busy failure at most slowRetries times", async () => {
+  // A slow fail means busy_timeout already burned (the holder runs a long
+  // transaction), so each extra retry multiplies request latency by ~5s.
+  // The attempt burns >= fastFailMs of wall time to classify as slow.
+  const attemptsFor = async (slowRetries: number): Promise<number> => {
+    let attempts = 0;
+    try {
+      await withBusyRetry(async () => {
+        attempts++;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        throw busyError();
+      }, {
+        maxAttempts: 10,
+        slowRetries,
+        fastFailMs: 10,
+        backoffMs: 1,
+        sleep: () => {},
+      });
+    } catch {
+      // expected: busy error eventually rethrown
+    }
+    return attempts;
+  };
+  assert.equal(await attemptsFor(0), 1, "slowRetries=0: no retry after a slow fail");
+  assert.equal(await attemptsFor(1), 2, "slowRetries=1: exactly one extra attempt");
+});
+
+test("withBusyRetry spends the slow budget once but keeps fast retries", async () => {
+  let attempts = 0;
+  const result = await withBusyRetry(async () => {
+    attempts++;
+    if (attempts === 1) throw busyError(); // fast fail
+    if (attempts === 2) {
+      await new Promise((resolve) => setTimeout(resolve, 15)); // slow fail
+      throw busyError();
+    }
+    return "ok";
+  }, {
+    maxAttempts: 5,
+    slowRetries: 1,
+    fastFailMs: 10,
+    backoffMs: 1,
+    sleep: () => {},
+  });
+  assert.equal(result, "ok");
+  assert.equal(attempts, 3);
+});
+
+test("withBusyRetrySync retries via injected sleepSync without real waiting", () => {
+  const sleeps: number[] = [];
+  let attempts = 0;
+  const result = withBusyRetrySync(() => {
+    attempts++;
+    if (attempts < 3) throw busyError();
+    return 7;
+  }, {
+    maxAttempts: 4,
+    backoffMs: 5,
+    backoffMaxMs: 8,
+    fastFailMs: 1000,
+    sleepSync: (ms) => {
+      sleeps.push(ms);
+    },
+  });
+  assert.equal(result, 7);
+  assert.equal(attempts, 3);
+  assert.deepEqual(sleeps, [5, 8]);
+});
+
+test("withBusyRetrySync rethrows non-busy errors immediately", () => {
+  let attempts = 0;
+  assert.throws(
+    () =>
+      withBusyRetrySync(() => {
+        attempts++;
+        throw new Error("no such table");
+      }, { maxAttempts: 5, backoffMs: 1, sleepSync: () => {} }),
+    /no such table/
+  );
+  assert.equal(attempts, 1);
+});
+
+test("remember succeeds once another connection releases its write lock", async () => {
+  // Two DatabaseSync handles on one file behave like two processes: SQLite
+  // locking is per-connection. The "other process" holds BEGIN IMMEDIATE,
+  // then releases while the backend is between retry attempts.
+  const dir = mkdtempSync(join(tmpdir(), "ltm-busy-"));
+  const dbPath = join(dir, "t.sqlite");
+  try {
+    const backend = new SqliteBackend(dbPath, {
+      busyTimeoutMs: 40,
+      busyRetry: {
+        maxAttempts: 6,
+        backoffMs: 25,
+        backoffMaxMs: 50,
+        fastFailMs: 20,
+        slowRetries: 2,
+      },
+    });
+    try {
+      const holder = new DatabaseSync(dbPath);
+      holder.exec("BEGIN IMMEDIATE");
+      // Materialize the write lock so the backend's writes really conflict.
+      holder.exec("CREATE TABLE IF NOT EXISTS busy_probe (x)");
+      // Release while the backend backtracks through its retry attempts.
+      setTimeout(() => {
+        try {
+          holder.exec("COMMIT");
+        } catch {
+          // already committed
+        }
+      }, 60);
+      try {
+        const r = await backend.remember({
+          projectId: "proj_busy",
+          content: "written after the cross-connection lock was released",
+        });
+        assert.ok(r.id.startsWith("mem_"));
+        const hits = await backend.recall({
+          projectId: "proj_busy",
+          query: "cross-connection lock",
+          kinds: ["memory"],
+        });
+        assert.ok(hits.length >= 1);
+      } finally {
+        try {
+          holder.exec("COMMIT");
+        } catch {
+          // already committed
+        }
+        holder.close();
+      }
+    } finally {
+      await backend.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("constructor retries pragma/schema init while a connection holds the write lock", async () => {
+  // `PRAGMA journal_mode = WAL` and the DDL below it fast-fail with
+  // SQLITE_BUSY when another connection holds a write transaction. The
+  // constructor path is synchronous, so the event loop cannot fire timers
+  // while it runs — the injected sleepSync hook releases the lock instead.
+  const dir = mkdtempSync(join(tmpdir(), "ltm-busy-init-"));
+  const dbPath = join(dir, "t.sqlite");
+  try {
+    // Seed an existing WAL database so the constructor has real contention.
+    const seed = new DatabaseSync(dbPath);
+    seed.exec("PRAGMA journal_mode = WAL;");
+    seed.close();
+
+    const holder = new DatabaseSync(dbPath);
+    holder.exec("BEGIN IMMEDIATE");
+    holder.exec("CREATE TABLE IF NOT EXISTS busy_probe (x)");
+
+    let released = false;
+    const backend = new SqliteBackend(dbPath, {
+      busyTimeoutMs: 20,
+      busyRetry: {
+        maxAttempts: 5,
+        backoffMs: 1,
+        backoffMaxMs: 2,
+        fastFailMs: 10,
+        slowRetries: 2,
+        sleepSync: () => {
+          if (!released) {
+            released = true;
+            holder.exec("COMMIT");
+          }
+        },
+      },
+    });
+    assert.ok(released, "constructor should have retried after a busy failure");
+    try {
+      // The retry went through: schema is writable and usable.
+      const r = await backend.remember({
+        projectId: "proj_busy_init",
+        content: "constructor survived a contended init",
+      });
+      assert.ok(r.id.startsWith("mem_"));
+    } finally {
+      // Close every handle (and await the async close) so Windows releases
+      // the files before rmSync.
+      await backend.close();
+      holder.close();
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
