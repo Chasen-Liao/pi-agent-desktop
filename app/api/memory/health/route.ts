@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
+import { getRequestId } from "@/lib/api-error";
+import { jsonLtmError } from "@/lib/ltm/http";
 import { getMemoryService } from "@/lib/ltm/service";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,10 @@ export async function GET(req: Request) {
       { headers: { "x-request-id": requestId } }
     );
   } catch (error) {
-    logApiError({ route: "/api/memory/health", method: "GET", requestId, error });
-    return jsonError(req, 500, errorMessage(error));
+    return jsonLtmError(req, error, {
+      route: "/api/memory/health",
+      method: "GET",
+      requestId,
+    });
   }
 }

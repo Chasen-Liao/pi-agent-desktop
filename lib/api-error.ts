@@ -29,6 +29,7 @@ export function getRequestId(req: Request): string {
 
 export type JsonErrorInit = Omit<ResponseInit, "status" | "headers"> & {
   headers?: HeadersInit;
+  errorCode?: string;
 };
 
 export function jsonError(
@@ -37,13 +38,14 @@ export function jsonError(
   message: string,
   extra: JsonErrorInit = {},
 ): NextResponse {
-  const headers = new Headers(extra.headers);
+  const { errorCode, ...responseInit } = extra;
+  const headers = new Headers(responseInit.headers);
   if (!headers.has("x-request-id")) {
     headers.set("x-request-id", getRequestId(req));
   }
   return NextResponse.json(
-    { error: message },
-    { ...extra, status, headers },
+    { error: message, ...(errorCode ? { errorCode } : {}) },
+    { ...responseInit, status, headers },
   );
 }
 

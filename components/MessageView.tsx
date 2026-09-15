@@ -398,10 +398,7 @@ const AssistantMessageView = React.memo(function AssistantMessageView({
     return map;
   }, [toolResults, message.timestamp]);
 
-  const textContent = blocks
-    .filter((b): b is TextContent => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
+  const textContent = getTextContent(blocks);
 
   const copyContent = () => {
     copyText(textContent).then(() => {

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
-import { isLtmDisabledError, LTM_BUSY, LTM_DISABLED, parseRememberBody } from "@/lib/ltm/http";
-import { isBusyError } from "@/lib/ltm/sqlite-backend";
+import { getRequestId, jsonError } from "@/lib/api-error";
+import { jsonLtmError, LTM_DISABLED, parseRememberBody } from "@/lib/ltm/http";
 import { getMemoryService } from "@/lib/ltm/service";
 
 export const dynamic = "force-dynamic";
@@ -36,18 +35,10 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(result, { headers: { "x-request-id": requestId } });
   } catch (error) {
-    if (isLtmDisabledError(error)) {
-      return jsonError(req, 503, LTM_DISABLED);
-    }
-    if (isBusyError(error)) {
-      return jsonError(req, 503, LTM_BUSY);
-    }
-    logApiError({
+    return jsonLtmError(req, error, {
       route: "/api/memory/remember",
       method: "POST",
       requestId,
-      error,
     });
-    return jsonError(req, 500, errorMessage(error));
   }
 }

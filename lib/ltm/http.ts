@@ -1,3 +1,5 @@
+import { errorMessage, jsonError, logApiError } from "../api-error.ts";
+import { isBusyError } from "./sqlite-backend.ts";
 import type { MemoryType } from "./types.ts";
 
 export const LTM_DISABLED = "ltm_disabled";
@@ -51,6 +53,33 @@ export function isLtmDisabledError(err: unknown): boolean {
 
 export function isStatsNotSupportedError(err: unknown): boolean {
   return isLtmError(err, LTM_STATS_NOT_SUPPORTED);
+}
+
+export interface LtmErrorContext {
+  route: string;
+  method: string;
+  requestId: string;
+}
+
+export interface LtmErrorOptions {
+  statsNotSupported?: boolean;
+}
+
+/** Map expected LTM failures to the shared API error contract. */
+export function jsonLtmError(
+  req: Request,
+  error: unknown,
+  context: LtmErrorContext,
+  options: LtmErrorOptions = {},
+): Response {
+  if (isLtmDisabledError(error)) return jsonError(req, 503, LTM_DISABLED);
+  if (isBusyError(error)) return jsonError(req, 503, LTM_BUSY);
+  if (options.statsNotSupported && isStatsNotSupportedError(error)) {
+    return jsonError(req, 501, LTM_STATS_NOT_SUPPORTED);
+  }
+
+  logApiError({ ...context, error });
+  return jsonError(req, 500, errorMessage(error));
 }
 
 function isLtmError(err: unknown, code: string): boolean {

@@ -79,6 +79,18 @@ test("jsonError: returns an error body, status, request id, and extra headers", 
   assert.deepEqual(await response.json(), { error: "teapot" });
 });
 
+test("jsonError: includes an optional stable error code", async () => {
+  const req = new Request("http://x/");
+  const response = jsonError(req, 404, "Session not found", {
+    errorCode: "SESSION_NOT_FOUND",
+  });
+
+  assert.deepEqual(await response.json(), {
+    error: "Session not found",
+    errorCode: "SESSION_NOT_FOUND",
+  });
+});
+
 // ---------------------------------------------------------------------------
 // logApiError
 // ---------------------------------------------------------------------------

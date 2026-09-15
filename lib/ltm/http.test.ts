@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import {
   isLtmDisabledError,
   isMemoryType,
+  jsonLtmError,
   parseForgetBody,
   parseLimit,
   parseRecallQuery,
   parseRememberBody,
   parseStatsQuery,
+  LTM_BUSY,
   LTM_DISABLED,
 } from "./http.ts";
 
@@ -126,4 +128,18 @@ test("isMemoryType and isLtmDisabledError", () => {
   assert.equal(isLtmDisabledError(new Error(LTM_DISABLED)), true);
   assert.equal(isLtmDisabledError(new Error("other")), false);
   assert.equal(isLtmDisabledError("ltm_disabled"), false);
+});
+
+test("jsonLtmError maps busy failures to a 503 machine-readable response", async () => {
+  const requestId = "11111111-2222-3333-4444-555555555555";
+  const req = new Request("http://x/", { headers: { "x-request-id": requestId } });
+  const response = jsonLtmError(
+    req,
+    Object.assign(new Error("database is locked"), { errcode: 5 }),
+    { route: "/api/memory/remember", method: "POST", requestId },
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("x-request-id"), requestId);
+  assert.deepEqual(await response.json(), { error: LTM_BUSY });
 });
