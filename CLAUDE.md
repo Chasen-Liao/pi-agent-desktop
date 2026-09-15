@@ -87,7 +87,7 @@ npm run dist:mac
 | `app/api/` | **38** 条 API 路由（含 **memory** 5 条；另有 agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings 等） |
 | `lib/` | 服务端库：`rpc-manager` / `session-reader` / **`ltm/`** / **`i18n/`** / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` 等 |
 | `components/` | 27 个顶层组件（含 `I18nProvider` / `AgentThinkingOrb` / `LiquidOrbCanvas` / `McpConfigModal` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
-| `hooks/` | 6 个顶层 hook + `agent-session/` 子目录下 15 个拆分模块 |
+| `hooks/` | 7 个顶层 hook + `agent-session/` 子目录下 15 个拆分模块 |
 | `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 14 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
 
@@ -101,9 +101,7 @@ npm run dist:mac
 - **Fork 后必须立即销毁旧 wrapper**：Fork 在文件层通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）创建新 `.jsonl`，再用 `startRpcSession()` 构造全新 AgentSession 实例；旧 wrapper 不再会被请求到，立即 `destroy()` 可及时释放资源（而非等 10 分钟 idle 超时）。详见 [docs/ARCHITECTURE.md §14.2](docs/ARCHITECTURE.md#142-fork-的执行顺序预注册--销毁旧-wrapper)。
 
 > 更完整的设计决策与陷阱清单（ToolCall 归一化、SSE 重连、electron-builder extraResources、Windows 兼容层等）见 [docs/ARCHITECTURE.md §14](docs/ARCHITECTURE.md#14-关键设计决策与陷阱)。
-<!-- rules-aio:start -->
 @.claude/rules/nextjs.md
 @.claude/rules/react.md
 @.claude/rules/typescript.md
 @.claude/rules/nodejs.md
-<!-- rules-aio:end -->

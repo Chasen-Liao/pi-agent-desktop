@@ -16,7 +16,7 @@ Conventions for building server-side applications with Node.js and Express.
 - Always `await` promises — never fire-and-forget. Unhandled rejections crash the process.
 - Wrap async route handlers with a helper (`asyncHandler`) or use a router that supports async handlers natively.
 - Use `process.on('unhandledRejection')` as a safety net, not as primary error handling.
-- Return structured error responses with a consistent shape (e.g., `{ error: { code, message } }`) and appropriate HTTP status codes.
+- Return structured error responses with a consistent shape. In this Next.js project, use `lib/api-error.ts` (`jsonError` / `jsonLtmError`), which returns `{ error, errorCode? }` plus `x-request-id`, with an appropriate HTTP status code.
 
 ## Security
 - Use `helmet` for security headers, `cors` with explicit origins, and `express-rate-limit` for endpoint throttling.

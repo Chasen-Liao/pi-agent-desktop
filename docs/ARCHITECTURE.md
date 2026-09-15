@@ -555,7 +555,7 @@ components/models-config/     模型配置弹窗的子组件
 | `app/api/memory/forget/route.ts` | POST | 按 id 删除 memory / observation |
 | `app/api/memory/stats/route.ts` | GET | `?cwd=` 项目记忆计数 |
 
-实现与工具面见 `lib/ltm/`、`lib/desktop-ltm-extension.ts`；会话 JSONL 仍为独立 episodic 日志。可视化基线：[memory-architecture.html](./memory-architecture.html)；设计：[superpowers/specs/2026-08-03-long-term-memory-design.md](./superpowers/specs/2026-08-03-long-term-memory-design.md)。
+实现与工具面见 `lib/ltm/`、`lib/desktop-ltm-extension.ts`；会话 JSONL 仍为独立 episodic 日志。`/api/memory/*` 使用统一 JSON 错误契约：SQLite `BUSY` / `LOCKED` 在有界重试耗尽后返回 `503 { error: "ltm_busy" }`，禁用返回 `503 { error: "ltm_disabled" }`；带稳定错误码的响应同时返回 `errorCode` 和 `x-request-id`。可视化基线：[memory-architecture.html](./memory-architecture.html)；设计：[superpowers/specs/2026-08-03-long-term-memory-design.md](./superpowers/specs/2026-08-03-long-term-memory-design.md)。
 
 ### 会话浏览、分叉与导出（7 条）
 

@@ -104,6 +104,8 @@ CLI 入口 `bin/pi-web.js` 与桌面端都启动完整 Next server,共享同一�
 
 ## 修复方向(按实验证据重新排序)
 
+> 当前状态（2026-09-15）：方向 1 已落地；方向 2 已落地为有界重试，重试耗尽后统一返回 `503 { error: "ltm_busy" }`。以下条目保留当时的修复决策和证据链。
+
 1. **crash-recovery 达上限后加载 `startup.html` 错误页**(实验 E 证明必要):`main.ts:478-480` 的 skip 分支改为 `showStartupState("stopped", …)`——server 退出路径 `main.ts:227/245` 已有同款兜底,复制即可。
 2. **`/api/memory/*` 的 SQLITE_BUSY 处理**(实验 C 证明 500 真实存在):捕获后降级(返回空结果/提示)或缩短 busy_timeout + 重试。
 3. **settings 写盘原子化 tmp+rename**——注意实验 A 的 **EPERM 约束,必须带重试循环**;定位为完整性修复(丢配置),而非白屏修复。
