@@ -1,6 +1,7 @@
 import type { MemoryType } from "./types.ts";
 
 export const LTM_DISABLED = "ltm_disabled";
+export const LTM_BUSY = "ltm_busy";
 export const LTM_STATS_NOT_SUPPORTED = "ltm_stats_not_supported";
 
 const MEMORY_TYPES = new Set<MemoryType>([

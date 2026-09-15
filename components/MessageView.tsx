@@ -14,11 +14,11 @@ import type {
   ToolResultMessage,
   AssistantContentBlock,
   TextContent,
-  ImageContent,
   ToolCallContent,
   ThinkingContent,
   CustomMessage,
 } from "@/lib/types";
+import { getAssistantContent, getImageContent, getTextContent } from "./message-content";
 
 interface Props {
   message: AgentMessage;
@@ -139,13 +139,7 @@ const CustomMessageView = React.memo(function CustomMessageView({
   showTimestamp?: boolean;
 }) {
   const time = showTimestamp ? formatTime(message.timestamp) : null;
-  const content =
-    typeof message.content === "string"
-      ? message.content
-      : message.content
-          .filter((b): b is TextContent => b.type === "text")
-          .map((b) => b.text)
-          .join("\n");
+  const content = getTextContent(message.content);
 
   return (
     <div className="mb-[18px] flex flex-col items-center">
@@ -196,18 +190,8 @@ const UserMessageView = React.memo(function UserMessageView({
     return () => clearTimeout(t);
   }, [copied]);
 
-  const content =
-    typeof message.content === "string"
-      ? message.content
-      : message.content
-          .filter((b): b is TextContent => b.type === "text")
-          .map((b) => b.text)
-          .join("\n");
-
-  const imageBlocks: ImageContent[] =
-    typeof message.content === "string"
-      ? []
-      : message.content.filter((b): b is ImageContent => b.type === "image");
+  const content = getTextContent(message.content);
+  const imageBlocks = getImageContent(message.content);
 
   const time = formatTime(message.timestamp);
   const canFork = !!entryId && !!onFork;
@@ -376,7 +360,7 @@ const AssistantMessageView = React.memo(function AssistantMessageView({
 }) {
   const { t } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
-  const blocks = useMemo(() => message.content ?? [], [message.content]);
+  const blocks = useMemo(() => getAssistantContent(message.content), [message.content]);
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -713,12 +697,7 @@ function ToolCallBlock({
   const [expanded, setExpanded] = useState(false);
   const inputStr = JSON.stringify(block.input, null, 2);
 
-  const resultText = result
-    ? result.content
-        .filter((b): b is { type: "text"; text: string } => b.type === "text")
-        .map((b) => b.text)
-        .join("\n")
-    : null;
+  const resultText = result ? getTextContent(result.content) : null;
   const resultIsEmpty = resultText === null ? false : resultText.trim() === "(no output)" || resultText.trim() === "";
   const isError = result?.isError ?? false;
 

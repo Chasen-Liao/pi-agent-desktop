@@ -3,10 +3,12 @@ import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-er
 import {
   isLtmDisabledError,
   isStatsNotSupportedError,
+  LTM_BUSY,
   LTM_DISABLED,
   LTM_STATS_NOT_SUPPORTED,
   parseStatsQuery,
 } from "@/lib/ltm/http";
+import { isBusyError } from "@/lib/ltm/sqlite-backend";
 import { getMemoryService } from "@/lib/ltm/service";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +27,7 @@ export async function GET(req: Request) {
     return NextResponse.json(stats, { headers: { "x-request-id": requestId } });
   } catch (error) {
     if (isLtmDisabledError(error)) return jsonError(req, 503, LTM_DISABLED);
+    if (isBusyError(error)) return jsonError(req, 503, LTM_BUSY);
     if (isStatsNotSupportedError(error)) return jsonError(req, 501, LTM_STATS_NOT_SUPPORTED);
     logApiError({ route: "/api/memory/stats", method: "GET", requestId, error });
     return jsonError(req, 500, errorMessage(error));
