@@ -132,6 +132,14 @@ app/
     models-config/ # models.json の読み書き
     skills/        # Skill の検索とインストール
     auth/          # ログインと API Key 管理
+    mcp/           # MCP サーバー設定の読み書き
+    extensions/    # 拡張機能管理
+    trust/         # プロジェクト信頼ハンドシェイク
+    desktop-settings/ # デスクトップ設定
+    default-cwd/   # デフォルト作業ディレクトリ
+    select-directory/ # ディレクトリ選択
+    statusline/    # ステータスラインデータ
+    home/          # ホームデータ
     health/        # ヘルスチェック
 components/        # UI コンポーネント
 electron/          # Electron メインプロセス
@@ -150,13 +158,15 @@ scripts/
   ensure-standalone-pi-runtime.mjs                # Pi ランタイムの依存クロージャを補完
   ensure-standalone-macos-universal-runtimes.mjs  # macOS 用 Sharp ランタイム 2 種を補完
   dereference-standalone-symlinks.mjs             # パッケージング前に standalone シンボリックリンクを解決
+  smoke-standalone-server.mjs                      # standalone サーバーのスモークテスト
+  smoke-packaged-standalone.mjs                    # パッケージ済みアプリのスモークテスト
 ```
 
 ## 技術スタック
 
 | レイヤー | 技術 |
 | --- | --- |
-| フロントエンド | Next.js + React + TypeScript |
+| フロントエンド | Next.js + React + TypeScript + Tailwind CSS |
 | デスクトップ | Electron |
 | パッケージング | electron-builder（Windows NSIS / macOS Universal DMG + ZIP / Linux DEB） |
 | リアルタイム通信 | SSE (Server-Sent Events) ストリーミング |

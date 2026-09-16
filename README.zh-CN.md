@@ -132,6 +132,14 @@ app/
     models-config/ # 读写 models.json
     skills/        # 技能搜索与安装
     auth/          # 登录与 API Key 管理
+    mcp/           # MCP 服务器配置读写
+    extensions/    # 扩展管理
+    trust/         # 项目信任握手
+    desktop-settings/ # 桌面级设置
+    default-cwd/   # 默认工作目录
+    select-directory/ # 目录选择器
+    statusline/    # 状态栏数据
+    home/          # 首页数据
     health/        # 健康检查
 components/        # UI 组件
 electron/          # Electron 主进程
@@ -150,13 +158,15 @@ scripts/
   ensure-standalone-pi-runtime.mjs                # 补齐 Pi 运行时依赖闭包
   ensure-standalone-macos-universal-runtimes.mjs  # 补齐两套 macOS Sharp 运行时
   dereference-standalone-symlinks.mjs             # 打包前落实 standalone 符号链接
+  smoke-standalone-server.mjs                      # standalone 服务器冒烟测试
+  smoke-packaged-standalone.mjs                    # 打包后应用冒烟测试
 ```
 
 ## 技术栈
 
 | 分层 | 技术 |
 | --- | --- |
-| 前端 | Next.js + React + TypeScript |
+| 前端 | Next.js + React + TypeScript + Tailwind CSS |
 | 桌面 | Electron |
 | 打包 | electron-builder（Windows NSIS；macOS Universal DMG + ZIP；Linux DEB） |
 | 通信 | SSE (Server-Sent Events) 实时流式传输 |

@@ -132,6 +132,14 @@ app/
     models-config/ # Read/write models.json
     skills/        # Skill search & install
     auth/          # Login & API Key management
+    mcp/           # MCP server config read/write
+    extensions/    # Extension management
+    trust/         # Project trust handshake
+    desktop-settings/ # Desktop-level settings
+    default-cwd/   # Default working directory
+    select-directory/ # Directory picker
+    statusline/    # Status line data
+    home/          # Home / landing data
     health/        # Health checks
 components/        # UI components
 electron/          # Electron main process
@@ -150,13 +158,15 @@ scripts/
   ensure-standalone-pi-runtime.mjs                # Patch in Pi runtime dependency closure
   ensure-standalone-macos-universal-runtimes.mjs  # Patch in both macOS Sharp runtimes
   dereference-standalone-symlinks.mjs             # Resolve standalone symlinks before packaging
+  smoke-standalone-server.mjs                      # Smoke-test the standalone server
+  smoke-packaged-standalone.mjs                    # Smoke-test the packaged app
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
 | --- | --- |
-| Frontend | Next.js + React + TypeScript |
+| Frontend | Next.js + React + TypeScript + Tailwind CSS |
 | Desktop | Electron |
 | Packaging | electron-builder (Windows NSIS; macOS Universal DMG + ZIP; Linux DEB) |
 | Realtime | SSE (Server-Sent Events) streaming |
