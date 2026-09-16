@@ -7,7 +7,7 @@
 <div align="center">
 
 <a href="https://github.com/Chasen-Liao/pi-agent-desktop">
-  <img src="public/logo.png" alt="Pi Agent Desktop ロゴ" width="128" height="128" />
+  <img src="public/logo.png" alt="Pi Agent Desktop ロゴ" width="160" height="160" style="border-radius:20%" />
 </a>
 
 # Pi Agent Desktop
@@ -16,6 +16,9 @@
 
 [![Release](https://img.shields.io/github/v/release/Chasen-Liao/pi-agent-desktop?color=orange&logo=github)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
 [![License](https://img.shields.io/github/license/Chasen-Liao/pi-agent-desktop?color=blue)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/Chasen-Liao/pi-agent-desktop?style=flat&logo=github&color=yellow)](https://github.com/Chasen-Liao/pi-agent-desktop/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/Chasen-Liao/pi-agent-desktop/total?color=green)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
 [![Landing](https://img.shields.io/badge/Landing-GitHub%20Pages-111111?logo=githubpages)](https://chasen-liao.github.io/pi-agent-desktop/)
 
 ![Pi Agent Desktop デモ](public/pi.gif)
@@ -39,51 +42,60 @@
 
 ### 🖥️ デスクトップ体験
 
-- **ネイティブなデスクトップアプリ** — Electron ベースの独立ウィンドウ。システムトレイとトレイへの最小化に対応
-- **ネイティブなワークスペース UI** — Apple 風のデスクトップレイアウト、リキッド思考ボール、よりコンパクトなメッセージ入力欄
-- **自動更新** — GitHub Releases からの自動更新チェックに対応
-- **ショートカットキー** — `Ctrl+B` で左サイドバー、`Ctrl+Alt+B` で右パネルを切り替え
+| 機能 | 説明 |
+| --- | --- |
+| **ネイティブなデスクトップアプリ** | Electron ベースの独立ウィンドウ。システムトレイとトレイへの最小化に対応 |
+| **ネイティブなワークスペース UI** | Apple 風のデスクトップレイアウト、リキッド思考ボール、よりコンパクトなメッセージ入力欄 |
+| **自動更新** | GitHub Releases からの自動更新チェックに対応 |
+| **ショートカットキー** | <kbd>Ctrl</kbd>+<kbd>B</kbd> で左サイドバー、<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>B</kbd> で右パネルを切り替え |
 
 ### 💬 セッションと会話
 
-- **セッションブラウザ** — 作業ディレクトリごとにすべての Pi セッションをグループ化して表示
-- **リアルタイム会話** — SSE ストリーミングでエージェントとリアルタイムにやり取り
-- **実行中メッセージキュー** — `Enter` で即座に steer、`Alt+Enter` でキューに追加。ドラッグ＆キーボードで Follow-up を並べ替え
-- **セッション内ブランチ** — 任意のノードに戻って会話を継続。ブランチは同じファイル内に保持
-- **ブランチナビゲーター** — セッション内のブランチをビジュアルに切り替え
-- **セッションのフォークとクローン** — API/UI で任意のノードから Branch、またはセッションを通常ディレクトリや Git Worktree の新規ブランチに Clone
-- **セッションのエクスポート** — HTML / Markdown 形式でワンクリックエクスポート
-- **モデル切り替え** — 会話の途中でもモデルを切り替え。セレクターと認証パネルはローカルの Pi 拡張機能が動的登録したプロバイダーを読み込み
+| 機能 | 説明 |
+| --- | --- |
+| **セッションブラウザ** | 作業ディレクトリごとにすべての Pi セッションをグループ化して表示 |
+| **リアルタイム会話** | SSE ストリーミングでエージェントとリアルタイムにやり取り |
+| **実行中メッセージキュー** | <kbd>Enter</kbd> で即座に steer、<kbd>Alt</kbd>+<kbd>Enter</kbd> でキューに追加。ドラッグ＆キーボードで Follow-up を並べ替え |
+| **セッション内ブランチ** | 任意のノードに戻って会話を継続。ブランチは同じファイル内に保持 |
+| **ブランチナビゲーター** | セッション内のブランチをビジュアルに切り替え |
+| **セッションのフォークとクローン** | API/UI で任意のノードから Branch、またはセッションを通常ディレクトリや Git Worktree の新規ブランチに Clone |
+| **セッションのエクスポート** | HTML / Markdown 形式でワンクリックエクスポート |
+| **モデル切り替え** | 会話の途中でもモデルを切り替え。セレクターはローカルの Pi 拡張機能が動的登録したプロバイダーを読み込み |
 
 ### 🤖 エージェント機能
 
-- **Agent モード** — Plan / Ask / Full の 3 つの安全モードと、Ask ツールのインターセプト確認
-- **Extension UI Bridge** — 拡張機能の `confirm` / `select` / `input` / `editor` / `notify` 操作をネイティブダイアログで表示
-- **プロジェクト信頼** — Project Trust 409 ハンドシェイクと認可ダイアログ
-- **ツールパネル** — エージェントが使用できるツールを制御
-- **長期記憶 LTM** — プロジェクト単位の SQLite メモリ（`memory_save` / `memory_recall` / `memory_forget`）でセッションをまたいだ検索に対応。中国語・日本語・韓国語は FTS5 trigram で検索。`agent_end` と compact の前に自動で観察を書き込み
+| 機能 | 説明 |
+| --- | --- |
+| **Agent モード** | Plan / Ask / Full の 3 つの安全モードと、Ask ツールのインターセプト確認 |
+| **Extension UI Bridge** | 拡張機能の `confirm` / `select` / `input` / `editor` / `notify` 操作をネイティブダイアログで表示 |
+| **プロジェクト信頼** | Project Trust 409 ハンドシェイクと認可ダイアログ |
+| **ツールパネル** | エージェントが使用できるツールを制御 |
+| **長期記憶 LTM** | プロジェクト単位の SQLite メモリ（`memory_save` / `memory_recall` / `memory_forget`）でセッションをまたいだ検索に対応。中国語・日本語・韓国語は FTS5 trigram で検索。`agent_end` と compact の前に自動で観察を書き込み |
 
 ### ⚙️ 設定と管理
 
-- **MCP サーバー管理** — グローバル（`~/.pi/agent/mcp.json`）とプロジェクト（`<cwd>/.pi/mcp.json`）の MCP 設定を UI から管理
-- **拡張機能と Skill の管理** — グローバル・プロジェクトの拡張機能と Skill の有効化・診断を一元管理する UI
-- **AgentMode の永続化** — `.jsonl` にカスタムの `desktop_agent_mode` ノードを書き込み、リロード時に履歴モードを復元
-- **表示言語** — 中国語 / 英語、システムに追従
-- **ファイルブラウザ** — サイドバー内蔵のファイルブラウザとビューア
+| 機能 | 説明 |
+| --- | --- |
+| **MCP サーバー管理** | グローバル（`~/.pi/agent/mcp.json`）とプロジェクト（`<cwd>/.pi/mcp.json`）の MCP 設定を UI から管理 |
+| **拡張機能と Skill の管理** | グローバル・プロジェクトの拡張機能と Skill の有効化・診断を一元管理する UI |
+| **AgentMode の永続化** | `.jsonl` にカスタムの `desktop_agent_mode` ノードを書き込み、リロード時に履歴モードを復元 |
+| **表示言語** | 中国語 / 英語、システムに追従 |
+| **ファイルブラウザ** | サイドバー内蔵のファイルブラウザとビューア |
 
 ## ダウンロードとインストール
 
 最新のインストーラーは [Releases](https://github.com/Chasen-Liao/pi-agent-desktop/releases) ページから入手してください。
 
-お使いの OS に合わせてパッケージを選んでください（現在の Release アセットに従ってください）：
-
 | プラットフォーム | パッケージ |
 | --- | --- |
-| Windows | `Pi-Agent-Desktop-Setup-x.x.x.exe` |
-| macOS（Universal、Intel + Apple Silicon） | `Pi-Agent-Desktop-x.x.x-mac-universal.dmg`（自動更新用 ZIP あり） |
-| Linux x64 | `Pi-Agent-Desktop-x.x.x-linux-amd64.deb` |
+| 🪟 Windows | `Pi-Agent-Desktop-Setup-x.x.x.exe` |
+| 🍎 macOS（Universal、Intel + Apple Silicon） | `Pi-Agent-Desktop-x.x.x-mac-universal.dmg`（自動更新用 ZIP あり） |
+| 🐧 Linux x64 | `Pi-Agent-Desktop-x.x.x-linux-amd64.deb` |
 
 ## 開発
+
+<details>
+<summary><strong>開発コマンドを表示</strong></summary>
 
 ```bash
 # 依存関係のインストール
@@ -119,7 +131,12 @@ npm run dist:mac
 # GitHub Release：vX.Y.Z タグをプッシュし、Actions が 3 プラットフォームをビルド（docs/RELEASING.md 参照）
 ```
 
+</details>
+
 ## プロジェクト構成
+
+<details>
+<summary><strong>プロジェクト構成を表示</strong></summary>
 
 ```
 app/
@@ -162,14 +179,17 @@ scripts/
   smoke-packaged-standalone.mjs                    # パッケージ済みアプリのスモークテスト
 ```
 
+</details>
+
 ## 技術スタック
 
-| レイヤー | 技術 |
-| --- | --- |
-| フロントエンド | Next.js + React + TypeScript + Tailwind CSS |
-| デスクトップ | Electron |
-| パッケージング | electron-builder（Windows NSIS / macOS Universal DMG + ZIP / Linux DEB） |
-| リアルタイム通信 | SSE (Server-Sent Events) ストリーミング |
+[![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Electron](https://img.shields.io/badge/Electron-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+
+パッケージング：electron-builder（Windows NSIS · macOS Universal DMG + ZIP · Linux DEB）· リアルタイム通信：SSE ストリーミング
 
 ## 謝辞
 

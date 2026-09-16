@@ -7,7 +7,7 @@
 <div align="center">
 
 <a href="https://github.com/Chasen-Liao/pi-agent-desktop">
-  <img src="public/logo.png" alt="Pi Agent Desktop logo" width="128" height="128" />
+  <img src="public/logo.png" alt="Pi Agent Desktop logo" width="160" height="160" style="border-radius:20%" />
 </a>
 
 # Pi Agent Desktop
@@ -16,6 +16,9 @@
 
 [![Release](https://img.shields.io/github/v/release/Chasen-Liao/pi-agent-desktop?color=orange&logo=github)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
 [![License](https://img.shields.io/github/license/Chasen-Liao/pi-agent-desktop?color=blue)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/Chasen-Liao/pi-agent-desktop?style=flat&logo=github&color=yellow)](https://github.com/Chasen-Liao/pi-agent-desktop/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/Chasen-Liao/pi-agent-desktop/total?color=green)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
 [![Landing](https://img.shields.io/badge/Landing-GitHub%20Pages-111111?logo=githubpages)](https://chasen-liao.github.io/pi-agent-desktop/)
 
 ![Pi Agent Desktop demo](public/pi.gif)
@@ -39,51 +42,60 @@
 
 ### 🖥️ Desktop Experience
 
-- **Native desktop app** — standalone Electron window with system tray and minimize-to-tray
-- **Native workspace UI** — Apple-style layout, a liquid thinking orb, and a more compact message input
-- **Auto-updates** — checks and installs new versions from GitHub Releases
-- **Shortcuts** — `Ctrl+B` toggles the left sidebar, `Ctrl+Alt+B` toggles the right panel
+| Feature | Description |
+| --- | --- |
+| **Native desktop app** | Standalone Electron window with system tray and minimize-to-tray |
+| **Native workspace UI** | Apple-style layout, a liquid thinking orb, and a more compact message input |
+| **Auto-updates** | Checks and installs new versions from GitHub Releases |
+| **Shortcuts** | <kbd>Ctrl</kbd>+<kbd>B</kbd> toggles the left sidebar, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>B</kbd> toggles the right panel |
 
 ### 💬 Sessions & Conversation
 
-- **Session browser** — all Pi sessions grouped by working directory
-- **Real-time conversation** — stream responses live with the agent over SSE
-- **Running message queue** — press `Enter` to steer immediately, `Alt+Enter` to queue; drag or use the keyboard to reorder follow-ups
-- **In-session branching** — roll back to any node and continue from there, with branches kept in the same file
-- **Branch navigator** — visually switch between branches within a session
-- **Fork & clone sessions** — branch from any node via API/UI, or clone a session to a plain directory or a Git worktree on a new branch
-- **Session export** — export a session to HTML or Markdown in one click
-- **Model switching** — switch models mid-conversation; the picker and auth panel load providers dynamically registered by your local Pi extensions
+| Feature | Description |
+| --- | --- |
+| **Session browser** | All Pi sessions grouped by working directory |
+| **Real-time conversation** | Stream responses live with the agent over SSE |
+| **Running message queue** | <kbd>Enter</kbd> to steer immediately, <kbd>Alt</kbd>+<kbd>Enter</kbd> to queue; drag or keyboard to reorder follow-ups |
+| **In-session branching** | Roll back to any node and continue from there, branches kept in the same file |
+| **Branch navigator** | Visually switch between branches within a session |
+| **Fork & clone sessions** | Branch from any node via API/UI, or clone to a plain directory or a Git worktree on a new branch |
+| **Session export** | Export a session to HTML or Markdown in one click |
+| **Model switching** | Switch models mid-conversation; picker loads providers dynamically registered by local Pi extensions |
 
 ### 🤖 Agent Capabilities
 
-- **Agent modes** — Plan / Ask / Full safety modes, with Ask-tool interception confirmation
-- **Extension UI Bridge** — native dialogs for extension `confirm` / `select` / `input` / `editor` / `notify` interactions
-- **Project trust** — Project Trust 409 handshake with an authorization dialog
-- **Tool panel** — control which tools the agent may use
-- **Long-term memory (LTM)** — project-level SQLite memory (`memory_save` / `memory_recall` / `memory_forget`) with cross-session retrieval; CJK search via FTS5 trigram; auto-observed before `agent_end` and compaction
+| Feature | Description |
+| --- | --- |
+| **Agent modes** | Plan / Ask / Full safety modes, with Ask-tool interception confirmation |
+| **Extension UI Bridge** | Native dialogs for extension `confirm` / `select` / `input` / `editor` / `notify` |
+| **Project trust** | Project Trust 409 handshake with an authorization dialog |
+| **Tool panel** | Control which tools the agent may use |
+| **Long-term memory (LTM)** | Project-level SQLite memory (`memory_save` / `memory_recall` / `memory_forget`) with cross-session retrieval; CJK via FTS5 trigram; auto-observed before `agent_end` and compaction |
 
 ### ⚙️ Configuration & Management
 
-- **MCP server management** — global (`~/.pi/agent/mcp.json`) and project (`<cwd>/.pi/mcp.json`) MCP configs, manageable from the UI
-- **Extensions & Skills management** — unified UI to enable, diagnose, and manage global and project extensions and Skills
-- **AgentMode persistence** — writes a custom `desktop_agent_mode` node to `.jsonl` and restores the historical mode on reload
-- **Interface language** — English / 简体中文, follows the system
-- **File browsing** — built-in file browser and viewer in the sidebar
+| Feature | Description |
+| --- | --- |
+| **MCP server management** | Global (`~/.pi/agent/mcp.json`) and project (`<cwd>/.pi/mcp.json`) MCP configs, manageable from the UI |
+| **Extensions & Skills management** | Unified UI to enable, diagnose, and manage global and project extensions and Skills |
+| **AgentMode persistence** | Writes a custom `desktop_agent_mode` node to `.jsonl` and restores the historical mode on reload |
+| **Interface language** | English / 简体中文, follows the system |
+| **File browsing** | Built-in file browser and viewer in the sidebar |
 
 ## Download & Install
 
 Grab the latest installer from the [Releases](https://github.com/Chasen-Liao/pi-agent-desktop/releases) page.
 
-Pick the package for your platform (check the current release assets):
-
 | Platform | Package |
 | --- | --- |
-| Windows | `Pi-Agent-Desktop-Setup-x.x.x.exe` |
-| macOS (Universal, Intel + Apple Silicon) | `Pi-Agent-Desktop-x.x.x-mac-universal.dmg` (ZIP for auto-update) |
-| Linux x64 | `Pi-Agent-Desktop-x.x.x-linux-amd64.deb` |
+| 🪟 Windows | `Pi-Agent-Desktop-Setup-x.x.x.exe` |
+| 🍎 macOS (Universal, Intel + Apple Silicon) | `Pi-Agent-Desktop-x.x.x-mac-universal.dmg` (ZIP for auto-update) |
+| 🐧 Linux x64 | `Pi-Agent-Desktop-x.x.x-linux-amd64.deb` |
 
 ## Development
+
+<details>
+<summary><strong>Show development commands</strong></summary>
 
 ```bash
 # Install dependencies
@@ -119,7 +131,12 @@ npm run dist:mac
 # GitHub Release: push a vX.Y.Z tag and Actions builds all three platforms (see docs/RELEASING.md)
 ```
 
+</details>
+
 ## Project Structure
+
+<details>
+<summary><strong>Show project structure</strong></summary>
 
 ```
 app/
@@ -162,14 +179,17 @@ scripts/
   smoke-packaged-standalone.mjs                    # Smoke-test the packaged app
 ```
 
+</details>
+
 ## Tech Stack
 
-| Layer | Technology |
-| --- | --- |
-| Frontend | Next.js + React + TypeScript + Tailwind CSS |
-| Desktop | Electron |
-| Packaging | electron-builder (Windows NSIS; macOS Universal DMG + ZIP; Linux DEB) |
-| Realtime | SSE (Server-Sent Events) streaming |
+[![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Electron](https://img.shields.io/badge/Electron-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+
+Packaging: electron-builder (Windows NSIS · macOS Universal DMG + ZIP · Linux DEB) · Realtime: SSE streaming
 
 ## Credits
 

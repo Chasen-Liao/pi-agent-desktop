@@ -7,7 +7,7 @@
 <div align="center">
 
 <a href="https://github.com/Chasen-Liao/pi-agent-desktop">
-  <img src="public/logo.png" alt="Pi Agent Desktop logo" width="128" height="128" />
+  <img src="public/logo.png" alt="Pi Agent Desktop logo" width="160" height="160" style="border-radius:20%" />
 </a>
 
 # Pi Agent Desktop
@@ -16,6 +16,9 @@
 
 [![Release](https://img.shields.io/github/v/release/Chasen-Liao/pi-agent-desktop?color=orange&logo=github)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
 [![License](https://img.shields.io/github/license/Chasen-Liao/pi-agent-desktop?color=blue)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/Chasen-Liao/pi-agent-desktop?style=flat&logo=github&color=yellow)](https://github.com/Chasen-Liao/pi-agent-desktop/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/Chasen-Liao/pi-agent-desktop/total?color=green)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
 [![Landing](https://img.shields.io/badge/Landing-GitHub%20Pages-111111?logo=githubpages)](https://chasen-liao.github.io/pi-agent-desktop/)
 
 ![Pi Agent Desktop 演示](public/pi.gif)
@@ -39,51 +42,60 @@
 
 ### 🖥️ 桌面体验
 
-- **原生桌面应用** — 基于 Electron 的独立窗口应用，支持系统托盘、最小化到托盘
-- **原生工作区界面** — Apple 风格桌面布局、液态思考球与更紧凑的消息输入体验
-- **自动更新** — 支持 GitHub Releases 自动检查更新
-- **快捷键** — `Ctrl+B` 切换左侧边栏，`Ctrl+Alt+B` 切换右侧面板
+| 功能 | 说明 |
+| --- | --- |
+| **原生桌面应用** | 基于 Electron 的独立窗口应用，支持系统托盘、最小化到托盘 |
+| **原生工作区界面** | Apple 风格桌面布局、液态思考球与更紧凑的消息输入体验 |
+| **自动更新** | 支持 GitHub Releases 自动检查更新 |
+| **快捷键** | <kbd>Ctrl</kbd>+<kbd>B</kbd> 切换左侧边栏，<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>B</kbd> 切换右侧面板 |
 
 ### 💬 会话与对话
 
-- **会话浏览器** — 按工作目录分组展示所有 Pi 会话
-- **实时对话** — 通过 SSE 流式输出与智能体实时交互
-- **运行中消息队列** — `Enter` 立即 steer，`Alt+Enter` 排队；支持拖拽与键盘重排 Follow-up
-- **会话内分支** — 回退到任意节点继续对话，分支保存在同一文件内
-- **分支导航器** — 可视化切换同一会话内的各个分支
-- **会话分叉与克隆** — API/UI 支持从任意节点 Branch，或将会话 Clone 到普通目录或 Git Worktree（新分支）
-- **会话导出** — 一键导出为 HTML / Markdown 格式
-- **模型切换** — 对话中途随时切换模型；选择器与认证面板加载本机 Pi 扩展动态注册的 provider
+| 功能 | 说明 |
+| --- | --- |
+| **会话浏览器** | 按工作目录分组展示所有 Pi 会话 |
+| **实时对话** | 通过 SSE 流式输出与智能体实时交互 |
+| **运行中消息队列** | <kbd>Enter</kbd> 立即 steer，<kbd>Alt</kbd>+<kbd>Enter</kbd> 排队；支持拖拽与键盘重排 Follow-up |
+| **会话内分支** | 回退到任意节点继续对话，分支保存在同一文件内 |
+| **分支导航器** | 可视化切换同一会话内的各个分支 |
+| **会话分叉与克隆** | API/UI 支持从任意节点 Branch，或将会话 Clone 到普通目录或 Git Worktree（新分支） |
+| **会话导出** | 一键导出为 HTML / Markdown 格式 |
+| **模型切换** | 对话中途随时切换模型；选择器加载本机 Pi 扩展动态注册的 provider |
 
 ### 🤖 智能体能力
 
-- **Agent 模式** — 支持 Plan / Ask / Full 三种安全模式与 Ask 工具拦截确认
-- **Extension UI Bridge** — 原生弹窗支持 Extension `confirm` / `select` / `input` / `editor` / `notify` 交互
-- **项目信任机制** — Project Trust 409 握手与授权弹窗
-- **工具面板** — 控制智能体可使用的工具
-- **长期记忆 LTM** — 项目级 SQLite 记忆（`memory_save` / `memory_recall` / `memory_forget`），跨会话检索；中文/日韩走 FTS5 trigram；`agent_end` 与 compact 前自动观察写入
+| 功能 | 说明 |
+| --- | --- |
+| **Agent 模式** | 支持 Plan / Ask / Full 三种安全模式与 Ask 工具拦截确认 |
+| **Extension UI Bridge** | 原生弹窗支持 Extension `confirm` / `select` / `input` / `editor` / `notify` 交互 |
+| **项目信任机制** | Project Trust 409 握手与授权弹窗 |
+| **工具面板** | 控制智能体可使用的工具 |
+| **长期记忆 LTM** | 项目级 SQLite 记忆（`memory_save` / `memory_recall` / `memory_forget`），跨会话检索；中文/日韩走 FTS5 trigram；`agent_end` 与 compact 前自动观察写入 |
 
 ### ⚙️ 配置与管理
 
-- **MCP 服务器管理** — 支持全局（`~/.pi/agent/mcp.json`）与项目（`<cwd>/.pi/mcp.json`）MCP 配置与 UI 管理
-- **扩展与 Skill 管理** — 统一 UI 管理全局和项目扩展、Skill 启用与诊断
-- **AgentMode 持久化** — 自动写入 `.jsonl` 自定义 `desktop_agent_mode` 节点，重载恢复历史模式
-- **界面语言** — 中 / 英，可跟随系统
-- **文件浏览** — 侧边栏内置文件浏览器和查看器
+| 功能 | 说明 |
+| --- | --- |
+| **MCP 服务器管理** | 支持全局（`~/.pi/agent/mcp.json`）与项目（`<cwd>/.pi/mcp.json`）MCP 配置与 UI 管理 |
+| **扩展与 Skill 管理** | 统一 UI 管理全局和项目扩展、Skill 启用与诊断 |
+| **AgentMode 持久化** | 自动写入 `.jsonl` 自定义 `desktop_agent_mode` 节点，重载恢复历史模式 |
+| **界面语言** | 中 / 英，可跟随系统 |
+| **文件浏览** | 侧边栏内置文件浏览器和查看器 |
 
 ## 下载安装
 
 前往 [Releases](https://github.com/Chasen-Liao/pi-agent-desktop/releases) 页面下载最新版安装程序。
 
-按系统下载对应安装包（以当前 Release 资产为准）：
-
 | 平台 | 安装包 |
 | --- | --- |
-| Windows | `Pi-Agent-Desktop-Setup-x.x.x.exe` |
-| macOS（Universal，Intel + Apple Silicon） | `Pi-Agent-Desktop-x.x.x-mac-universal.dmg`（ZIP 供自动更新） |
-| Linux x64 | `Pi-Agent-Desktop-x.x.x-linux-amd64.deb` |
+| 🪟 Windows | `Pi-Agent-Desktop-Setup-x.x.x.exe` |
+| 🍎 macOS（Universal，Intel + Apple Silicon） | `Pi-Agent-Desktop-x.x.x-mac-universal.dmg`（ZIP 供自动更新） |
+| 🐧 Linux x64 | `Pi-Agent-Desktop-x.x.x-linux-amd64.deb` |
 
 ## 开发
+
+<details>
+<summary><strong>展开开发命令</strong></summary>
 
 ```bash
 # 安装依赖
@@ -119,7 +131,12 @@ npm run dist:mac
 # GitHub Release：推 vX.Y.Z tag，由 Actions 打三端（见 docs/RELEASING.md）
 ```
 
+</details>
+
 ## 项目结构
+
+<details>
+<summary><strong>展开项目结构</strong></summary>
 
 ```
 app/
@@ -162,14 +179,17 @@ scripts/
   smoke-packaged-standalone.mjs                    # 打包后应用冒烟测试
 ```
 
+</details>
+
 ## 技术栈
 
-| 分层 | 技术 |
-| --- | --- |
-| 前端 | Next.js + React + TypeScript + Tailwind CSS |
-| 桌面 | Electron |
-| 打包 | electron-builder（Windows NSIS；macOS Universal DMG + ZIP；Linux DEB） |
-| 通信 | SSE (Server-Sent Events) 实时流式传输 |
+[![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Electron](https://img.shields.io/badge/Electron-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+
+打包：electron-builder（Windows NSIS · macOS Universal DMG + ZIP · Linux DEB）· 通信：SSE 实时流式传输
 
 ## 致谢
 
