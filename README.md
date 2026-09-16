@@ -1,148 +1,176 @@
+<p align="center">
+  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a>
+</p>
+
+---
+
 <div align="center">
-  <a href="https://github.com/Chasen-Liao/pi-agent-desktop">
-    <img src="public/logo.png" alt="Pi Agent Desktop application icon" width="128" height="128" />
-  </a>
 
-  # Pi Agent Desktop
+<a href="https://github.com/Chasen-Liao/pi-agent-desktop">
+  <img src="public/logo.png" alt="Pi Agent Desktop logo" width="128" height="128" />
+</a>
 
-  ### **目标：做出个人极简版 Codex**
+# Pi Agent Desktop
 
-  [Pi 编程智能体](https://github.com/badlogic/pi-mono) 的原生桌面客户端。基于 Electron 构建，提供比浏览器更原生的使用体验。
+**Your personal, minimalist Codex** — a native desktop client for the [Pi coding agent](https://github.com/badlogic/pi-mono), built with Electron for an experience that feels more native than the browser.
 
-  [![Release](https://img.shields.io/github/v/release/Chasen-Liao/pi-agent-desktop?color=orange&logo=github)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
-  [![License](https://img.shields.io/github/license/Chasen-Liao/pi-agent-desktop?color=blue)](LICENSE)
-  [![Landing](https://img.shields.io/badge/Landing-GitHub%20Pages-111111?logo=githubpages)](https://chasen-liao.github.io/pi-agent-desktop/)
+[![Release](https://img.shields.io/github/v/release/Chasen-Liao/pi-agent-desktop?color=orange&logo=github)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
+[![License](https://img.shields.io/github/license/Chasen-Liao/pi-agent-desktop?color=blue)](LICENSE)
+[![Landing](https://img.shields.io/badge/Landing-GitHub%20Pages-111111?logo=githubpages)](https://chasen-liao.github.io/pi-agent-desktop/)
 
-  ---
+![Pi Agent Desktop demo](public/pi.gif)
 
-  ![Pi Agent Desktop Demo](public/pi.gif)
-
-  ---
 </div>
 
-> **上游项目**：本项目衍生自 [pi-web](https://github.com/agegr/pi-web)，侧重于桌面端体验的优化与功能增强。
+> **Upstream**: this project is derived from [pi-web](https://github.com/agegr/pi-web), with a focus on desktop experience polish and feature enhancements.
 
-## 特性
+## Table of Contents
 
-- **原生桌面体验** — 基于 Electron 的独立窗口应用，支持系统托盘、最小化到托盘
-- **会话浏览器** — 按工作目录分组展示所有 pi 会话
-- **实时对话** — 通过 SSE 流式输出与智能体实时交互
-- **运行中消息队列** — Enter 立即 steer，Alt+Enter 排队；支持拖拽与键盘重排 Follow-up
-- **原生工作区界面** — Apple 风格桌面布局、液态思考球与更紧凑的消息输入体验
-- **Agent 模式** — 支持 Plan / Ask / Full 三种安全模式与 Ask 工具拦截确认
-- **Extension UI Bridge** — 原生弹窗支持 Extension `confirm`/`select`/`input`/`editor`/`notify` 交互
-- **项目信任机制** — Project Trust 409 握手与授权弹窗
-- **MCP 服务器管理** — 支持全局 (`~/.pi/agent/mcp.json`) 与项目 (`<cwd>/.pi/mcp.json`) MCP 配置与 UI 管理
-- **扩展与 Skill 管理** — 统一 UI 管理全局和项目扩展、Skill 启用与诊断
-- **会话分叉与克隆** — API/UI 支持从任意节点 Branch，以及将会话 Clone 到普通目录或 Git Worktree（新分支）
-- **会话导出** — 一键导出为 HTML / Markdown 格式
-- **AgentMode 持久化** — 自动写入 `.jsonl` 自定义 `desktop_agent_mode` 节点，重载恢复历史模式
-- **长期记忆 LTM** — 项目级 SQLite 记忆（`memory_save` / `memory_recall` / `memory_forget`），跨会话检索；中文/日韩走 FTS5 trigram；`agent_end` 与 compact 前自动观察写入
-- **界面语言** — 中 / 英，可跟随系统
-- **会话内分支** — 回退到任意节点继续对话，在同一文件内创建分支
-- **分支导航器** — 可视化切换同一会话内的各个分支
-- **模型切换** — 对话中途随时切换模型；选择器与认证面板加载本机 Pi 扩展动态注册的 provider
-- **工具面板** — 控制智能体可使用的工具
-- **文件浏览** — 侧边栏内置文件浏览器和查看器
-- **快捷键** — `Ctrl+B` 切换左侧边栏，`Ctrl+Alt+B` 切换右侧面板
-- **自动更新** — 支持 GitHub Releases 自动检查更新
+- [Features](#features)
+- [Download & Install](#download--install)
+- [Development](#development)
+- [Project Structure](#project-structure)
+- [Tech Stack](#tech-stack)
+- [Credits](#credits)
+- [Contributing](#contributing)
+- [License](#license)
 
-## 下载安装
+## Features
 
-前往 [Releases](https://github.com/Chasen-Liao/pi-agent-desktop/releases) 页面下载最新版安装程序。
+### 🖥️ Desktop Experience
 
-按系统下载对应安装包（以当前 Release 资产为准）：
+- **Native desktop app** — standalone Electron window with system tray and minimize-to-tray
+- **Native workspace UI** — Apple-style layout, a liquid thinking orb, and a more compact message input
+- **Auto-updates** — checks and installs new versions from GitHub Releases
+- **Shortcuts** — `Ctrl+B` toggles the left sidebar, `Ctrl+Alt+B` toggles the right panel
 
-- Windows：`Pi-Agent-Desktop-Setup-x.x.x.exe`
-- macOS Universal（Intel + Apple Silicon）：`Pi-Agent-Desktop-x.x.x-mac-universal.dmg`（ZIP 供自动更新）
-- Linux x64：`Pi-Agent-Desktop-x.x.x-linux-amd64.deb`
+### 💬 Sessions & Conversation
 
-## 开发
+- **Session browser** — all Pi sessions grouped by working directory
+- **Real-time conversation** — stream responses live with the agent over SSE
+- **Running message queue** — press `Enter` to steer immediately, `Alt+Enter` to queue; drag or use the keyboard to reorder follow-ups
+- **In-session branching** — roll back to any node and continue from there, with branches kept in the same file
+- **Branch navigator** — visually switch between branches within a session
+- **Fork & clone sessions** — branch from any node via API/UI, or clone a session to a plain directory or a Git worktree on a new branch
+- **Session export** — export a session to HTML or Markdown in one click
+- **Model switching** — switch models mid-conversation; the picker and auth panel load providers dynamically registered by your local Pi extensions
+
+### 🤖 Agent Capabilities
+
+- **Agent modes** — Plan / Ask / Full safety modes, with Ask-tool interception confirmation
+- **Extension UI Bridge** — native dialogs for extension `confirm` / `select` / `input` / `editor` / `notify` interactions
+- **Project trust** — Project Trust 409 handshake with an authorization dialog
+- **Tool panel** — control which tools the agent may use
+- **Long-term memory (LTM)** — project-level SQLite memory (`memory_save` / `memory_recall` / `memory_forget`) with cross-session retrieval; CJK search via FTS5 trigram; auto-observed before `agent_end` and compaction
+
+### ⚙️ Configuration & Management
+
+- **MCP server management** — global (`~/.pi/agent/mcp.json`) and project (`<cwd>/.pi/mcp.json`) MCP configs, manageable from the UI
+- **Extensions & Skills management** — unified UI to enable, diagnose, and manage global and project extensions and Skills
+- **AgentMode persistence** — writes a custom `desktop_agent_mode` node to `.jsonl` and restores the historical mode on reload
+- **Interface language** — English / 简体中文, follows the system
+- **File browsing** — built-in file browser and viewer in the sidebar
+
+## Download & Install
+
+Grab the latest installer from the [Releases](https://github.com/Chasen-Liao/pi-agent-desktop/releases) page.
+
+Pick the package for your platform (check the current release assets):
+
+| Platform | Package |
+| --- | --- |
+| Windows | `Pi-Agent-Desktop-Setup-x.x.x.exe` |
+| macOS (Universal, Intel + Apple Silicon) | `Pi-Agent-Desktop-x.x.x-mac-universal.dmg` (ZIP for auto-update) |
+| Linux x64 | `Pi-Agent-Desktop-x.x.x-linux-amd64.deb` |
+
+## Development
 
 ```bash
-# 安装依赖
+# Install dependencies
 npm install
 
-# 开发模式（浏览器）
+# Dev mode (browser)
 npm run dev          # http://localhost:30141
 
-# 开发模式（Electron 桌面窗口）
+# Dev mode (Electron desktop window)
 npm run dev:electron
 
-# 类型检查
+# Type check
 npx tsc --noEmit
 
-# 代码检查
+# Lint
 npm run lint
 
-# 单测（含 middleware.test.ts；不要去掉 --test-force-exit）
+# Unit tests (includes middleware.test.ts; keep --test-force-exit)
 npm test
 
-# Windows CI 子集（路径 / Electron）
+# Windows CI subset (paths / Electron)
 npm run test:windows
 
-# macOS CI 子集（路径 / Electron / 打包配置）
+# macOS CI subset (paths / Electron / packaging config)
 npm run test:macos
 
-# 构建当前系统安装包（Windows NSIS / Linux DEB；macOS 请用下一行）
+# Build the installer for the current system (Windows NSIS / Linux DEB; for macOS use the next line)
 npm run dist
 
-# 构建 Intel + Apple Silicon Universal macOS 安装包
+# Build Intel + Apple Silicon Universal macOS installer
 npm run dist:mac
 
-# GitHub Release：推 vX.Y.Z tag，由 Actions 打三端（见 docs/RELEASING.md）
+# GitHub Release: push a vX.Y.Z tag and Actions builds all three platforms (see docs/RELEASING.md)
 ```
 
-## 项目结构
+## Project Structure
 
 ```
 app/
   api/
-    sessions/      # 读取会话文件
-    agent/         # 发送命令、SSE 事件流
-    memory/        # 长期记忆 recall / remember / forget / stats / health
-    files/         # 文件内容读取
-    models/        # 可用模型列表与默认模型
-    models-config/ # 读写 models.json
-    skills/        # 技能搜索与安装
-    auth/          # 登录与 API Key 管理
-    health/        # 健康检查
-components/        # UI 组件
-electron/          # Electron 主进程
-hooks/             # React Hooks（会话管理、面板布局等）
+    sessions/      # Read session files
+    agent/         # Send commands, SSE event stream
+    memory/        # LTM recall / remember / forget / stats / health
+    files/         # Read file contents
+    models/        # Available models & default model
+    models-config/ # Read/write models.json
+    skills/        # Skill search & install
+    auth/          # Login & API Key management
+    health/        # Health checks
+components/        # UI components
+electron/          # Electron main process
+hooks/             # React hooks (session management, panel layout, etc.)
 lib/
-  ltm/               # 长期记忆（SQLite + MemoryService + hooks）
-  i18n/              # 界面文案（en / zh-CN / system）
-  session-reader.ts  # 解析 .jsonl 会话文件
-  session-branch-clone.ts # 会话分叉与克隆参数及 header
-  git-worktree.ts    # Git Worktree 创建、身份校验与清理
-  rpc-manager.ts     # 管理 AgentSession 生命周期
-  normalize.ts       # 规范化 toolCall 字段名
+  ltm/               # Long-term memory (SQLite + MemoryService + hooks)
+  i18n/              # UI copy (en / zh-CN / system)
+  session-reader.ts  # Parse .jsonl session files
+  session-branch-clone.ts # Session fork & clone params and headers
+  git-worktree.ts    # Git worktree creation, identity check & cleanup
+  rpc-manager.ts     # Manage AgentSession lifecycle
+  normalize.ts       # Normalize toolCall field names
   types.ts
 scripts/
-  ensure-standalone-next-runtimes.mjs             # 补齐 Turbopack runtime
-  ensure-standalone-pi-runtime.mjs                # 补齐 Pi 运行时依赖闭包
-  ensure-standalone-macos-universal-runtimes.mjs  # 补齐两套 macOS Sharp 运行时
-  dereference-standalone-symlinks.mjs             # 打包前落实 standalone 符号链接
+  ensure-standalone-next-runtimes.mjs             # Patch in Turbopack runtime
+  ensure-standalone-pi-runtime.mjs                # Patch in Pi runtime dependency closure
+  ensure-standalone-macos-universal-runtimes.mjs  # Patch in both macOS Sharp runtimes
+  dereference-standalone-symlinks.mjs             # Resolve standalone symlinks before packaging
 ```
 
-## 技术栈
+## Tech Stack
 
-- **前端**：Next.js + React + TypeScript
-- **桌面**：Electron
-- **打包**：electron-builder（Windows NSIS；macOS Universal DMG + ZIP；Linux DEB）
-- **通信**：SSE (Server-Sent Events) 实时流式传输
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js + React + TypeScript |
+| Desktop | Electron |
+| Packaging | electron-builder (Windows NSIS; macOS Universal DMG + ZIP; Linux DEB) |
+| Realtime | SSE (Server-Sent Events) streaming |
 
-## 致谢
+## Credits
 
-- [pi-mono](https://github.com/badlogic/pi-mono) — Pi 编程智能体核心
-- [pi-web](https://github.com/agegr/pi-web) — 上游 Web 界面项目
+- [pi-mono](https://github.com/badlogic/pi-mono) — the Pi coding agent core
+- [pi-web](https://github.com/agegr/pi-web) — the upstream web UI project
 
-## 协作
+## Contributing
 
-报 Issue、提 PR、合并方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。新功能用 `dev/` 或 `future/` 分支。发版见 [docs/RELEASING.md](docs/RELEASING.md)。
+Report issues, open PRs, and merge guidelines live in [CONTRIBUTING.md](CONTRIBUTING.md). New features go on `dev/` or `future/` branches. Releasing follows [docs/RELEASING.md](docs/RELEASING.md).
 
-## 许可
+## License
 
 MIT License
 
