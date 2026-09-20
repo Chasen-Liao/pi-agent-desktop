@@ -17,7 +17,7 @@ test("returns null when there are no usage values", () => {
   assert.equal(calculateSessionStats(messages), null);
 });
 
-test("sums assistant usage and cost", () => {
+test("sums assistant usage and cost and calculates cacheHitRate", () => {
   const messages: AgentMessage[] = [
     { role: "user", content: "hello" },
     {
@@ -49,7 +49,8 @@ test("sums assistant usage and cost", () => {
   ];
 
   assert.deepEqual(calculateSessionStats(messages), {
-    tokens: { input: 11, output: 22, cacheRead: 33, cacheWrite: 44 },
+    tokens: { input: 11, output: 22, cacheRead: 33, cacheWrite: 44, total: 110 },
+    cacheHitRate: 37.5,
     cost: 11,
   });
 });

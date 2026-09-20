@@ -61,6 +61,9 @@ next-env.d.ts
 
 # agent session leftovers and Windows NUL device file
 /.sessions/
+/.agents/sentinel_*/
+/.agents/teamwork_preview_*/
+/.agents/ORIGINAL_REQUEST.md
 nul
 # Bun lockfile (project uses npm, see package-lock.json)
 bun.lock

@@ -18,7 +18,7 @@ import type { ChatInputHandle } from "./ChatInput";
 import { usePanelLayout } from "@/hooks/usePanelLayout";
 import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 import { useFileTabs } from "@/hooks/useFileTabs";
-import { StatsBar } from "./StatsBar";
+import { StatsBar, type SessionStats, type ContextUsage } from "./StatsBar";
 import { useI18n } from "./I18nProvider";
 
 function isEditableTarget(target: EventTarget | null) {
@@ -111,29 +111,21 @@ export function AppShell() {
     setSystemPrompt(prompt);
   }, []);
 
-  const [sessionStats, setSessionStats] = useState<{
-    tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
-    cost?: number;
-  } | null>(null);
-  const [contextUsage, setContextUsage] = useState<{
-    percent: number | null;
-    contextWindow: number;
-    tokens: number | null;
-  } | null>(null);
+  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+  const [currentModel, setCurrentModel] = useState<{ provider: string; modelId: string } | null>(null);
+  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
 
-  const handleSessionStatsChange = useCallback(
-    (stats: { tokens: { input: number; output: number; cacheRead: number; cacheWrite: number }; cost?: number } | null) => {
-      setSessionStats(stats);
-    },
-    []
-  );
+  const handleSessionStatsChange = useCallback((stats: SessionStats | null) => {
+    setSessionStats(stats);
+  }, []);
 
-  const handleContextUsageChange = useCallback(
-    (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
-      setContextUsage(usage);
-    },
-    []
-  );
+  const handleModelChange = useCallback((model: { provider: string; modelId: string } | null) => {
+    setCurrentModel(model);
+  }, []);
+
+  const handleContextUsageChange = useCallback((usage: ContextUsage | null) => {
+    setContextUsage(usage);
+  }, []);
 
   // Single active panel — only one dropdown open at a time
   const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "system" | null>(null);
@@ -577,7 +569,12 @@ export function AppShell() {
               </div>
             )}
             <div className="flex-1" />
-            <StatsBar showChat={showChat} sessionStats={sessionStats} contextUsage={contextUsage} />
+            <StatsBar
+              showChat={showChat}
+              sessionStats={sessionStats}
+              contextUsage={contextUsage}
+              currentProvider={currentModel?.provider}
+            />
             <div ref={shellMenuRef} className="relative h-full [-webkit-app-region:no-drag]">
               <button
                 ref={shellMenuButtonRef}
@@ -726,6 +723,7 @@ export function AppShell() {
                 onSystemPromptChange={handleSystemPromptChange}
                 onSessionStatsChange={handleSessionStatsChange}
                 onContextUsageChange={handleContextUsageChange}
+                onModelChange={handleModelChange}
               />
             ) : showPlaceholder ? (
               activeCwd ? (
