@@ -3,6 +3,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import { useI18n } from "./I18nProvider";
 import { useUpstreamUsage } from "@/hooks/useUpstreamUsage";
+import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 import { UsagePopover } from "./UsagePopover";
 
 import type { SessionStats } from "@/hooks/agent-session/session-stats";
@@ -45,6 +46,8 @@ export const StatsBar = React.memo(function StatsBar({
   const closePopover = useCallback(() => {
     setPopoverOpen(false);
   }, []);
+
+  useDismissOnOutsideClick(containerRef, popoverOpen, closePopover);
 
   if (!showChat || (!sessionStats && !contextUsage && !currentUsage && usages.length === 0)) {
     return null;

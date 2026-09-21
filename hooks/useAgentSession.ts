@@ -10,7 +10,10 @@ import {
 } from "react";
 import type { SessionInfo, SessionTreeNode, UserMessage } from "@/lib/types";
 import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
-import { calculateSessionStats } from "./agent-session/session-stats";
+import {
+  calculateSessionStats,
+  type SessionStats,
+} from "./agent-session/session-stats";
 import { type AgentPhase } from "./agent-session/agent-phase";
 import {
   initialStreamingState,
@@ -122,6 +125,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [agentRunning, setAgentRunning] = useState(false);
   const [retryInfo, setRetryInfo] = useState<RetryInfo | null>(null);
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
+  const [authoritativeSessionStats, setAuthoritativeSessionStats] =
+    useState<SessionStats | null>(null);
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
   const [isCompacting, setIsCompacting] = useState(false);
@@ -289,10 +294,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     () => (isNew ? newSessionModel : currentModel),
     [isNew, newSessionModel, currentModel],
   );
-  const sessionStats = useMemo(
+  const calculatedSessionStats = useMemo(
     () => calculateSessionStats(messages),
     [messages],
   );
+  const sessionStats = authoritativeSessionStats ?? calculatedSessionStats;
 
   const loadSession = useCallback(
     async (sid: string, showLoading = false, includeState = false) => {
@@ -469,6 +475,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                   (d: {
                     state?: {
                       contextUsage?: ContextUsage | null;
+                      sessionStats?: SessionStats | null;
                       systemPrompt?: string;
                       agentMode?: AgentMode;
                       followUpQueue?: FollowUpQueueSnapshot;
@@ -476,6 +483,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                   }) => {
                     if (d.state?.contextUsage !== undefined) {
                       setContextUsage(d.state.contextUsage ?? null);
+                    }
+                    if (d.state?.sessionStats !== undefined) {
+                      setAuthoritativeSessionStats(d.state.sessionStats ?? null);
                     }
                     if (d.state?.systemPrompt !== undefined) {
                       setSystemPrompt(d.state.systemPrompt ?? null);
@@ -633,6 +643,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     dispatch({ type: "reset" });
     setRetryInfo(reset.retryInfo);
     setContextUsage(reset.contextUsage);
+    setAuthoritativeSessionStats(null);
     setSystemPrompt(reset.systemPrompt);
     setForkingEntryId(reset.forkingEntryId);
     setIsCompacting(reset.isCompacting);
@@ -670,6 +681,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (patch.connectEvents) connectEvents(sid);
       if (patch.isCompacting !== undefined) setIsCompacting(patch.isCompacting);
       if (patch.contextUsage !== undefined) setContextUsage(patch.contextUsage);
+      if (loaded?.agentState?.state?.sessionStats !== undefined) {
+        setAuthoritativeSessionStats(loaded.agentState.state.sessionStats ?? null);
+      }
       if (patch.systemPrompt !== undefined) setSystemPrompt(patch.systemPrompt);
       const loadedQueue = loaded?.agentState?.state?.followUpQueue;
       if (loadedQueue) acceptFollowUpQueue(loadedQueue);

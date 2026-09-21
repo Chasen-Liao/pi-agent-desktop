@@ -301,6 +301,7 @@ export class AgentSessionWrapper {
   private buildStateSnapshot(): Record<string, unknown> {
     const model = this.inner.model;
     const contextUsage = this.inner.getContextUsage();
+    const sessionStats = this.inner.getSessionStats?.();
     const followUpQueue = this.followUpQueue.snapshot();
     return {
       sessionId: this.inner.sessionId,
@@ -315,6 +316,18 @@ export class AgentSessionWrapper {
       followUpQueue,
       contextUsage: contextUsage
         ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
+        : null,
+      sessionStats: sessionStats
+        ? {
+            tokens: sessionStats.tokens,
+            cost: sessionStats.cost,
+            cacheHitRate:
+              sessionStats.tokens.input + sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite > 0
+                ? (sessionStats.tokens.cacheRead /
+                    (sessionStats.tokens.input + sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite)) *
+                  100
+                : null,
+          }
         : null,
       systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
       thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",

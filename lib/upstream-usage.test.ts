@@ -125,8 +125,8 @@ test("fetchAnthropicUsage parses 5h and 7d utilization", async () => {
       ok: true,
       status: 200,
       json: async () => ({
-        five_hour: { utilization: 0.15, resets_at: "2026-09-19T20:00:00.000Z" },
-        seven_day: { utilization: 0.55, resets_at: "2026-09-25T00:00:00.000Z" },
+        five_hour: { utilization: 15, resets_at: "2026-09-19T20:00:00.000Z" },
+        seven_day: { utilization: 55, resets_at: "2026-09-25T00:00:00.000Z" },
       }),
     } as unknown as Response;
   };
@@ -244,6 +244,50 @@ test("getUpstreamProviderUsage normalizes openai to openai-codex when fetching",
   assert.equal(usage?.providerName, "OpenAI Codex");
 });
 
+test("getUpstreamProviderUsage deduplicates concurrent requests", async () => {
+  globalThis.__piUpstreamUsageCache?.clear();
+  let fetchCount = 0;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const mockFetch = async () => {
+    fetchCount++;
+    await pending;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ rate_limit: { primary_window: { used_percent: 10 } } }),
+    } as unknown as Response;
+  };
+  const options = {
+    auth: { "openai-codex": { access: "token" } },
+    fetchImpl: mockFetch as unknown as typeof fetch,
+  };
+
+  const first = getUpstreamProviderUsage("openai-codex", options);
+  const second = getUpstreamProviderUsage("openai-codex", options);
+  assert.equal(fetchCount, 1);
+  release();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+  assert.equal(firstResult, secondResult);
+});
+
+test("getUpstreamProviderUsage never sends custom-provider credentials to OpenRouter", async () => {
+  globalThis.__piUpstreamUsageCache?.clear();
+  let fetchCount = 0;
+  const usage = await getUpstreamProviderUsage("company-openrouter-proxy", {
+    auth: { "company-openrouter-proxy": { key: "private-token" } },
+    fetchImpl: (async () => {
+      fetchCount++;
+      throw new Error("must not be called");
+    }) as unknown as typeof fetch,
+  });
+
+  assert.equal(usage, null);
+  assert.equal(fetchCount, 0);
+});
+
 test("constants verify 120s TTL and 15s cooldown debounce", () => {
   assert.equal(CACHE_TTL_MS, 120 * 1000);
   assert.equal(REFRESH_COOLDOWN_MS, 15 * 1000);
@@ -337,7 +381,7 @@ test("fetchAnthropicUsage handles invalid resetDate without producing NaN", asyn
       ok: true,
       status: 200,
       json: async () => ({
-        five_hour: { utilization: 0.2, resets_at: "not-a-valid-date" },
+        five_hour: { utilization: 20, resets_at: "not-a-valid-date" },
       }),
     } as unknown as Response;
   };

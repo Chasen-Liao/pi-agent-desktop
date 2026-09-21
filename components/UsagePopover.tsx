@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useI18n } from "./I18nProvider";
 import type { UpstreamProviderUsage } from "@/lib/upstream-usage/types";
 import { formatDuration } from "@/lib/upstream-usage/format";
@@ -34,25 +34,14 @@ export function UsagePopover({
   onRefresh,
 }: UsagePopoverProps) {
   const { t, locale } = useI18n();
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [open, onClose]);
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [open]);
 
   if (!open || !anchorRect) return null;
 
@@ -83,10 +72,15 @@ export function UsagePopover({
     : [];
 
   const durationLocale = locale.startsWith("zh") ? "zh" : "en";
+  const localizeUpstreamError = (error: string) => {
+    if (/timeout|abort|cancel/i.test(error)) return t("usage.errorTimeout");
+    if (/no (access token|api key)/i.test(error)) return t("usage.errorCredentials");
+    if (/^HTTP \d+/i.test(error)) return t("usage.errorRejected");
+    return t("usage.errorUnknown");
+  };
 
   return (
     <div
-      ref={popoverRef}
       role="dialog"
       aria-label={t("usage.title")}
       className="t-dropdown is-open material-popover fixed z-[700] w-[350px] rounded-panel border border-border p-3.5 shadow-popover text-text select-none flex flex-col"
@@ -262,7 +256,7 @@ export function UsagePopover({
 
                   {usage.error && (
                     <div className="text-[11px] text-danger bg-danger-bg p-2 rounded-control border border-danger-border">
-                      {t("usage.upstreamError", { error: usage.error })}
+                      {t("usage.upstreamError", { error: localizeUpstreamError(usage.error) })}
                     </div>
                   )}
 
@@ -271,9 +265,18 @@ export function UsagePopover({
                     <div className="space-y-2 pt-0.5">
                       {usage.windows.map((win, idx) => {
                         const pct = win.usedPercent;
+                        const resetSeconds =
+                          win.resetAt != null
+                            ? Math.max(0, Math.ceil((win.resetAt - now) / 1000))
+                            : win.resetAfterSeconds != null
+                            ? Math.max(
+                                0,
+                                win.resetAfterSeconds - Math.floor((now - usage.updatedAt) / 1000)
+                              )
+                            : null;
                         const resetStr =
-                          win.resetAfterSeconds != null
-                            ? formatDuration(win.resetAfterSeconds, durationLocale)
+                          resetSeconds != null
+                            ? formatDuration(resetSeconds, durationLocale)
                             : null;
                         const winLabel =
                           win.id === "5h" || win.label === "5h"

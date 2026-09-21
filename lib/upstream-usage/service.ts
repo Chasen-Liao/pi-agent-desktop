@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { createPiRuntime } from "../pi-runtime.ts";
 import type { UpstreamProviderUsage, UpstreamWindowUsage } from "./types.ts";
 
 interface CacheEntry {
-  data: UpstreamProviderUsage;
+  data?: UpstreamProviderUsage;
+  pending?: Promise<UpstreamProviderUsage | null>;
   expiresAt: number;
   fetchedAt: number;
 }
@@ -386,7 +388,7 @@ export async function fetchAnthropicUsage(
       windows.push({
         id: "5h",
         label: "5h",
-        usedPercent: Math.round(json.five_hour.utilization * 100),
+        usedPercent: Math.round(json.five_hour.utilization),
         resetAfterSeconds: resetAfterSec,
         resetAt: isValidDate ? resetDate!.getTime() : undefined,
       });
@@ -403,7 +405,7 @@ export async function fetchAnthropicUsage(
       windows.push({
         id: "7d",
         label: "7d",
-        usedPercent: Math.round(json.seven_day.utilization * 100),
+        usedPercent: Math.round(json.seven_day.utilization),
         resetAfterSeconds: resetAfterSec,
         resetAt: isValidDate ? resetDate!.getTime() : undefined,
       });
@@ -436,6 +438,43 @@ export function normalizeProviderId(providerId: string, auth: AuthStorageContent
   return providerId;
 }
 
+function usableStoredAuth(stored: AuthStorageContent["string"]): AuthStorageContent["string"] {
+  if (
+    stored.type === "oauth" &&
+    typeof stored.expires === "number" &&
+    stored.expires <= Date.now() + REQUEST_TIMEOUT_MS
+  ) {
+    return {};
+  }
+  return stored;
+}
+
+async function resolveProviderAuth(
+  providerId: string,
+  stored: AuthStorageContent["string"]
+): Promise<AuthStorageContent["string"]> {
+  try {
+    const { runtime } = await createPiRuntime({ allowModelNetwork: false });
+    const resolved = await runtime.getAuth(providerId, { minOAuthValidityMs: REQUEST_TIMEOUT_MS });
+    if (!resolved) return usableStoredAuth(stored);
+
+    const headers = resolved.auth.headers ?? {};
+    const accountId = Object.entries(headers).find(
+      ([name]) => name.toLowerCase() === "chatgpt-account-id"
+    )?.[1];
+    return {
+      ...stored,
+      key: resolved.auth.apiKey ?? stored.key,
+      apiKey: resolved.auth.apiKey ?? stored.apiKey,
+      access: resolved.auth.apiKey ?? stored.access,
+      accountId: accountId != null ? String(accountId) : stored.accountId,
+    };
+  } catch (error) {
+    console.warn(`Failed to resolve refreshed auth for ${providerId}:`, error);
+    return usableStoredAuth(stored);
+  }
+}
+
 export async function getUpstreamProviderUsage(
   providerId: string,
   options: { forceRefresh?: boolean; auth?: AuthStorageContent; fetchImpl?: typeof fetch; now?: number } = {}
@@ -444,45 +483,61 @@ export async function getUpstreamProviderUsage(
   const effectiveProviderId = normalizeProviderId(providerId, authData);
 
   const now = options.now ?? Date.now();
-  const cached = getCache().get(effectiveProviderId);
+  const cache = getCache();
+  const cached = cache.get(effectiveProviderId);
 
-  if (cached) {
-    if (!options.forceRefresh && cached.expiresAt > now) {
-      return cached.data;
+  if (cached?.pending) return cached.pending;
+  if (cached?.data) {
+    if (!options.forceRefresh && cached.expiresAt > now) return cached.data;
+    if (options.forceRefresh && now - cached.fetchedAt < REFRESH_COOLDOWN_MS) return cached.data;
+  }
+
+  const storedAuth = authData[effectiveProviderId];
+  if (!storedAuth) return null;
+
+  const request = (async (): Promise<UpstreamProviderUsage | null> => {
+    const providerAuth = options.auth
+      ? storedAuth
+      : await resolveProviderAuth(effectiveProviderId, storedAuth);
+    const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+    let result: UpstreamProviderUsage | null = null;
+
+    if (effectiveProviderId === "openai-codex") {
+      result = await fetchOpenAICodexUsage(providerAuth, fetchImpl);
+    } else if (effectiveProviderId === "deepseek") {
+      result = await fetchDeepSeekBalance(providerAuth, fetchImpl);
+    } else if (effectiveProviderId === "openrouter") {
+      result = await fetchOpenRouterUsage(providerAuth, effectiveProviderId, fetchImpl);
+    } else if (effectiveProviderId === "anthropic") {
+      result = await fetchAnthropicUsage(providerAuth, fetchImpl);
     }
-    if (options.forceRefresh && now - (cached.fetchedAt ?? cached.data.updatedAt) < REFRESH_COOLDOWN_MS) {
-      return cached.data;
+
+    if (result) {
+      const ttl = result.error ? REFRESH_COOLDOWN_MS : CACHE_TTL_MS;
+      cache.set(effectiveProviderId, {
+        data: result,
+        expiresAt: now + ttl,
+        fetchedAt: now,
+      });
+    } else {
+      cache.delete(effectiveProviderId);
     }
+    return result;
+  })();
+
+  cache.set(effectiveProviderId, {
+    data: cached?.data,
+    pending: request,
+    expiresAt: cached?.expiresAt ?? 0,
+    fetchedAt: cached?.fetchedAt ?? now,
+  });
+
+  try {
+    return await request;
+  } catch (error) {
+    cache.delete(effectiveProviderId);
+    throw error;
   }
-
-  const providerAuth = authData[effectiveProviderId];
-  if (!providerAuth) {
-    return null;
-  }
-
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-  let result: UpstreamProviderUsage | null = null;
-
-  if (effectiveProviderId === "openai-codex") {
-    result = await fetchOpenAICodexUsage(providerAuth, fetchImpl);
-  } else if (effectiveProviderId === "deepseek") {
-    result = await fetchDeepSeekBalance(providerAuth, fetchImpl);
-  } else if (effectiveProviderId === "openrouter" || effectiveProviderId.includes("openrouter") || effectiveProviderId.includes("open-router")) {
-    result = await fetchOpenRouterUsage(providerAuth, effectiveProviderId, fetchImpl);
-  } else if (effectiveProviderId === "anthropic") {
-    result = await fetchAnthropicUsage(providerAuth, fetchImpl);
-  }
-
-  if (result) {
-    const ttl = result.error ? REFRESH_COOLDOWN_MS : CACHE_TTL_MS;
-    getCache().set(effectiveProviderId, {
-      data: result,
-      expiresAt: now + ttl,
-      fetchedAt: now,
-    });
-  }
-
-  return result;
 }
 
 export async function getAllUpstreamUsage(
@@ -494,8 +549,6 @@ export async function getAllUpstreamUsage(
       id === "openai-codex" ||
       id === "deepseek" ||
       id === "openrouter" ||
-      id.includes("openrouter") ||
-      id.includes("open-router") ||
       id === "anthropic"
   );
 
