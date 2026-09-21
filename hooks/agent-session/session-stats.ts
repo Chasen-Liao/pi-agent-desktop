@@ -6,7 +6,9 @@ export interface SessionStats {
     output: number;
     cacheRead: number;
     cacheWrite: number;
+    total?: number;
   };
+  cacheHitRate?: number | null;
   cost?: number;
 }
 
@@ -26,5 +28,14 @@ export function calculateSessionStats(messages: AgentMessage[]): SessionStats | 
   }
 
   const total = tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite;
-  return total > 0 ? { tokens, cost } : null;
+  if (total === 0) return null;
+
+  const promptTokens = tokens.input + tokens.cacheRead + tokens.cacheWrite;
+  const cacheHitRate = promptTokens > 0 ? (tokens.cacheRead / promptTokens) * 100 : undefined;
+
+  return {
+    tokens: { ...tokens, total },
+    cacheHitRate,
+    cost,
+  };
 }

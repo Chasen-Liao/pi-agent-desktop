@@ -1,4 +1,9 @@
-import type { SessionManager, SettingsManager, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import type {
+  SessionManager,
+  SettingsManager,
+  AgentSessionEvent,
+  SessionStats,
+} from "@earendil-works/pi-coding-agent";
 
 export interface ContextUsage {
   percent: number | null;
@@ -52,6 +57,7 @@ export interface AgentSessionLike {
   setActiveToolsByName(names: string[]): void;
   abortCompaction(): void;
   getContextUsage(): ContextUsage | undefined;
+  getSessionStats?(): SessionStats;
   /** Pi extension bindings (desktop UI bridge). Optional on stubs. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   bindExtensions?(bindings: { uiContext?: any; mode?: string }): Promise<void>;

@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { AgentMessage, SessionTreeNode } from "../../lib/types";
 import type { FollowUpQueueSnapshot } from "../../lib/follow-up-queue";
+import type { SessionStats } from "./session-stats.ts";
 import { fetchSession, fetchContext } from "./session-loader-api.ts";
 
 /** Latest-request-wins guard: stale() goes true once a newer call bumps the ref. */
@@ -30,6 +31,7 @@ export interface LoadedAgentState {
     isStreaming?: boolean;
     isCompacting?: boolean;
     contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
+    sessionStats?: SessionStats | null;
     systemPrompt?: string;
     thinkingLevel?: string;
     followUpQueue?: FollowUpQueueSnapshot;

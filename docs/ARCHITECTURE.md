@@ -378,6 +378,7 @@ stateDiagram-v2
 | `globalThis.__piLtmService` | 长期记忆 `MemoryService` 单例 | [lib/ltm/service.ts](../lib/ltm/service.ts) | 配置 key 变化时重建；测试可显式 reset |
 | `globalThis.__piLoginCallbacks` | OAuth 手动输入回调注册表 | [app/api/auth/login/[provider]/route.ts](../app/api/auth/login/[provider]/route.ts) | 登录完成、取消或流结束时删除 token |
 | `globalThis.__piGitWorktreeLocks` | Worktree 创建/清理的进程内锁 | [lib/git-worktree.ts](../lib/git-worktree.ts) | 操作完成后释放；键值为空时删除 |
+| `globalThis.__piUpstreamUsageCache` | 上游配额查询缓存（120s TTL） | [lib/upstream-usage/service.ts](../lib/upstream-usage/service.ts) | 120s TTL 自动过期；forceRefresh 15s 冷却防抖 |
 
 **Fork 注册顺序陷阱**（详见 §14.2）：fork 在**文件层**通过 `SessionManager.createBranchedSession()`（或首条消息前的 `SessionManager.create()`）完成，**不修改旧 wrapper 内部状态**。但 `send("fork")` 仍需先 `startRpcSession(newSessionId, ...)` 预注册新 wrapper，再 `this.destroy()` 旧 wrapper，以满足"返回时 newSessionId 已在注册表"的契约。
 

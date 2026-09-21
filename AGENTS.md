@@ -79,6 +79,7 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 | `__piSessionOnlyTrust` | per-session 信任状态 | `rpc-manager.ts` |
 | `__piGitWorktreeLocks` | Worktree 创建/清理并发锁 | `git-worktree.ts` |
 | `__piLoginCallbacks` | OAuth 手动输入回调注册表 | `auth/login/[provider]/route.ts` |
+| `__piUpstreamUsageCache` | 上游配额查询缓存（120s TTL） | `lib/upstream-usage/service.ts` |
 
 ---
 
