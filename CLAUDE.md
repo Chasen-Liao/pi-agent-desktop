@@ -63,6 +63,7 @@ npm run dist:mac
 - **MCP 服务器管理**：读写全局 (`~/.pi/agent/mcp.json`) 和项目级 (`<cwd>/.pi/mcp.json`) MCP 配置，支持连接测试、开关与工具计数管理。
 - **扩展与 Skill 管理**：统一配置面板管理已加载 Extension、Skill 启用状态与诊断信息。
 - **扩展模型进选择器（v0.8.7）**：`createPiRuntime` 经 `createAgentSessionServices` 加载本机 Pi 扩展注册的 provider，`/api/models` 与 `/api/auth/*` 与终端对齐。
+- **用量与上游额度面板（v0.8.9）**：状态栏汇总会话 Token / 上下文用量，面板读取 OpenAI Codex、DeepSeek、OpenRouter、Anthropic 的可用额度与重置时间。
 - **会话 Branching & Cloning**：支持从会话节点分叉新分支 (`/api/sessions/[id]/branch`)，或通过 `/api/sessions/[id]/clone` Clone 到普通目录或 Git Worktree（可指定新分支）。
 - **会话导出 (HTML/MD)**：支持将会话流式或静态导出为独立的 HTML（含语法高亮）或 Markdown 文件 (`/api/sessions/[id]/export`)。
 - **AgentMode `.jsonl` 持久化**：在模式切换时向 Session `.jsonl` 追加 `desktop_agent_mode` Custom Entry，Session 重载时自动恢复历史模式。
@@ -84,10 +85,10 @@ npm run dist:mac
 
 | 目录 | 用途 |
 |---|---|
-| `app/api/` | **38** 条 API 路由（含 **memory** 5 条；另有 agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings 等） |
+| `app/api/` | **39** 条 API 路由（含 **memory** 5 条；另有 agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings 等） |
 | `lib/` | 服务端库：`rpc-manager` / `session-reader` / **`ltm/`** / **`i18n/`** / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` 等 |
-| `components/` | 27 个顶层组件（含 `I18nProvider` / `AgentThinkingOrb` / `LiquidOrbCanvas` / `McpConfigModal` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
-| `hooks/` | 7 个顶层 hook + `agent-session/` 子目录下 15 个拆分模块 |
+| `components/` | 29 个顶层组件（含 `I18nProvider` / `AgentThinkingOrb` / `LiquidOrbCanvas` / `McpConfigModal` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
+| `hooks/` | 8 个顶层 hook + `agent-session/` 子目录下 15 个拆分模块 |
 | `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 14 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
 

@@ -102,7 +102,7 @@ flowchart TD
         S1[rpc-manager.ts<br/>AgentSessionWrapper]
         S2[session-reader.ts<br/>.jsonl 解析]
         S3[normalize.ts<br/>ToolCall 归一化]
-        S4["38 条 API 路由"]
+        S4["39 条 API 路由"]
         S5[session-cascade / session-lock]
     end
 
@@ -160,7 +160,7 @@ pi-agent-desktop/
 │   ├── layout.tsx                主题初始化 + I18nProvider + 字体 + 防 FOUC 脚本
 │   ├── page.tsx                  挂载 <AppShell/>
 │   ├── globals.css               CSS 变量主题 + View Transitions
-│   └── api/                      38 条 API 路由（见 §12）
+│   └── api/                      39 条 API 路由（见 §12）
 │
 ├── components/                   React 组件（见 §10）
 │   ├── I18nProvider.tsx          界面语言（en / zh-CN / system）
@@ -442,7 +442,7 @@ Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并�
 
 > 完整清单基于 CodeGraph 索引。所有组件**手写，零 UI 库依赖**，通过 CSS 变量实现暗色/亮色主题。
 
-### 顶层组件（27 个）
+### 顶层组件（29 个）
 
 | 组件 | 职责 |
 | --- | --- |
@@ -463,7 +463,8 @@ Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并�
 | `FileViewer.tsx` | 文件内容查看：代码高亮、图片、音频、Myers diff |
 | `FileIcons.tsx` | 纯 SVG 单色文件图标（按扩展名匹配） |
 | `TabBar.tsx` | 顶部标签栏：Chat 标签 + 多文件标签 |
-| `StatsBar.tsx` | token / cost / 上下文用量统计 |
+| `StatsBar.tsx` | token / cost / 上下文用量与额度摘要；点击打开用量面板 |
+| `UsagePopover.tsx` | 会话用量、上下文容量、上游额度窗口与重置倒计时 |
 | `AgentModeSelector.tsx` | Plan / Ask / Full 三档安全模式切换控件 |
 | `ExecutePlanBar.tsx` | Plan 模式生成计划后的“一键执行计划”操作条 |
 | `ExtensionUiDialog.tsx` | Extension UI Bridge 交互弹窗 (confirm/select/input/editor) |
@@ -621,12 +622,13 @@ components/models-config/     模型配置弹窗的子组件
 | `app/api/auth/logout/[provider]/route.ts` | POST | 登出 |
 | `app/api/auth/api-key/[provider]/route.ts` | GET / POST / DELETE | API Key 状态查询 / 保存 / 删除 |
 
-### 其他（2 条）
+### 其他（3 条）
 
 | 路由 | 方法 | 用途 |
 | --- | --- | --- |
 | `app/api/statusline/route.ts` | GET | git 分支与状态元数据 |
 | `app/api/health/route.ts` | GET | 桌面端启动健康探测（`server-wait.ts` 调用） |
+| `app/api/usage/upstream/route.ts` | GET | 查询支持 provider 的上游用量 / 额度；支持 `provider` 单查与 `refresh` 刷新 |
 
 ---
 
