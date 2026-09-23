@@ -61,6 +61,7 @@
 | **Fork & clone sessions** | Branch from any node via API/UI, or clone to a plain directory or a Git worktree on a new branch |
 | **Session export** | Export a session to HTML or Markdown in one click |
 | **Model switching** | Switch models mid-conversation; picker loads providers dynamically registered by local Pi extensions |
+| **Usage & quotas** | Open the status-bar panel to inspect session tokens, cache usage, context capacity, and supported provider quotas with reset times |
 
 ### 🤖 Agent Capabilities
 

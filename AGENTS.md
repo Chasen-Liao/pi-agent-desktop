@@ -57,10 +57,10 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 
 | 目录 | 内容 |
 | --- | --- |
-| `app/api/` | 38 条 API 路由 |
+| `app/api/` | 39 条 API 路由 |
 | `lib/` | `rpc-manager` / `session-reader` / `session-branch-clone` / `git-worktree` / `ltm` / `i18n` 等服务端库 |
-| `components/` | 27 个顶层组件 + 3 个子目录（`chat-input` / `models-config` / `session-sidebar`） |
-| `hooks/` | 7 个顶层 hook + `agent-session/` 15 个模块 |
+| `components/` | 29 个顶层组件 + 3 个子目录（`chat-input` / `models-config` / `session-sidebar`） |
+| `hooks/` | 8 个顶层 hook + `agent-session/` 15 个模块 |
 | `electron/` | `main.ts` + `preload.ts` + `tray.ts` + 13 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口 |
 
