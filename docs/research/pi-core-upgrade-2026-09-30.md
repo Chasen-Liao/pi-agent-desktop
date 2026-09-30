@@ -157,3 +157,5 @@ DefaultResourceLoader 的 extensionFactories 挂载 `createCodemodeExtension({ m
 通过 `npm test`（660 通过、2 跳过）、改动文件 ESLint、排除 `.next` 生成文件的源码类型检查及 `git diff --check`。使用真实隔离的 stdio/本地 Streamable HTTP 服务验证协议握手和工具发现；stdio 会话验证原生 Codemode 嵌套调用、Ask 拒绝、Plan/关闭开关拦截。回归覆盖重载先于 prompt、扩展 shutdown 先于 dispose、context_edit 的历史消息来源对应。浏览器在隔离 agentDir 验证开关保存、重开读回与说明布局。
 
 完整 lint 仍受已有 `docs/assets/liquid-orb.js:53` 的 `no-assign-module-variable` 错误阻塞；dev 生成的完整类型检查仍受已有 usage 路由 `createUsageGetHandler` 额外导出阻塞。当前机器的 SWC 原生二进制不可用，UI 验证使用 webpack/WASM fallback。遵守项目约定未运行 `next build`；正式打包、真实外部服务 OAuth/登录 UI、完整 Windows 子进程树回收尚未验证。MCP UI 显示配置状态，当前会话的连接及认证仍由原生 `/mcp` 命令管理。
+
+后续按用户要求清除 CI 阻塞：shader 局部变量改名为 `shaderModule`，usage 路由的测试工厂移至 `lib/upstream-usage/route-handler.ts`，保留合法路由导出。完整 lint 和包含 dev 生成文件的 `npx tsc --noEmit` 已通过，usage 路由回归测试通过。另修复混合 `enabled`/旧 `disabled` 字段时 UI 与运行层的启用状态不一致，并更新 HTTP 表单双语文案；新增启用状态组合回归测试。生产构建继续由 PR CI 验证。
