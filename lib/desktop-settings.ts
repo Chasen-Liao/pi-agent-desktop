@@ -25,6 +25,7 @@ export interface DesktopLtmSettings {
 export interface DesktopSettings {
   defaultAgentMode: AgentMode;
   defaultToolPreset: ToolPreset;
+  codemodeEnabled?: boolean;
   /** Optional LTM config; omitted when unset. Merged by getLtmConfig. */
   ltm?: DesktopLtmSettings;
 }
@@ -35,6 +36,7 @@ export function defaultDesktopSettings(): DesktopSettings {
   return {
     defaultAgentMode: DEFAULT_AGENT_MODE,
     defaultToolPreset: DEFAULT_TOOL_PRESET,
+    codemodeEnabled: false,
   };
 }
 
@@ -65,6 +67,7 @@ export function mergeDesktopSettings(raw: unknown): DesktopSettings {
       : base.defaultToolPreset,
   };
   if (ltm) result.ltm = ltm;
+  result.codemodeEnabled = typeof obj.codemodeEnabled === "boolean" ? obj.codemodeEnabled : false;
   return result;
 }
 
@@ -93,6 +96,9 @@ export function validateDesktopSettingsBody(body: unknown): string | null {
     return "Body must be an object";
   }
   const obj = body as Record<string, unknown>;
+  if (obj.codemodeEnabled !== undefined && typeof obj.codemodeEnabled !== "boolean") {
+    return "codemodeEnabled must be a boolean";
+  }
   if (obj.defaultAgentMode !== undefined && !isAgentMode(obj.defaultAgentMode)) {
     return "defaultAgentMode must be plan | ask | full";
   }

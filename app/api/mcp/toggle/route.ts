@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server.js";
 import { errorMessage, getRequestId, jsonError, logApiError } from "../../../../lib/api-error.ts";
 import { toggleMcpServer } from "../../../../lib/mcp-config.ts";
+import { requestSessionResourceReload } from "../../../../lib/rpc-manager.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
       );
     }
 
+    requestSessionResourceReload(scope === "project" ? cwd : undefined);
     return NextResponse.json({ success: true }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     logApiError({ route: "/api/mcp/toggle", method: "POST", requestId, error });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server.js";
 import { errorMessage, getRequestId, jsonError, logApiError } from "../../../lib/api-error.ts";
 import { getMcpServers, removeMcpServer, saveMcpServer, type McpServerConfig } from "../../../lib/mcp-config.ts";
+import { requestSessionResourceReload } from "../../../lib/rpc-manager.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
     }
 
     const saved = saveMcpServer(scope, server, cwd);
+    requestSessionResourceReload(scope === "project" ? cwd : undefined);
     return NextResponse.json(
       { success: true, server: saved },
       { headers: { "x-request-id": requestId } }
@@ -67,6 +69,8 @@ export async function DELETE(req: Request) {
         { status: 404, headers: { "x-request-id": requestId } }
       );
     }
+
+    requestSessionResourceReload(scope === "project" ? cwd : undefined);
 
     return NextResponse.json({ success: true }, { headers: { "x-request-id": requestId } });
   } catch (error) {

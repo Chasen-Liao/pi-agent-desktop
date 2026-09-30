@@ -1,4 +1,4 @@
-import { SessionManager, buildSessionContext as piBuildSessionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { SessionManager, buildSessionProjection, getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { SessionEntry, SessionInfo, SessionContext, SessionTreeNode, AssistantMessage, SessionHeader } from "./types.ts";
 import type { SessionEntry as PiSessionEntry, SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize.ts";
@@ -176,62 +176,12 @@ export function buildTree(entries: SessionEntry[]): SessionTreeNode[] {
 }
 
 export function buildSessionContext(entries: SessionEntry[], leafId?: string | null): SessionContext {
-  const byId = new Map<string, SessionEntry>();
-  for (const e of entries) byId.set(e.id, e);
-
   const piEntries = entries as unknown as PiSessionEntry[];
-  const piCtx = piBuildSessionContext(piEntries, leafId, byId as unknown as Map<string, PiSessionEntry>);
-
-  // Build entryIds: parallel array to messages[], mapping each message back to its entry id.
-  // Needed for fork and navigate_tree calls from the UI.
-  let targetLeaf: SessionEntry | undefined;
-  if (leafId === null) {
-    return { messages: [], entryIds: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model };
-  }
-  if (leafId) targetLeaf = byId.get(leafId);
-  if (!targetLeaf) targetLeaf = entries[entries.length - 1];
-  if (!targetLeaf) {
-    return { messages: [], entryIds: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model };
-  }
-
-  // Walk path from target leaf to root
-  const path: SessionEntry[] = [];
-  let cur: SessionEntry | undefined = targetLeaf;
-  while (cur) {
-    path.unshift(cur);
-    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
-  }
-
-  // Find the last compaction on path (mirrors pi's buildSessionContext logic)
-  let compactionId: string | undefined;
-  let firstKeptEntryId: string | undefined;
-  for (const e of path) {
-    if (e.type === "compaction") {
-      compactionId = e.id;
-      firstKeptEntryId = (e as { firstKeptEntryId: string }).firstKeptEntryId;
-    }
-  }
-
-  const entryIds: string[] = [];
-  if (compactionId) {
-    // The first message in piCtx.messages is the synthetic compaction summary — map to compaction entry id
-    entryIds.push(compactionId);
-    const compactionIdx = path.findIndex((e) => e.id === compactionId);
-    const firstKeptIdx = firstKeptEntryId
-      ? path.findIndex((e, i) => i < compactionIdx && e.id === firstKeptEntryId)
-      : -1;
-    const startIdx = firstKeptIdx >= 0 ? firstKeptIdx : compactionIdx;
-    for (let i = startIdx; i < compactionIdx; i++) {
-      if (path[i].type === "message") entryIds.push(path[i].id);
-    }
-    for (let i = compactionIdx + 1; i < path.length; i++) {
-      if (path[i].type === "message") entryIds.push(path[i].id);
-    }
-  } else {
-    for (const e of path) {
-      if (e.type === "message") entryIds.push(e.id);
-    }
-  }
+  const byId = new Map(piEntries.map((entry) => [entry.id, entry]));
+  const piCtx = buildSessionProjection(piEntries, leafId, byId);
+  // Pi 0.87+ context edits can omit or replace messages. Use upstream
+  // provenance so entryIds stay aligned with the finalized messages.
+  const entryIds = piCtx.entries.flatMap((entry) => entry.messages.map(() => entry.sourceEntry.id));
 
   // pi injects compaction summary as {role:"compactionSummary", summary, tokensBefore}.
   // Convert to {role:"user"} so MessageView can render it the same as before.

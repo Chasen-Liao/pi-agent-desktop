@@ -7,6 +7,7 @@ import {
   writeDesktopSettings,
 } from "@/lib/desktop-settings";
 import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
+import { updateSessionCodemode } from "@/lib/rpc-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export async function PUT(req: Request) {
     const current = readDesktopSettings(agentDir);
     const merged = mergeDesktopSettings({ ...current, ...(body as object) });
     const saved = writeDesktopSettings(agentDir, merged);
+    updateSessionCodemode(saved.codemodeEnabled ?? false);
     return NextResponse.json(saved, { headers: { "x-request-id": requestId } });
   } catch (error) {
     logApiError({ route: "/api/desktop-settings", method: "PUT", requestId, error });

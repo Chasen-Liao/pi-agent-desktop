@@ -156,6 +156,12 @@ export interface SessionInfoEntry extends SessionEntryBase {
   name?: string;
 }
 
+export interface ContextEditEntry extends SessionEntryBase {
+  type: "context_edit";
+  targetId: string;
+  replacement: { content: AgentMessage["content"] } | null;
+}
+
 export type SessionEntry =
   | SessionMessageEntry
   | ThinkingLevelChangeEntry
@@ -164,6 +170,7 @@ export type SessionEntry =
   | BranchSummaryEntry
   | CustomEntry
   | CustomMessageEntry
+  | ContextEditEntry
   | LabelEntry
   | SessionInfoEntry;
 

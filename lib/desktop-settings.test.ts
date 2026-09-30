@@ -54,6 +54,21 @@ test("validateDesktopSettingsBody", () => {
   assert.equal(validateDesktopSettingsBody({ defaultAgentMode: "ask" }), null);
   assert.match(validateDesktopSettingsBody(null)!, /object/);
   assert.match(validateDesktopSettingsBody({ defaultAgentMode: "x" })!, /defaultAgentMode/);
+  assert.match(validateDesktopSettingsBody({ codemodeEnabled: "yes" })!, /codemodeEnabled/);
+  assert.equal(validateDesktopSettingsBody({ codemodeEnabled: true }), null);
+});
+
+test("Codemode defaults off and persists alongside other desktop preferences", () => {
+  assert.equal(defaultDesktopSettings().codemodeEnabled, false);
+  const dir = mkdtempSync(join(tmpdir(), "pi-desktop-codemode-"));
+  try {
+    const saved = writeDesktopSettings(dir, { defaultAgentMode: "ask", defaultToolPreset: "full", codemodeEnabled: true, ltm: { enabled: false } });
+    assert.deepEqual(readDesktopSettings(dir), saved);
+    assert.equal(saved.codemodeEnabled, true);
+    assert.equal(saved.ltm?.enabled, false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("mergeDesktopSettings merges nested ltm", () => {

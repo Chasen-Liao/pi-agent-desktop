@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { McpConfigContent } from "./McpConfigModal";
+import { CodemodeConfig } from "./CodemodeConfig";
 import { ModalSurface } from "./ModalSurface";
 import type {
   ExtensionInfo,
@@ -12,7 +13,7 @@ import { useI18n } from "./I18nProvider";
 import { apiJson } from "./apiJson";
 import { getExtensionRenderKey } from "@/lib/extension-render-key";
 
-export type ExtensionsTab = "mcp" | "extensions" | "skills" | "diagnostics";
+export type ExtensionsTab = "mcp" | "codemode" | "extensions" | "skills" | "diagnostics";
 
 export interface ExtensionsConfigModalProps {
   isOpen: boolean;
@@ -213,6 +214,7 @@ export function ExtensionsConfigModal({
 
   const tabs: { id: ExtensionsTab; label: string; count?: number }[] = [
     { id: "mcp", label: t("mcp.servers") },
+    { id: "codemode", label: t("codemode.title") },
     {
       id: "extensions",
       label: t("extension.extensions"),
@@ -288,6 +290,7 @@ export function ExtensionsConfigModal({
           )}
 
           {activeTab === "mcp" && <McpConfigContent cwd={cwd} />}
+          {activeTab === "codemode" && <CodemodeConfig />}
 
           {activeTab === "extensions" && (
             <div className="p-4 flex flex-col gap-4">

@@ -19,6 +19,7 @@ export interface ModelLike {
 export interface ToolInfo {
   name: string;
   description: string;
+  exposure?: string;
 }
 
 export interface NavigateTreeResult {
@@ -44,6 +45,9 @@ export interface AgentSessionLike {
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
   prompt(text: string, options?: { images?: Array<{ type: "image"; data: string; mimeType: string }> }): Promise<void>;
   abort(): Promise<void>;
+  dispose?(): void;
+  reload?(): Promise<void>;
+  extensionRunner?: { emit(event: { type: "session_shutdown"; reason: "quit" }): Promise<unknown> };
   setModel(model: ModelLike): Promise<void>;
   navigateTree(targetId: string, options?: { summarize?: boolean }): Promise<NavigateTreeResult>;
   setThinkingLevel(level: string): void;

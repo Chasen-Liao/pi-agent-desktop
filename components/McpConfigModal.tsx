@@ -19,13 +19,15 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
   const [editingServer, setEditingServer] = useState<Partial<McpServerStatus> | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [formScope, setFormScope] = useState<"global" | "project">("project");
-  const [formTransport, setFormTransport] = useState<"stdio" | "sse">("stdio");
+  const [formTransport, setFormTransport] = useState<"stdio" | "http" | "sse">("stdio");
   const [formId, setFormId] = useState("");
   const [formName, setFormName] = useState("");
   const [formCommand, setFormCommand] = useState("");
   const [formArgs, setFormArgs] = useState("");
   const [formEnv, setFormEnv] = useState("");
   const [formUrl, setFormUrl] = useState("");
+  const [formHeaders, setFormHeaders] = useState("");
+  const [formExposure, setFormExposure] = useState<NonNullable<McpServerConfig["exposure"]>>("direct");
 
   // Testing connection state
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -106,6 +108,9 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
           args: server.args,
           env: server.env,
           url: server.url,
+          headers: server.headers,
+          transport: server.transport,
+          cwd,
         }),
       });
       const data = await res.json();
@@ -150,7 +155,10 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
           command: formTransport === "stdio" ? formCommand.trim() : undefined,
           args: formTransport === "stdio" ? formArgs.split(/\s+/).filter(Boolean) : undefined,
           env: parsedEnv,
-          url: formTransport === "sse" ? formUrl.trim() : undefined,
+          url: formTransport !== "stdio" ? formUrl.trim() : undefined,
+          transport: formTransport,
+          headers: formHeaders.trim() ? JSON.parse(formHeaders) : undefined,
+          cwd,
         }),
       });
       const data = await res.json();
@@ -174,7 +182,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
   const openAddForm = () => {
     setIsNew(true);
     setEditingServer({});
-    setFormScope("project");
+    setFormScope(cwd ? "project" : "global");
     setFormTransport("stdio");
     setFormId("");
     setFormName("");
@@ -182,6 +190,8 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
     setFormArgs("");
     setFormEnv("");
     setFormUrl("");
+    setFormHeaders("");
+    setFormExposure("direct");
     setTestResult(null);
   };
 
@@ -202,6 +212,8 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
         : ""
     );
     setFormUrl(server.url || "");
+    setFormHeaders(server.headers ? JSON.stringify(server.headers, null, 2) : "");
+    setFormExposure(server.exposure ?? "codemode");
     setTestResult(null);
   };
 
@@ -231,12 +243,14 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
       transport: formTransport,
       command: formTransport === "stdio" ? formCommand.trim() || undefined : undefined,
       args: formTransport === "stdio" ? formArgs.split(/\s+/).filter(Boolean) : undefined,
-      env: parsedEnv,
-      url: formTransport === "sse" ? formUrl.trim() || undefined : undefined,
+      env: formTransport === "stdio" ? parsedEnv ?? {} : undefined,
+      url: formTransport !== "stdio" ? formUrl.trim() || undefined : undefined,
+      exposure: formExposure,
       disabled: editingServer?.disabled ?? false,
     };
 
     try {
+      serverConfig.headers = formTransport === "http" ? (formHeaders.trim() ? JSON.parse(formHeaders) : {}) : undefined;
       await apiJson("/api/mcp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -284,6 +298,7 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-4">
+        <p className="mb-4 text-[12px] leading-relaxed text-text-muted">{t("mcp.nativeHint")}</p>
         {editingServer ? (
           /* Add / Edit Form */
           <form onSubmit={handleSaveForm} className="flex flex-col gap-3 max-w-xl mx-auto bg-bg-panel p-4 rounded-panel border border-border">
@@ -340,14 +355,23 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                 </label>
                 <select
                   value={formTransport}
-                  onChange={(e) => setFormTransport(e.target.value as "stdio" | "sse")}
+                  onChange={(e) => setFormTransport(e.target.value as "stdio" | "http" | "sse")}
                   className="w-full px-2.5 py-1.5 rounded-control bg-bg border border-border text-text text-[12px] focus:outline-none focus:border-accent"
                 >
                   <option value="stdio">{t("mcp.stdioTransport")}</option>
-                  <option value="sse">{t("mcp.sseTransport")}</option>
+                  <option value="http">{t("mcp.httpTransport")}</option>
+                  {formTransport === "sse" && <option value="sse" disabled>{t("mcp.sseTransport")}</option>}
                 </select>
               </div>
             </div>
+
+            <label className="text-[12px] text-text-muted">
+              {t("mcp.exposure")}
+              <select value={formExposure} onChange={(e) => setFormExposure(e.target.value as NonNullable<McpServerConfig["exposure"]>)}
+                className="block mt-1 w-full px-2.5 py-1.5 rounded-control bg-bg border border-border text-text">
+                {["direct", "codemode", "codemode-deferred", "deferred", "hidden"].map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
 
             {formTransport === "stdio" ? (
               <>
@@ -397,9 +421,15 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                   type="url"
                   value={formUrl}
                   onChange={(e) => setFormUrl(e.target.value)}
-                  placeholder="https://mcp-server.example.com/sse"
+                  placeholder="https://mcp-server.example.com/mcp"
                   className="w-full px-2.5 py-1.5 rounded-control bg-bg border border-border text-text font-mono text-[12px] focus:outline-none focus:border-accent"
                 />
+                <label className="block mt-3 text-[12px] text-text-muted">
+                  {t("mcp.headers")}
+                  <textarea value={formHeaders} onChange={(e) => setFormHeaders(e.target.value)} rows={3}
+                    placeholder={'{"Authorization": "Bearer ${TOKEN}"}'}
+                    className="block mt-1 w-full px-2.5 py-1.5 rounded-control bg-bg border border-border text-text font-mono resize-y" />
+                </label>
               </div>
             )}
 
@@ -546,13 +576,13 @@ export function McpConfigContent({ cwd }: McpConfigContentProps) {
                           ? `${t("common.connected")} ${server.toolsCount ? `(${t("common.toolsCount", { count: server.toolsCount })})` : ""}`
                           : server.status === "error"
                           ? t("common.error")
-                          : t("common.disconnected")}
+                          : t("mcp.configured")}
                       </span>
                     </div>
 
                     {/* Command / URL details */}
                     <div className="font-mono text-[11px] text-text-muted truncate max-w-lg mt-0.5">
-                      {server.transport === "sse" ? (
+                      {server.transport !== "stdio" ? (
                         <span>{server.url}</span>
                       ) : (
                         <span>
