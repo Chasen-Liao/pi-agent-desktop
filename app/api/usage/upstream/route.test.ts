@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createUsageGetHandler } from "./route.ts";
+import { createUsageGetHandler } from "../../../../lib/upstream-usage/route-handler.ts";
 
 function createTestHandler(onOptions?: (forceRefresh: boolean | undefined) => void) {
   return createUsageGetHandler({
