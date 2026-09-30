@@ -48,6 +48,20 @@ test("MCP project overrides require trust and legacy SSE is not treated as HTTP"
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("native and legacy disabled fields agree between UI and runtime", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-enabled-"));
+  try {
+    for (const enabled of [true, false, undefined]) {
+      for (const disabled of [true, false, undefined]) {
+        writeMcpConfig("global", { mcpServers: { mixed: { command: "node", enabled, disabled } } }, undefined, { agentDir: dir });
+        const visible = getMcpServers(undefined, { agentDir: dir })[0];
+        const loaded = loadDesktopMcpConfig(dir, dir, false).servers[0];
+        assert.equal(loaded.config.enabled, !visible.disabled);
+      }
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("editing does not overwrite a malformed MCP file", () => {
   const dir = mkdtempSync(join(tmpdir(), "pi-mcp-malformed-"));
   try {

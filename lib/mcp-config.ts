@@ -158,7 +158,7 @@ export function loadDesktopMcpConfig(agentDir: string, cwd: string, projectTrust
         const { transport, disabled, ...native } = entry;
         merged.set(name, {
           name, scope, source,
-          config: { ...native, type: native.type ?? transport ?? (native.url ? "http" : "stdio"), enabled: disabled !== undefined ? !disabled : native.enabled } as NativeMcpServerConfig,
+          config: { ...native, type: native.type ?? transport ?? (native.url ? "http" : "stdio"), enabled: !(native.enabled === false || Boolean(disabled)) } as NativeMcpServerConfig,
         });
       }
     } catch {
