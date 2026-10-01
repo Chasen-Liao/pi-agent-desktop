@@ -1,9 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
-import { spawn } from "child_process";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { McpClient, StdioTransport, StreamableHttpTransport } from "@earendil-works/pi-mcp";
+import { writeFileAtomic } from "./atomic-write.ts";
+import { getAgentDir, type LoadedMcpConfig, type McpServerConfig as NativeMcpServerConfig } from "@earendil-works/pi-coding-agent";
 
-export type McpTransportType = "stdio" | "sse";
+export type McpTransportType = "stdio" | "http" | "sse";
 
 export interface McpServerConfig {
   id: string; // unique key in mcpServers dictionary
@@ -12,12 +13,21 @@ export interface McpServerConfig {
   command?: string;
   args?: string[];
   env?: Record<string, string>;
-  url?: string; // for SSE transport
+  url?: string; // Streamable HTTP endpoint
   disabled?: boolean;
+  type?: "stdio" | "http";
+  enabled?: boolean;
+  exposure?: "direct" | "codemode" | "codemode-deferred" | "deferred" | "hidden";
+  headers?: Record<string, string>;
+  cwd?: string;
+  oauth?: Record<string, unknown>;
+  toolExposure?: Record<string, string>;
+  timeout?: number;
 }
 
 export interface McpConfigFile {
   mcpServers?: Record<string, Omit<McpServerConfig, "id">>;
+  [key: string]: unknown;
 }
 
 export interface McpServerStatus extends McpServerConfig {
@@ -29,6 +39,10 @@ export interface McpServerStatus extends McpServerConfig {
 
 export interface McpOptions {
   agentDir?: string;
+}
+
+function isMcpEntry(value: unknown): value is Omit<McpServerConfig, "id"> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 export function getMcpConfigPath(
@@ -62,9 +76,9 @@ export function readMcpConfig(
     }
     const obj = parsed as Record<string, unknown>;
     if (!obj.mcpServers || typeof obj.mcpServers !== "object" || Array.isArray(obj.mcpServers)) {
-      return { mcpServers: {} };
+      return { ...obj, mcpServers: {} };
     }
-    return { mcpServers: obj.mcpServers as Record<string, Omit<McpServerConfig, "id">> };
+    return { ...obj, mcpServers: obj.mcpServers as Record<string, Omit<McpServerConfig, "id">> };
   } catch {
     return { mcpServers: {} };
   }
@@ -77,11 +91,19 @@ export function writeMcpConfig(
   options?: McpOptions
 ): void {
   const path = getMcpConfigPath(scope, cwd, options);
+  // Never replace a malformed existing configuration with an empty one.
+  if (existsSync(path)) {
+    const previous: unknown = JSON.parse(readFileSync(path, "utf-8"));
+    if (!previous || typeof previous !== "object" || Array.isArray(previous)) throw new Error("MCP configuration must be an object");
+    const entries = (previous as McpConfigFile).mcpServers;
+    if (entries !== undefined && (!entries || typeof entries !== "object" || Array.isArray(entries))) throw new Error("mcpServers must be an object");
+  }
   mkdirSync(dirname(path), { recursive: true });
   const formatted: McpConfigFile = {
+    ...config,
     mcpServers: config.mcpServers ?? {},
   };
-  writeFileSync(path, `${JSON.stringify(formatted, null, 2)}\n`, "utf-8");
+  writeFileAtomic(path, `${JSON.stringify(formatted, null, 2)}\n`);
 }
 
 export function getMcpServers(cwd?: string, options?: McpOptions): McpServerStatus[] {
@@ -90,13 +112,15 @@ export function getMcpServers(cwd?: string, options?: McpOptions): McpServerStat
   // Global servers
   const globalConfig = readMcpConfig("global", undefined, options);
   for (const [id, s] of Object.entries(globalConfig.mcpServers ?? {})) {
-    const disabled = Boolean(s.disabled);
+    if (!isMcpEntry(s)) continue;
+    const disabled = s.enabled === false || Boolean(s.disabled);
     serversMap.set(id, {
       id,
       scope: "global",
       status: disabled ? "disabled" : "disconnected",
-      transport: s.transport ?? "stdio",
       ...s,
+      transport: s.transport ?? s.type ?? (s.url ? "http" : "stdio"),
+      disabled,
     });
   }
 
@@ -104,18 +128,56 @@ export function getMcpServers(cwd?: string, options?: McpOptions): McpServerStat
   if (cwd) {
     const projectConfig = readMcpConfig("project", cwd, options);
     for (const [id, s] of Object.entries(projectConfig.mcpServers ?? {})) {
-      const disabled = Boolean(s.disabled);
+      if (!isMcpEntry(s)) continue;
+      const disabled = s.enabled === false || Boolean(s.disabled);
       serversMap.set(id, {
         id,
         scope: "project",
         status: disabled ? "disabled" : "disconnected",
-        transport: s.transport ?? "stdio",
         ...s,
+        transport: s.transport ?? s.type ?? (s.url ? "http" : "stdio"),
+        disabled,
       });
     }
   }
 
   return Array.from(serversMap.values());
+}
+
+/** Only adapt legacy desktop fields; Pi owns connection, auth and tool registration. */
+export function loadDesktopMcpConfig(agentDir: string, cwd: string, projectTrusted: boolean): LoadedMcpConfig {
+  const errors: string[] = [];
+  const servers: LoadedMcpConfig["servers"] = [];
+  const scopes = projectTrusted ? ["global", "project"] as const : ["global"] as const;
+  const merged = new Map<string, LoadedMcpConfig["servers"][number]>();
+  for (const scope of scopes) {
+    const source = getMcpConfigPath(scope, cwd, { agentDir });
+    if (!existsSync(source)) continue;
+    try {
+      const config = JSON.parse(readFileSync(source, "utf-8")) as McpConfigFile;
+      for (const [name, entry] of Object.entries(config.mcpServers ?? {})) {
+        if (!isMcpEntry(entry)) {
+          errors.push(`${source}: server "${name}" must be an object`);
+          continue;
+        }
+        if (entry.transport === "sse") {
+          merged.delete(name);
+          errors.push(`${name}: legacy SSE is not supported; configure a Streamable HTTP endpoint`);
+          continue;
+        }
+        const { transport, disabled, ...native } = entry;
+        merged.set(name, {
+          name, scope, source,
+          config: { ...native, type: native.type ?? transport ?? (native.url ? "http" : "stdio"), enabled: !(native.enabled === false || Boolean(disabled)) } as NativeMcpServerConfig,
+        });
+      }
+    } catch {
+      errors.push(`Could not read MCP configuration: ${source}`);
+    }
+  }
+  servers.push(...merged.values());
+  // The desktop switch is authoritative; MCP must not turn Codemode back on.
+  return { servers, errors, autoEnableCodemode: false };
 }
 
 export function saveMcpServer(
@@ -129,25 +191,52 @@ export function saveMcpServer(
   }
 
   const id = serverConfig.id.trim();
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error("Server id must contain only letters, digits, underscores or hyphens");
+  const transport = serverConfig.transport ?? serverConfig.type ?? (serverConfig.url ? "http" : "stdio");
+  if (transport === "sse") throw new Error("Pi supports Streamable HTTP, not legacy SSE. Configure an HTTP MCP endpoint instead.");
+  if (transport !== "stdio" && transport !== "http") throw new Error("Invalid MCP transport");
+  if (transport === "stdio" && !serverConfig.command?.trim()) throw new Error("Command is required for stdio transport");
+  if (transport === "http") {
+    const url = new URL(serverConfig.url ?? "");
+    if (!["http:", "https:"].includes(url.protocol)) throw new Error("MCP URL must use HTTP or HTTPS");
+  }
   const config = readMcpConfig(scope, cwd, options);
   const currentServers = config.mcpServers ? { ...config.mcpServers } : {};
 
-  const { id: _ignoreId, ...rest } = serverConfig;
+  const rest: Partial<McpServerConfig> = { ...serverConfig };
+  delete rest.id;
+  delete rest.transport;
+  delete rest.disabled;
   const entry: Omit<McpServerConfig, "id"> = {
+    ...currentServers[id],
     ...rest,
-    transport: rest.transport ?? "stdio",
-    disabled: Boolean(rest.disabled),
+    type: transport,
+    enabled: serverConfig.disabled !== undefined ? !serverConfig.disabled : serverConfig.enabled ?? true,
+    exposure: serverConfig.exposure ?? currentServers[id]?.exposure ?? "direct",
   };
+  delete entry.transport;
+  delete entry.disabled;
+  if (transport === "http") {
+    delete entry.command;
+    delete entry.args;
+    delete entry.env;
+  } else {
+    delete entry.url;
+    delete entry.headers;
+    delete entry.oauth;
+  }
 
   currentServers[id] = entry;
-  writeMcpConfig(scope, { mcpServers: currentServers }, cwd, options);
+  writeMcpConfig(scope, { ...config, mcpServers: currentServers }, cwd, options);
 
-  const disabled = Boolean(entry.disabled);
+  const disabled = entry.enabled === false;
   return {
     id,
     scope,
     status: disabled ? "disabled" : "disconnected",
     ...entry,
+    transport,
+    disabled,
   };
 }
 
@@ -168,7 +257,7 @@ export function removeMcpServer(
 
   const currentServers = { ...config.mcpServers };
   delete currentServers[id];
-  writeMcpConfig(scope, { mcpServers: currentServers }, cwd, options);
+  writeMcpConfig(scope, { ...config, mcpServers: currentServers }, cwd, options);
   return true;
 }
 
@@ -191,10 +280,11 @@ export function toggleMcpServer(
   const currentServers = { ...config.mcpServers };
   currentServers[id] = {
     ...currentServers[id],
-    disabled,
+    enabled: !disabled,
   };
+  delete currentServers[id].disabled;
 
-  writeMcpConfig(scope, { mcpServers: currentServers }, cwd, options);
+  writeMcpConfig(scope, { ...config, mcpServers: currentServers }, cwd, options);
   return true;
 }
 export interface TestMcpServerOptions {
@@ -203,6 +293,8 @@ export interface TestMcpServerOptions {
   env?: Record<string, string>;
   url?: string;
   transport?: McpTransportType;
+  headers?: Record<string, string>;
+  cwd?: string;
 }
 
 export interface TestMcpServerResult {
@@ -211,109 +303,28 @@ export interface TestMcpServerResult {
   toolsCount?: number;
 }
 
-export async function testMcpServerConnection(
-  options: TestMcpServerOptions
-): Promise<TestMcpServerResult> {
-  const { command, args, env, url, transport } = options;
-
-  if (transport === "sse" || url) {
-    if (!url) {
-      return { success: false, message: "URL is required for SSE transport" };
-    }
-    try {
-      const response = await fetch(url, {
-        method: "GET",
-        headers: { Accept: "text/event-stream, */*" },
-      });
-      if (response.ok) {
-        return {
-          success: true,
-          message: `Successfully reached SSE endpoint (${response.status})`,
-          toolsCount: 0,
-        };
-      } else {
-        return {
-          success: false,
-          message: `SSE endpoint returned HTTP status ${response.status}`,
-        };
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return {
-        success: false,
-        message: `Failed to connect to SSE endpoint: ${msg}`,
-      };
-    }
+/** A user-requested protocol probe; session connections remain owned by Pi. */
+export async function testMcpServerConnection(options: TestMcpServerOptions): Promise<TestMcpServerResult> {
+  const client = new McpClient({ name: "pi-desktop-probe", version: "1.0.0", requestTimeoutMs: 5000 });
+  const resolveValues = (values?: Record<string, string>) => Object.fromEntries(Object.entries(values ?? {}).map(([key, value]) => {
+    if (value.startsWith("!")) throw new Error("Command-valued credentials are resolved by Pi during the session; use /mcp to check this server.");
+    return [key, value.replace(/\$\{([^}]+)\}/g, (_, name: string) => process.env[name] ?? "")];
+  }));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    if (options.transport === "sse") throw new Error("Legacy SSE is not supported; use Streamable HTTP.");
+    const transport = options.url
+      ? new StreamableHttpTransport({ url: options.url, headers: resolveValues(options.headers), openGetStream: false })
+      : new StdioTransport({ command: options.command ?? "", args: options.args, env: resolveValues(options.env), cwd: options.cwd });
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => { void client.close(); reject(new Error("MCP connection timed out")); }, 7000);
+    });
+    const tools = await Promise.race([(async () => { await client.connect(transport); return client.listTools(); })(), timeout]);
+    return { success: true, toolsCount: tools.length };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : String(error) };
+  } finally {
+    if (timer) clearTimeout(timer);
+    await client.close();
   }
-
-  if (!command) {
-    return { success: false, message: "Command is required for stdio transport" };
-  }
-
-  return new Promise<TestMcpServerResult>((resolve) => {
-    try {
-      const child = spawn(command, args ?? [], {
-        env: { ...process.env, ...env },
-        stdio: "pipe",
-        shell: false,
-      });
-
-      let spawned = true;
-      let errorMessage: string | null = null;
-      let resolved = false;
-
-      const safeResolve = (res: TestMcpServerResult) => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timer);
-          resolve(res);
-        }
-      };
-
-      child.on("error", (err: Error) => {
-        spawned = false;
-        errorMessage = err.message;
-        safeResolve({
-          success: false,
-          message: `Failed to spawn process: ${err.message}`,
-        });
-      });
-
-      const timer = setTimeout(() => {
-        if (spawned) {
-          try {
-            child.kill();
-          } catch {}
-          safeResolve({
-            success: true,
-            message: `Process ${command} spawned successfully`,
-            toolsCount: 0,
-          });
-        }
-      }, 500);
-
-      child.on("exit", (code: number | null) => {
-        if (spawned && errorMessage === null) {
-          if (code !== 0 && code !== null) {
-            safeResolve({
-              success: false,
-              message: `Process exited with failure code ${code}`,
-            });
-          } else {
-            safeResolve({
-              success: true,
-              message: `Process ${command} spawned successfully`,
-              toolsCount: 0,
-            });
-          }
-        }
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      resolve({
-        success: false,
-        message: `Execution failed: ${msg}`,
-      });
-    }
-  });
 }

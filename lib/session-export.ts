@@ -7,12 +7,10 @@ import type {
   TextContent,
   ImageContent,
 } from "./types.ts";
-import {
-  exportFromFile,
-  exportSessionToHtml as piExportSessionToHtml,
-  type ExportOptions,
-} from "../node_modules/@earendil-works/pi-coding-agent/dist/core/export-html/index.js";
-import type { SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ExportOptions } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/export-html/index.js";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { getPackageDir, type SessionManager } from "@earendil-works/pi-coding-agent";
 
 export type HtmlExportOptions = ExportOptions;
 
@@ -125,6 +123,10 @@ export async function exportSessionToHtml(
   input: string | SessionManager,
   options?: HtmlExportOptions
 ): Promise<string> {
+  // Pi does not expose HTML export from its public entry. Resolve it inside
+  // the installed external package so Next does not bundle Pi's workers/WASM.
+  const exporterUrl = pathToFileURL(join(getPackageDir(), "dist/core/export-html/index.js")).href;
+  const { exportFromFile, exportSessionToHtml: piExportSessionToHtml } = await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ exporterUrl) as typeof import("../node_modules/@earendil-works/pi-coding-agent/dist/core/export-html/index.js");
   if (typeof input === "string") {
     return exportFromFile(input, options);
   }

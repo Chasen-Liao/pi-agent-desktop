@@ -50,8 +50,8 @@
       if (!adapter) throw new Error("no-adapter");
 
       var device = await adapter.requestDevice();
-      var module = device.createShaderModule({ code: payload.wgsl });
-      var info = await module.getCompilationInfo();
+      var shaderModule = device.createShaderModule({ code: payload.wgsl });
+      var info = await shaderModule.getCompilationInfo();
       if (info.messages.some(function (m) { return m.type === "error"; })) {
         device.destroy();
         throw new Error("shader-compile");
@@ -60,8 +60,8 @@
       var format = navigator.gpu.getPreferredCanvasFormat();
       var pipeline = await device.createRenderPipelineAsync({
         layout: "auto",
-        vertex: { module: module, entryPoint: "vs_main" },
-        fragment: { module: module, entryPoint: "fs_main", targets: [{ format: format }] },
+        vertex: { module: shaderModule, entryPoint: "vs_main" },
+        fragment: { module: shaderModule, entryPoint: "fs_main", targets: [{ format: format }] },
         primitive: { topology: "triangle-list" }
       });
 

@@ -15,9 +15,9 @@ const flushMicrotasks = (): Promise<void> => new Promise((r) => setImmediate(r))
 
 test("startRpcSession does not pass a hardcoded default tool allowlist", () => {
   assert.doesNotMatch(source, /const allCodingToolNames = \[[^\]]+\]/);
-  assert.match(source, /effectiveTools\.length === 0 \? \{ noTools: "all" as const \}/);
+  assert.match(source, /noTools: "builtin"/);
   assert.match(source, /effectiveToolsForMode/);
-  assert.match(source, /setActiveToolsByName\(effectiveTools\)/);
+  assert.match(source, /setActiveToolsByName\(\[\.\.\.effectiveTools, \.\.\.inner\.getActiveToolNames\(\)\]\)/);
 });
 
 test("startRpcSession registers desktopLtmInlineExtension", () => {
@@ -70,6 +70,37 @@ function makeStubInner(overrides: {
     subscribe: overrides.subscribe ?? ((cb: (event: unknown) => void) => { void cb; return () => {}; }),
   } as never;
 }
+
+test("Codemode changes wait until the running turn settles", async () => {
+  let receive: (event: unknown) => void = () => {};
+  const inner = makeStubInner({ isStreaming: true, subscribe: cb => { receive = cb; return () => {}; } });
+  const w = new AgentSessionWrapper(inner);
+  w.initPolicy("full", "default", true);
+  w.start();
+  try {
+    w.setCodemodeEnabled(false);
+    assert.equal(w.modeRef.codemodeEnabled, true);
+    receive({ type: "agent_settled" });
+    assert.equal(w.modeRef.codemodeEnabled, false);
+  } finally {
+    await w.destroy();
+  }
+});
+
+test("MCP resource changes reload before the next prompt and shutdown before disposal", async () => {
+  const calls: string[] = [];
+  const inner = Object.assign(makeStubInner({ prompt: async () => { calls.push("prompt"); } }), {
+    reload: async () => { calls.push("reload"); },
+    extensionRunner: { emit: async () => { calls.push("shutdown"); } },
+    dispose: () => { calls.push("dispose"); },
+  });
+  const w = new AgentSessionWrapper(inner);
+  w.start();
+  w.requestResourceReload();
+  await w.send({ type: "prompt", message: "test" });
+  await w.destroy();
+  assert.deepEqual(calls, ["reload", "prompt", "shutdown", "dispose"]);
+});
 
 test("wrapper is destroyed after 10 min of inactivity", async () => {
   mock.timers.enable({ apis: ["setTimeout"] });

@@ -1,6 +1,6 @@
 {
   "name": "@chasen-liao/pi-agent-desktop",
-  "version": "0.8.9",
+  "version": "0.9.0",
   "description": "Pi Agent Desktop — desktop client for the pi coding agent",
   "license": "MIT",
   "author": "Chasen",
@@ -45,8 +45,9 @@
     "electron-updater": "^6.8.9"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.84.3",
-    "@earendil-works/pi-coding-agent": "^0.84.3",
+    "@earendil-works/pi-ai": "^0.99.1",
+    "@earendil-works/pi-coding-agent": "^0.99.1",
+    "@earendil-works/pi-mcp": "^0.99.1",
     "@electron/packager": "^20.3.0",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
@@ -57,7 +58,7 @@
     "@types/react-dom": "^19",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@webgpu/types": "^0.1.72",
-    "electron": "^43.4.1",
+    "electron": "^43.7.7",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
@@ -74,6 +75,6 @@
     "typescript": "^5"
   },
   "allowScripts": {
-    "electron@43.4.1": true
+    "electron@43.7.7": true
   }
 }

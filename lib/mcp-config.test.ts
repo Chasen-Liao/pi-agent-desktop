@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
@@ -11,7 +11,79 @@ import {
   saveMcpServer,
   removeMcpServer,
   toggleMcpServer,
+  loadDesktopMcpConfig,
 } from "./mcp-config.ts";
+
+test("native configuration preserves headers, OAuth, exposure and top-level settings", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-native-"));
+  try {
+    writeMcpConfig("global", { autoEnableCodemode: false, mcpServers: { remote: { type: "http", url: "https://example.com/mcp", headers: { Authorization: "Bearer ${TOKEN}" }, oauth: { clientId: "test" }, toolExposure: { dangerous: "hidden" }, enabled: false } } }, undefined, { agentDir: dir });
+    const saved = saveMcpServer("global", { id: "remote", transport: "http", url: "https://example.com/mcp", disabled: false, exposure: "deferred" }, undefined, { agentDir: dir });
+    assert.equal(saved.disabled, false);
+    const native = readMcpConfig("global", undefined, { agentDir: dir });
+    assert.equal(native.autoEnableCodemode, false);
+    assert.equal(native.mcpServers?.remote.enabled, true);
+    assert.equal(native.mcpServers?.remote.disabled, undefined);
+    assert.equal(native.mcpServers?.remote.transport, undefined);
+    assert.deepEqual(native.mcpServers?.remote.headers, { Authorization: "Bearer ${TOKEN}" });
+    assert.deepEqual(native.mcpServers?.remote.oauth, { clientId: "test" });
+    const loaded = loadDesktopMcpConfig(dir, dir, false);
+    assert.equal(loaded.servers[0].config.exposure, "deferred");
+    assert.equal(loaded.autoEnableCodemode, false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("MCP project overrides require trust and legacy SSE is not treated as HTTP", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-trust-"));
+  const agentDir = join(dir, "agent");
+  try {
+    saveMcpServer("global", { id: "same", command: "node" }, undefined, { agentDir });
+    writeMcpConfig("project", { mcpServers: { same: { command: "project-node", disabled: true }, legacy: { transport: "sse", url: "https://example.com/sse" } } }, dir, { agentDir });
+    assert.equal((loadDesktopMcpConfig(agentDir, dir, false).servers[0].config as { command: string }).command, "node");
+    const trusted = loadDesktopMcpConfig(agentDir, dir, true);
+    assert.equal(trusted.servers.length, 1);
+    assert.equal(trusted.servers[0].scope, "project");
+    assert.equal(trusted.servers[0].config.enabled, false);
+    assert.match(trusted.errors[0], /legacy SSE/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("native and legacy disabled fields agree between UI and runtime", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-enabled-"));
+  try {
+    for (const enabled of [true, false, undefined]) {
+      for (const disabled of [true, false, undefined]) {
+        writeMcpConfig("global", { mcpServers: { mixed: { command: "node", enabled, disabled } } }, undefined, { agentDir: dir });
+        const visible = getMcpServers(undefined, { agentDir: dir })[0];
+        const loaded = loadDesktopMcpConfig(dir, dir, false).servers[0];
+        assert.equal(loaded.config.enabled, !visible.disabled);
+      }
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("editing does not overwrite a malformed MCP file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-malformed-"));
+  try {
+    const path = join(dir, "mcp.json");
+    writeFileSync(path, "{broken");
+    assert.throws(() => saveMcpServer("global", { id: "test", command: "node" }, undefined, { agentDir: dir }));
+    assert.equal(readFileSync(path, "utf8"), "{broken");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("malformed MCP entries do not prevent later valid servers from loading", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-entry-"));
+  try {
+    writeFileSync(join(dir, "mcp.json"), JSON.stringify({ mcpServers: {
+      broken: null, array: [], primitive: "invalid", valid: { command: "node" },
+    } }));
+    const loaded = loadDesktopMcpConfig(dir, dir, false);
+    assert.deepEqual(loaded.servers.map(server => server.name), ["valid"]);
+    assert.equal(loaded.errors.length, 3);
+    assert.deepEqual(getMcpServers(undefined, { agentDir: dir }).map(server => server.id), ["valid"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test("getMcpConfigPath resolves paths correctly", () => {
   const customAgentDir = "C:/tmp/custom-agent";

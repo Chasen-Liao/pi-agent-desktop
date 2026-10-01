@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -127,6 +128,15 @@ let child = null;
 try {
   const standaloneDir = join(isolatedRoot, "standalone");
   cpSync(sourceStandaloneDir, standaloneDir, { recursive: true });
+  const agentDir = join(isolatedRoot, "agent");
+  const fixtureDir = join(agentDir, "sessions", "--standalone-smoke--");
+  mkdirSync(fixtureDir, { recursive: true });
+  const fixtureId = randomUUID();
+  const fixtureEntries = [
+    { type: "session", version: 3, id: fixtureId, timestamp: new Date().toISOString(), cwd: isolatedRoot },
+    { type: "message", id: "smoke-message", parentId: null, timestamp: new Date().toISOString(), message: { role: "user", content: "standalone-export-fixture", timestamp: Date.now() } },
+  ];
+  writeFileSync(join(fixtureDir, `smoke_${fixtureId}.jsonl`), fixtureEntries.map(entry => JSON.stringify(entry)).join("\n") + "\n");
   const serverScript = join(standaloneDir, "server.js");
   const port = await getFreePort();
   let stderrText = "";
@@ -138,6 +148,7 @@ try {
       NODE_ENV: "production",
       HOSTNAME: "127.0.0.1",
       PORT: String(port),
+      PI_CODING_AGENT_DIR: agentDir,
       ...(usesElectronRuntime ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
     },
     stdio: ["ignore", "ignore", "pipe"],
@@ -157,9 +168,21 @@ try {
 
   const sessions = await getJsonArray(baseUrl, "/api/sessions", "sessions", stderr);
   const providers = await getJsonArray(baseUrl, "/api/auth/providers", "providers", stderr);
+  const exported = await fetch(`${baseUrl}/api/sessions/${fixtureId}/export?format=html`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  const html = await exported.text();
+  const embedded = html.match(/<script id="session-data" type="application\/json">([^<]+)<\/script>/);
+  if (exported.status !== 200 || !embedded) {
+    throw new Error(`HTML export returned HTTP ${exported.status} or missing session data${stderr()}`);
+  }
+  const exportedData = JSON.parse(Buffer.from(embedded[1], "base64").toString("utf8"));
+  if (exportedData.entries[0]?.message?.content !== "standalone-export-fixture") {
+    throw new Error("HTML export did not preserve the fixture message");
+  }
 
   console.log(
-    `smoke-standalone-server: health 200, sessions 200 (${sessions.length}), auth providers 200 (${providers.length})`
+    `smoke-standalone-server: health 200, sessions 200 (${sessions.length}), auth providers 200 (${providers.length}), HTML export 200`
   );
 } catch (error) {
   console.error(`smoke-standalone-server: ${error instanceof Error ? error.message : String(error)}`);
