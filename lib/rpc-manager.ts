@@ -136,7 +136,7 @@ export class AgentSessionWrapper {
     this._agentMode = mode;
     this._modeRef.current = mode;
     this._modeRef.toolPreset = this._toolPreset;
-    const tools = desktopRuntimeTools(mode, this._toolPreset, this._modeRef.codemodeEnabled ?? false, this.inner.getAllTools());
+    const tools = desktopRuntimeTools(mode, this._toolPreset, this._modeRef.codemodeEnabled ?? false, this.inner.getAllTools(), this.inner.getActiveToolNames());
     this.inner.setActiveToolsByName(tools);
   }
   setCodemodeEnabled(enabled: boolean): void {
@@ -896,7 +896,7 @@ export async function startRpcSession(
     });
 
     if (effectiveTools.length > 0) {
-      inner.setActiveToolsByName(effectiveTools);
+      inner.setActiveToolsByName([...effectiveTools, ...inner.getActiveToolNames()]);
     }
 
     // Pi 0.87+ systemPrompt is read-only. The desktop before_agent_start hook

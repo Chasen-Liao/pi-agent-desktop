@@ -72,6 +72,19 @@ test("editing does not overwrite a malformed MCP file", () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("malformed MCP entries do not prevent later valid servers from loading", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-entry-"));
+  try {
+    writeFileSync(join(dir, "mcp.json"), JSON.stringify({ mcpServers: {
+      broken: null, array: [], primitive: "invalid", valid: { command: "node" },
+    } }));
+    const loaded = loadDesktopMcpConfig(dir, dir, false);
+    assert.deepEqual(loaded.servers.map(server => server.name), ["valid"]);
+    assert.equal(loaded.errors.length, 3);
+    assert.deepEqual(getMcpServers(undefined, { agentDir: dir }).map(server => server.id), ["valid"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("getMcpConfigPath resolves paths correctly", () => {
   const customAgentDir = "C:/tmp/custom-agent";
   const globalPath = getMcpConfigPath("global", undefined, { agentDir: customAgentDir });

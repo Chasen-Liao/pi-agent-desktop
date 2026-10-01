@@ -7,11 +7,14 @@ export function isMcpTool(name: string): boolean {
 }
 
 /** Preserve native MCP exposure; selecting tools must not declare script-only tools. */
-export function desktopRuntimeTools(mode: AgentMode, preset: ToolPreset, codemode: boolean, registered: ToolInfo[]): string[] {
+export function desktopRuntimeTools(mode: AgentMode, preset: ToolPreset, codemode: boolean, registered: ToolInfo[], active: string[] = []): string[] {
   const names = withMemoryTools(effectiveToolsForMode(mode, preset), mode);
   if (mode === "plan" || preset === "none") return names;
   for (const tool of registered) {
-    if (isMcpTool(tool.name) && tool.exposure === "direct") names.push(tool.name);
+    // Native tool_search records deferred/codemode activations in the session.
+    // Keep those declarations across prompts without exposing hidden tools.
+    if (isMcpTool(tool.name) && (tool.exposure === "direct" ||
+      (active.includes(tool.name) && ["deferred", "codemode"].includes(tool.exposure ?? "")))) names.push(tool.name);
   }
   if (registered.some((tool) => tool.name === "tool_search")) names.push("tool_search");
   if (codemode && registered.some((tool) => tool.name === "codemode")) names.push("codemode");

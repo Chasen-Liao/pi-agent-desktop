@@ -61,11 +61,18 @@ test("native MCP handshake, discovery, invocation and Codemode nested permission
     const codemode = session.extensionRunner.getAllRegisteredTools().find((tool) => tool.definition.name === "codemode")!;
     const result = await codemode.definition.execute("test-parent", code, undefined, undefined, ctx);
     assert.match(JSON.stringify(result.content), /native-ok/);
+    const search = session.extensionRunner.getAllRegisteredTools().find(tool => tool.definition.name === "tool_search")!;
+    await search.definition.execute("test-search", { query: "echo", limit: 1 }, undefined, undefined, ctx);
+    assert.ok(session.getActiveToolNames().includes("mcp__fixture__echo"));
+    await session.extensionRunner.emitBeforeAgentStart("next prompt", undefined, { cwd: dir });
+    assert.ok(session.getActiveToolNames().includes("mcp__fixture__echo"), "search activation must survive the next prompt");
     ref.current = "ask";
     const blocked = await ctx.executeTool("mcp__fixture__echo", { text: "must-not-run" });
     assert.equal(blocked.isError, true);
     assert.match(JSON.stringify(blocked), /Blocked/);
     ref.current = "plan";
+    await session.extensionRunner.emitBeforeAgentStart("plan prompt", undefined, { cwd: dir });
+    assert.ok(!session.getActiveToolNames().includes("mcp__fixture__echo"), "Plan must still remove MCP declarations");
     const event = { type: "tool_call" as const, toolName: "codemode", toolCallId: "test-parent", input: code };
     assert.equal((await session.extensionRunner.emitToolCall(event))?.block, true);
     ref.current = "full";

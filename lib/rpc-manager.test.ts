@@ -17,7 +17,7 @@ test("startRpcSession does not pass a hardcoded default tool allowlist", () => {
   assert.doesNotMatch(source, /const allCodingToolNames = \[[^\]]+\]/);
   assert.match(source, /noTools: "builtin"/);
   assert.match(source, /effectiveToolsForMode/);
-  assert.match(source, /setActiveToolsByName\(effectiveTools\)/);
+  assert.match(source, /setActiveToolsByName\(\[\.\.\.effectiveTools, \.\.\.inner\.getActiveToolNames\(\)\]\)/);
 });
 
 test("startRpcSession registers desktopLtmInlineExtension", () => {

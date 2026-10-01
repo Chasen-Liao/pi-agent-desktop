@@ -41,6 +41,10 @@ export interface McpOptions {
   agentDir?: string;
 }
 
+function isMcpEntry(value: unknown): value is Omit<McpServerConfig, "id"> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 export function getMcpConfigPath(
   scope: "global" | "project",
   cwd?: string,
@@ -108,6 +112,7 @@ export function getMcpServers(cwd?: string, options?: McpOptions): McpServerStat
   // Global servers
   const globalConfig = readMcpConfig("global", undefined, options);
   for (const [id, s] of Object.entries(globalConfig.mcpServers ?? {})) {
+    if (!isMcpEntry(s)) continue;
     const disabled = s.enabled === false || Boolean(s.disabled);
     serversMap.set(id, {
       id,
@@ -123,6 +128,7 @@ export function getMcpServers(cwd?: string, options?: McpOptions): McpServerStat
   if (cwd) {
     const projectConfig = readMcpConfig("project", cwd, options);
     for (const [id, s] of Object.entries(projectConfig.mcpServers ?? {})) {
+      if (!isMcpEntry(s)) continue;
       const disabled = s.enabled === false || Boolean(s.disabled);
       serversMap.set(id, {
         id,
@@ -150,6 +156,10 @@ export function loadDesktopMcpConfig(agentDir: string, cwd: string, projectTrust
     try {
       const config = JSON.parse(readFileSync(source, "utf-8")) as McpConfigFile;
       for (const [name, entry] of Object.entries(config.mcpServers ?? {})) {
+        if (!isMcpEntry(entry)) {
+          errors.push(`${source}: server "${name}" must be an object`);
+          continue;
+        }
         if (entry.transport === "sse") {
           merged.delete(name);
           errors.push(`${name}: legacy SSE is not supported; configure a Streamable HTTP endpoint`);

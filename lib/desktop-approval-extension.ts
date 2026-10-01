@@ -18,7 +18,7 @@ export function createDesktopApprovalFactory(modeRef: AgentModeRef): ExtensionFa
   return (pi: ExtensionAPI) => {
     pi.on("before_agent_start", () => {
       const preset = modeRef.toolPreset ?? "default";
-      pi.setActiveTools(desktopRuntimeTools(modeRef.current, preset, modeRef.codemodeEnabled ?? false, pi.getAllTools()));
+      pi.setActiveTools(desktopRuntimeTools(modeRef.current, preset, modeRef.codemodeEnabled ?? false, pi.getAllTools(), pi.getActiveTools()));
       if (preset === "none" && modeRef.current !== "plan") return { systemPrompt: "" };
     });
     pi.on("tool_call", async (event, ctx) => {
