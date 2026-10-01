@@ -1,7 +1,7 @@
 /**
  * A Next.js standalone build only traces native optional dependencies for the
- * host architecture. A Universal macOS app needs Sharp's arm64 and x64
- * packages side-by-side because Sharp selects the package using process.arch.
+ * host architecture. A Universal macOS app needs Sharp's and esbuild's arm64
+ * and x64 packages side-by-side for runtime architecture selection.
  *
  * Copy packages already installed for the host and fetch only the missing
  * architecture packages with `npm pack`. `npm install` cannot install an
@@ -47,6 +47,16 @@ export function requiredDarwinSharpPackages(sharpManifest) {
   }
 
   return packages;
+}
+
+export function requiredDarwinEsbuildPackages(esbuildManifest) {
+  return ["@esbuild/darwin-arm64", "@esbuild/darwin-x64"].map((name) => {
+    const version = esbuildManifest.optionalDependencies?.[name];
+    if (version !== esbuildManifest.version) {
+      throw new Error(`expected esbuild optional dependency ${name}@${esbuildManifest.version}`);
+    }
+    return { name, version };
+  });
 }
 
 function packageDirectory(nodeModules, name) {
@@ -125,6 +135,9 @@ export function ensureStandaloneMacUniversalRuntimes(projectRoot) {
   const requiredPackages = requiredDarwinSharpPackages(
     readJson(sharpManifestPath),
   );
+  const esbuildDirectory = join(standaloneNodeModules, "esbuild");
+  const esbuildManifest = readJson(join(esbuildDirectory, "package.json"));
+  requiredPackages.push(...requiredDarwinEsbuildPackages(esbuildManifest));
   const temporaryDirectory = mkdtempSync(
     join(tmpdir(), "pi-agent-macos-universal-"),
   );
@@ -132,6 +145,20 @@ export function ensureStandaloneMacUniversalRuntimes(projectRoot) {
   let fetched = 0;
 
   try {
+    // esbuild's postinstall replaces the CLI JavaScript with a host-only Mach-O
+    // binary. Restore the upstream portable CLI so each architecture resolves
+    // its own optional package, just like esbuild's JavaScript API does.
+    const esbuildArchive = npmPack(
+      `esbuild@${esbuildManifest.version}`,
+      temporaryDirectory,
+      projectRoot,
+    );
+    const portableEsbuild = join(temporaryDirectory, "esbuild");
+    extractPackage(esbuildArchive, portableEsbuild);
+    const cliPath = join(esbuildDirectory, "bin", "esbuild");
+    rmSync(cliPath, { force: true });
+    cpSync(join(portableEsbuild, "bin", "esbuild"), cliPath);
+
     for (const { name, version } of requiredPackages) {
       const destination = packageDirectory(standaloneNodeModules, name);
       const destinationManifest = join(destination, "package.json");
