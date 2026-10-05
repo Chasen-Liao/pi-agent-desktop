@@ -1,0 +1,9 @@
+{
+  "include": ["scripts", "tests"],
+  "extraPaths": ["scripts"],
+  "typeCheckingMode": "basic",
+  "reportUnknownArgumentType": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownVariableType": false
+}

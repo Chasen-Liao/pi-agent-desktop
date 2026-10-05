@@ -1,0 +1,4 @@
+interface:
+  display_name: "Image to Editable PPT"
+  short_description: "Turn one slide image into a faithful editable PPT"
+  default_prompt: "Use $image-to-editable-ppt to recreate this slide image as an editable PowerPoint."

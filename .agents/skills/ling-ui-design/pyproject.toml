@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ling-ui-design-skill"
+version = "0.1.0"
+description = "Portable helpers for the ling-ui-design Agent Skill"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+  "Pillow>=10",
+  "requests>=2.31",
+]
+
+[project.optional-dependencies]
+browser = ["playwright>=1.52"]
+test = ["pytest>=8"]
+
+[tool.setuptools]
+py-modules = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
