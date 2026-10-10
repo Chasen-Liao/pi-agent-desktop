@@ -143,3 +143,4 @@ tabs.forEach((tab) => {
 requestAnimationFrame(() => moveTo(active(), false));
 window.addEventListener("resize", () => moveTo(active(), false));
 ```
+

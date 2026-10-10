@@ -64,3 +64,6 @@ next-env.d.ts
 nul
 # Bun lockfile (project uses npm, see package-lock.json)
 bun.lock
+
+# ling-ui-design / image-gen working files (references, layers, crops, captures)
+/artifacts/

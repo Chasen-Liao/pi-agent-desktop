@@ -164,3 +164,4 @@ The plus button must overlay the panel, pinned to a corner (`inset: auto 0 0 aut
 ### Open and close use different eases
 
 The bouncy `--morph-ease` only drives the open; the close falls back to the calm `--morph-close-ease`. Don't collapse them into one variable. Adjust the open `width` / `height` in the snippet to your real panel size — they're hardcoded, not derived from the content.
+

@@ -1,0 +1,234 @@
+{
+  "id": "2026-10-06-001245",
+  "generated_at": "2026-10-05T16:12:45.9002375Z",
+  "language": "zh",
+  "pages": [
+    {
+      "slug": "1-xiang-mu-gai-lan",
+      "title": "项目概览",
+      "file": "1-xiang-mu-gai-lan.md",
+      "section": "Get Started",
+      "level": "Beginner"
+    },
+    {
+      "slug": "2-kuai-su-kai-shi",
+      "title": "快速开始",
+      "file": "2-kuai-su-kai-shi.md",
+      "section": "Get Started",
+      "level": "Beginner"
+    },
+    {
+      "slug": "3-shuang-mo-shi-kai-fa-yu-yun-xing",
+      "title": "双模式开发与运行",
+      "file": "3-shuang-mo-shi-kai-fa-yu-yun-xing.md",
+      "section": "Get Started",
+      "level": "Beginner"
+    },
+    {
+      "slug": "4-mu-lu-jie-gou-yu-he-xin-mo-kuai",
+      "title": "目录结构与核心模块",
+      "file": "4-mu-lu-jie-gou-yu-he-xin-mo-kuai.md",
+      "section": "Get Started",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "5-ji-zhu-zhan-yu-guan-jian-yi-lai",
+      "title": "技术栈与关键依赖",
+      "file": "5-ji-zhu-zhan-yu-guan-jian-yi-lai.md",
+      "section": "Get Started",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "6-si-ceng-fen-chi-jia-gou-xiang-jie",
+      "title": "四层分离架构详解",
+      "file": "6-si-ceng-fen-chi-jia-gou-xiang-jie.md",
+      "section": "Deep Dive",
+      "group": "核心架构",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "7-agentsession-sheng-ming-zhou-qi-yu-jin-cheng-nei-zhu-ce-biao",
+      "title": "AgentSession 生命周期与进程内注册表",
+      "file": "7-agentsession-sheng-ming-zhou-qi-yu-jin-cheng-nei-zhu-ce-biao.md",
+      "section": "Deep Dive",
+      "group": "核心架构",
+      "level": "Advanced"
+    },
+    {
+      "slug": "8-sse-shi-jian-liu-yu-liu-shi-zhuang-tai-ji",
+      "title": "SSE 事件流与流式状态机",
+      "file": "8-sse-shi-jian-liu-yu-liu-shi-zhuang-tai-ji.md",
+      "section": "Deep Dive",
+      "group": "核心架构",
+      "level": "Advanced"
+    },
+    {
+      "slug": "9-hui-hua-de-liang-chong-fang-wen-mo-shi-zhi-du-liu-lan-yu-jiao-hu-dui-hua",
+      "title": "会话的两种访问模式：只读浏览与交互对话",
+      "file": "9-hui-hua-de-liang-chong-fang-wen-mo-shi-zhi-du-liu-lan-yu-jiao-hu-dui-hua.md",
+      "section": "Deep Dive",
+      "group": "核心架构",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "10-electron-zhu-jin-cheng-qi-dong-lian-yu-shuang-men-jian-jiu-xu-jian-cha",
+      "title": "Electron 主进程启动链与双门槛就绪检查",
+      "file": "10-electron-zhu-jin-cheng-qi-dong-lian-yu-shuang-men-jian-jiu-xu-jian-cha.md",
+      "section": "Deep Dive",
+      "group": "Electron 桌面端",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "11-da-bao-gou-jian-liu-cheng-yu-macos-universal-shuang-jia-gou-chu-li",
+      "title": "打包构建流程与 macOS Universal 双架构处理",
+      "file": "11-da-bao-gou-jian-liu-cheng-yu-macos-universal-shuang-jia-gou-chu-li.md",
+      "section": "Deep Dive",
+      "group": "Electron 桌面端",
+      "level": "Advanced"
+    },
+    {
+      "slug": "12-preload-csp-zi-dong-geng-xin-yu-xi-tong-tuo-pan",
+      "title": "Preload、CSP、自动更新与系统托盘",
+      "file": "12-preload-csp-zi-dong-geng-xin-yu-xi-tong-tuo-pan.md",
+      "section": "Deep Dive",
+      "group": "Electron 桌面端",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi",
+      "title": "Pi 会话文件格式与 .jsonl 解析",
+      "file": "13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi.md",
+      "section": "Deep Dive",
+      "group": "会话管理与分支模型",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone",
+      "title": "三种分支机制：Fork、会话内分支、Git Worktree Clone",
+      "file": "14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone.md",
+      "section": "Deep Dive",
+      "group": "会话管理与分支模型",
+      "level": "Advanced"
+    },
+    {
+      "slug": "15-hui-hua-dao-chu-agentmode-chi-jiu-hua-yu-ji-lian-shan-chu",
+      "title": "会话导出、AgentMode 持久化与级联删除",
+      "file": "15-hui-hua-dao-chu-agentmode-chi-jiu-hua-yu-ji-lian-shan-chu.md",
+      "section": "Deep Dive",
+      "group": "会话管理与分支模型",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "16-agent-mo-shi-yu-ask-lan-jie-plan-ask-full",
+      "title": "Agent 模式与 Ask 拦截：Plan / Ask / Full",
+      "file": "16-agent-mo-shi-yu-ask-lan-jie-plan-ask-full.md",
+      "section": "Deep Dive",
+      "group": "Agent 交互与能力",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "17-extension-ui-bridge-yu-yi-bu-rpc-xiang-ying-dui-lie",
+      "title": "Extension UI Bridge 与异步 RPC 响应队列",
+      "file": "17-extension-ui-bridge-yu-yi-bu-rpc-xiang-ying-dui-lie.md",
+      "section": "Deep Dive",
+      "group": "Agent 交互与能力",
+      "level": "Advanced"
+    },
+    {
+      "slug": "18-chang-qi-ji-yi-sqlite-hou-duan-guan-ce-gou-zi-yu-jian-suo-api",
+      "title": "长期记忆：SQLite 后端、观测钩子与检索 API",
+      "file": "18-chang-qi-ji-yi-sqlite-hou-duan-guan-ce-gou-zi-yu-jian-suo-api.md",
+      "section": "Deep Dive",
+      "group": "Agent 交互与能力",
+      "level": "Advanced"
+    },
+    {
+      "slug": "19-mcp-fu-wu-qi-shuang-ji-pei-zhi-yu-guan-li-ui",
+      "title": "MCP 服务器双级配置与管理 UI",
+      "file": "19-mcp-fu-wu-qi-shuang-ji-pei-zhi-yu-guan-li-ui.md",
+      "section": "Deep Dive",
+      "group": "Agent 交互与能力",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "20-follow-up-queue-yu-revision-bing-fa-kong-zhi",
+      "title": "Follow-up Queue 与 revision 并发控制",
+      "file": "20-follow-up-queue-yu-revision-bing-fa-kong-zhi.md",
+      "section": "Deep Dive",
+      "group": "Agent 交互与能力",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "21-project-trust-409-wo-shou-yu-yan-chi-session-chuang-jian",
+      "title": "Project Trust 409 握手与延迟 Session 创建",
+      "file": "21-project-trust-409-wo-shou-yu-yan-chi-session-chuang-jian.md",
+      "section": "Deep Dive",
+      "group": "Agent 交互与能力",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "22-useagentsession-zhu-hook-yu-zi-hook-chai-fen-ce-lue",
+      "title": "useAgentSession 主 Hook 与子 Hook 拆分策略",
+      "file": "22-useagentsession-zhu-hook-yu-zi-hook-chai-fen-ce-lue.md",
+      "section": "Deep Dive",
+      "group": "前端架构与 UI 系统",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "23-streamreducer-liu-shi-xiao-xi-zhuang-tai-ji-yu-zeng-liang-xuan-ran",
+      "title": "streamReducer 流式消息状态机与增量渲染",
+      "file": "23-streamreducer-liu-shi-xiao-xi-zhuang-tai-ji-yu-zeng-liang-xuan-ran.md",
+      "section": "Deep Dive",
+      "group": "前端架构与 UI 系统",
+      "level": "Advanced"
+    },
+    {
+      "slug": "24-appshell-bu-ju-xi-tong-mian-ban-tuo-zhuai-jian-pan-kuai-jie-jian-zhu-ti-qie-huan",
+      "title": "AppShell 布局系统：面板拖拽、键盘快捷键、主题切换",
+      "file": "24-appshell-bu-ju-xi-tong-mian-ban-tuo-zhuai-jian-pan-kuai-jie-jian-zhu-ti-qie-huan.md",
+      "section": "Deep Dive",
+      "group": "前端架构与 UI 系统",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran",
+      "title": "液态思考球：WebGPU 优先 Canvas 降级渲染",
+      "file": "25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran.md",
+      "section": "Deep Dive",
+      "group": "前端架构与 UI 系统",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "26-xiao-xi-xu-ni-hua-lie-biao-markdown-xuan-ran-yu-dai-ma-gao-liang",
+      "title": "消息虚拟化列表、Markdown 渲染与代码高亮",
+      "file": "26-xiao-xi-xu-ni-hua-lie-biao-markdown-xuan-ran-yu-dai-ma-gao-liang.md",
+      "section": "Deep Dive",
+      "group": "前端架构与 UI 系统",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "27-ce-shi-ce-lue-node-js-yuan-sheng-ce-shi-ping-tai-zi-ji-yu-mou-yan-ce-shi",
+      "title": "测试策略：Node.js 原生测试、平台子集与冒烟测试",
+      "file": "27-ce-shi-ce-lue-node-js-yuan-sheng-ce-shi-ping-tai-zi-ji-yu-mou-yan-ce-shi.md",
+      "section": "Deep Dive",
+      "group": "工程化与质量保障",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "28-ci-cd-liu-shui-xian-yu-san-ping-tai-zhuo-mian-bao-fa-bu",
+      "title": "CI/CD 流水线与三平台桌面包发布",
+      "file": "28-ci-cd-liu-shui-xian-yu-san-ping-tai-zhuo-mian-bao-fa-bu.md",
+      "section": "Deep Dive",
+      "group": "工程化与质量保障",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "29-guan-jian-she-ji-jue-ce-yu-yi-zhi-xian-jing-su-cha",
+      "title": "关键设计决策与已知陷阱速查",
+      "file": "29-guan-jian-she-ji-jue-ce-yu-yi-zhi-xian-jing-su-cha.md",
+      "section": "Deep Dive",
+      "group": "工程化与质量保障",
+      "level": "Advanced"
+    }
+  ]
+}

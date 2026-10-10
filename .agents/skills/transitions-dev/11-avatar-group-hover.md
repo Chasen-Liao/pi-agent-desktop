@@ -197,3 +197,4 @@ export function AvatarGroup({ items }) {
 ### Why the timing-function is set inline before the variable writes
 
 Both the lift (hover-in) and the return (mouseleave) animate the same property — `transform`. If we declared one fixed `transition-timing-function` in CSS, both directions would share it. Setting it inline immediately before mutating `--shift` / `--scale-active` means each new transition picks up the timing-function that was current at the moment the property changed, giving us a clean curve on the way up and a bouncy overshoot on the way back without a second `.is-leaving` class.
+

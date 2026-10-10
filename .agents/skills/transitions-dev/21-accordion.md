@@ -121,3 +121,4 @@ The panel needs the two-element structure (`.t-acc-panel` grid track + `.t-acc-p
 ### Why the chevron flips instead of morphing its path
 
 The natural way to turn the "v" into a "^" is to morph the chevron's SVG `d` between two vertex sets — but CSS `d:` path interpolation is **Chromium-only**, so on mobile Safari and Firefox it snaps (or doesn't move at all). A vertical flip (`transform: scaleY(-1)`) reproduces the same motion — it passes through a flat horizontal line at the midpoint, exactly like the path morph — and animates in every browser. Two requirements make it land cleanly: the chevron path must be **symmetric about the centre of its viewBox** (so the flip maps the "v" onto the "^"), and the path needs `vector-effect: non-scaling-stroke` so the stroke width stays constant while the box is squashed mid-flip.
+

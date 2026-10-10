@@ -199,3 +199,4 @@ The total in the CSS uses `calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2)
 - `.is-error` on `.t-input-wrap` controls the **message** visibility — the message lives in the wrap, not the input.
 - `.is-error` on `.t-input` controls the **border color** — the input owns the border.
 - `.is-shaking` on `.t-input` is **separate** from `.is-error` so you can replay the shake (remove → reflow → add) without flickering the error state on/off in the same tick. Keeping the shake state orthogonal also lets you trigger the shake on its own (e.g. for a "hint" jiggle) without the full error treatment.
+

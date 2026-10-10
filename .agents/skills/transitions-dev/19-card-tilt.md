@@ -167,3 +167,4 @@ Bind `pointermove` to the outer `.t-tilt` (which never transforms), not the `.t-
 ### Touch / mobile
 
 Because it uses Pointer Events, the tilt also works on touch: tap-hold-drag on the card and it follows your finger (a touch `pointermove` only fires while pressed). Two pieces make this reliable — `touch-action: none` on `.t-tilt` so the drag tilts instead of scrolling the page, and `setPointerCapture` on `pointerdown` so the gesture keeps targeting the card even if the finger drifts past its edge.
+

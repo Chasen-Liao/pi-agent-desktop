@@ -146,3 +146,4 @@ function replay() {
   setTimeout(() => skel.classList.add("is-revealed"), total);
 }
 ```
+

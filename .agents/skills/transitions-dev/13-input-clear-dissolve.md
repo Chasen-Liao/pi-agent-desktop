@@ -273,3 +273,4 @@ document.querySelectorAll(".t-clear").forEach((wrap) => {
 ### Dark mode
 
 The glow uses `mix-blend-mode: multiply` in light mode. In dark mode flip to `screen`, bump `--glow-opacity` to ~0.85, and paint **white** gradients in JS — multiply over a dark surface vanishes.
+

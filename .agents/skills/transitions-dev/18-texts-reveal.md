@@ -107,3 +107,4 @@ function hideText() {
   setTimeout(() => block.classList.remove("is-hiding"), 200);
 }
 ```
+

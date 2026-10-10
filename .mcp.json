@@ -6,7 +6,8 @@
       "args": [
         "serve",
         "--mcp"
-      ]
+      ],
+      "alwaysLoad": true
     }
   }
 }

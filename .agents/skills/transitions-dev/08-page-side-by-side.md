@@ -97,3 +97,4 @@ function showPage(n) {
   slider.setAttribute("data-page", String(n));
 }
 ```
+

@@ -1,5 +1,6 @@
 ---
 name: transitions-dev
+license: Free for personal and commercial use; see LICENSE.txt (no redistribution of the library itself)
 description: Production-ready CSS transitions for web apps. Use when implementing notification badges, dropdowns, modals, panel reveals, page transitions, card resizes, number pop-ins, text swaps, icon swaps, success checks, avatar group hovers, error state shakes, search/input clear, skeleton loaders, shimmer text, sliding tabs, tooltips, staggered text reveals, card hover tilt, plus-to-menu morph, accordions, toasts, like buttons, learn-more hovers, checkbox checks, spinning counters, toggles, AI thinking states, reasoning streams, streaming text, matrix dot loaders, or banner stacking. Triggers on "add a transition", "animate the dropdown", "make the modal open smoothly", "swap icon", "page slide", "stagger animation", "open / close transition", "make it animate", "fade between", "success animation", "form error", "shake on invalid", "hover lift", "avatar stack hover", "clear the search", "skeleton loader", "loading shimmer", "shimmer text", "sliding tabs", "segmented control", "tooltip", "reveal text", "tilt card", "3D hover tilt", "cursor glare", "plus to menu", "FAB morph", "accordion", "collapsible", "expand / collapse", "disclosure", "toast", "snackbar", "like button", "heart animation", "learn more arrow", "checkbox", "check animation", "spinning counter", "odometer", "slot machine digits", "toggle", "switch", "thinking states", "AI status line", "agent reasoning", "reasoning stream", "streaming text", "stream words in", "matrix loader", "dot loader", "banner stack", "stacked toasts". Also "motion tokens", "scan for ad-hoc transitions", "replace hardcoded durations with motion tokens", "tokenize my animations", and the commands transitions reveal, transitions review, transitions apply, transitions refine.
 ---
 
@@ -27,7 +28,7 @@ Thirty-two portable CSS transitions, each namespaced under `t-*` selectors with 
 | **Skeleton loader and reveal** | Pulse a placeholder, then cross-fade + cross-blur to the loaded content. | [14-skeleton-reveal.md](./14-skeleton-reveal.md) |
 | **Shimmer text** | Sweep a highlight band across muted text on a loop (pure CSS). | [15-shimmer-text.md](./15-shimmer-text.md) |
 | **Tabs sliding** | Slide the active pill between tabs in a segmented control. | [16-tabs-sliding.md](./16-tabs-sliding.md) |
-| **Tooltip open/close** | Delayed fade+scale in, instant out (pure CSS). | [17-tooltip.md](./17-tooltip.md) |
+| **Tooltip open/close** | Delayed fade+scale in, instant out, travels between triggers. | [17-tooltip.md](./17-tooltip.md) |
 | **Texts reveal** | Staggered blurred rise for stacked text lines, quiet fade out. | [18-texts-reveal.md](./18-texts-reveal.md) |
 | **Card hover tilt** | Tilt a card in 3D toward the pointer with a cursor-tracked glare. | [19-card-tilt.md](./19-card-tilt.md) |
 | **Plus to menu morph** | Morph a circular trigger into the menu / panel it opens. | [20-plus-menu-morph.md](./20-plus-menu-morph.md) |
@@ -43,6 +44,9 @@ Thirty-two portable CSS transitions, each namespaced under `t-*` selectors with 
 | **Streaming text** | Resolve streamed words one by one through a soft cross-blur. | [30-streaming-text.md](./30-streaming-text.md) |
 | **Matrix dot loader** | Pulse a 4×4 dot matrix in scan / twinkle / orbit / pulse patterns. | [31-matrix-loader.md](./31-matrix-loader.md) |
 | **Banner stacking** | Stack banners like toasts — new ones rise in, older ones push back. | [32-banner-stacking.md](./32-banner-stacking.md) |
+| **Text morph** | Keep the letters two labels share and cross-blur only the part that changes, easing its width. | [33-text-morph.md](./33-text-morph.md) |
+| **Text swap soft** | Cross-blur a value into the new one in place, both at once, with no movement. | [34-text-swap-soft.md](./34-text-swap-soft.md) |
+| **Donut chart** | Ring segments with even gaps and rounded corners that morph to new values. | [35-donut-chart.md](./35-donut-chart.md) |
 
 ## Decision rules
 
@@ -53,7 +57,10 @@ When the user asks for a transition, match against the visible UI element first,
 - **Surface that slides into a region of the page** → panel reveal.
 - **Two screens, list ↔ detail or step 1 ↔ step 2** → page side-by-side.
 - **Element changes width or height** → card resize.
-- **Element's text content changes in place** → text states swap.
+- **A label changes in place and the old and new text share letters at the start or end** (Copy code to Copied, Follow to Following) → text morph.
+- **Element's text content changes in place and the texts share nothing** (Processing to Done) → text states swap.
+- **Values update in place because the data behind a view changed** (a chart's period, a currency, a unit) → text swap soft for every value that changed.
+- **A donut or ring chart** → donut chart (even gaps, the smallest corner radius, morphs when its data changes).
 - **Two icons in the same slot** → icon swap.
 - **A number updates** → number pop-in.
 - **Confirmation / success / "done" moment** (checkmark, payment processed, file uploaded) → success check.
@@ -191,7 +198,7 @@ When inserting a transition into the user's project:
 2. **Paste the chosen transition's CSS verbatim** from the relevant reference file. Do not rewrite selectors, do not collapse the transition into shorthand, do not strip `will-change`. The snippets are tuned and tested.
 3. **Wire the documented HTML hooks** — class names (`.t-dropdown`, `.t-modal`, `.t-success-check`, `.t-avatar`, `.t-clear`, `.t-skel`, `.t-shimmer`, `.t-tabs`, `.t-tt`, `.t-stagger`, `.t-tilt`, `.t-morph`, `.t-acc`, …) and state attributes (`data-open`, `data-state`, `data-page`, `data-origin`, `aria-selected`, `aria-expanded`, `.is-open`, `.is-closing`, `.is-error`, `.is-shaking`, `.has-value`, `.is-clearing`, `.is-pulsing`, `.is-revealed`, `.is-shown`, `.is-hiding`, `.is-hover`, `.is-tilting`).
 4. **Preserve the `@media (prefers-reduced-motion: reduce)` block.** Every snippet ships one. Removing it makes the component fail accessibility audits.
-5. **For transitions that need JS** (dropdown, modal, text swap, number pop-in, page slide, success check, avatar group hover, error state shake, input clear, skeleton reveal, tabs sliding, texts reveal, card hover tilt, plus → menu morph, accordion expand), copy the small orchestration snippet from the reference file and adapt the selectors to the user's DOM. Keep the timing reads (`getComputedStyle(...)getPropertyValue("--…")`) so durations stay in sync with the `:root` values. Shimmer text and tooltip are **pure CSS** — no JS needed.
+5. **For transitions that need JS** (dropdown, modal, text swap, number pop-in, page slide, success check, avatar group hover, error state shake, input clear, skeleton reveal, tabs sliding, tooltip, texts reveal, card hover tilt, plus → menu morph, accordion expand), copy the small orchestration snippet from the reference file and adapt the selectors to the user's DOM. Keep the timing reads (`getComputedStyle(...)getPropertyValue("--…")`) so durations stay in sync with the `:root` values. Shimmer text is **pure CSS** — no JS needed.
 
 Keep the diff small: only edit the files needed to introduce the transition. Don't rename the user's existing variables, don't reformat unrelated CSS, don't pull in a motion library.
 
@@ -244,4 +251,7 @@ Keep the diff small: only edit the files needed to introduce the transition. Don
 - [30-streaming-text.md](./30-streaming-text.md) — Streaming text
 - [31-matrix-loader.md](./31-matrix-loader.md) — Matrix dot loader
 - [32-banner-stacking.md](./32-banner-stacking.md) — Banner stacking
+- [33-text-morph.md](./33-text-morph.md): Text morph
+- [34-text-swap-soft.md](./34-text-swap-soft.md): Text swap soft
+- [35-donut-chart.md](./35-donut-chart.md): Donut chart
 - [_root.css](./_root.css) — the universal install block on its own, ready to import directly.

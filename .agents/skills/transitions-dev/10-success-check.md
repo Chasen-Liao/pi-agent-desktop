@@ -166,3 +166,4 @@ The CSS hardcodes `stroke-dasharray: 20` as a placeholder. For a clean draw, rep
    ```
 
 If the dasharray is too short the stroke pre-reveals before the animation starts; too long and the path appears to draw past its end before fading in. Round up by 1px to absorb sub-pixel float jitter.
+
