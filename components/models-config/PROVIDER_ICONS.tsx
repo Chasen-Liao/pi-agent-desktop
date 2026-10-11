@@ -63,7 +63,7 @@ export const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boo
   "xiaomi-token-plan-cn":   { Icon: XiaomiMiMoIcon,        hasColor: false },
   "xiaomi-token-plan-sgp":  { Icon: XiaomiMiMoIcon,        hasColor: false },
   "amazon-bedrock":         { Icon: AwsColorIcon,         hasColor: true },
-  "azure-openai-responses": { Icon: AzureColorIcon,       hasColor: true },
+  "azure":                  { Icon: AzureColorIcon,       hasColor: true },
   "kimi-coding":            { Icon: KimiColorIcon,        hasColor: true },
   "qwen":                   { Icon: QwenColorIcon,        hasColor: true },
   "qwen-token-plan":        { Icon: QwenColorIcon,        hasColor: true },
