@@ -237,7 +237,7 @@ npm run dist:mac
 
 - `asar: true`：应用代码打包为 asar 压缩包
 - `npmRebuild: true`：打包时重新编译原生模块
-- `extraResources`：将 `.next/standalone`、`public`、关键 `node_modules` 作为额外资源打包
+- `extraResources`：第一项 `.next/standalone` 必须 `filter: ["**/*", "!node_modules", ...]`（`filter:["**/*"]` 会静默排除 `node_modules`）；`node_modules` 是**单独一条** extraResources；另拷 `electron-updater` 及其依赖到 `app/node_modules/`
 - macOS `x64ArchFiles`：保护双架构原生模块（`sharp`、`clipboard`、`esbuild`、`pi-tui`）不被 `lipo` 合并
 
 Sources: [package.json](package.json#L25-L35), [electron-builder.yml](electron-builder.yml#L1-L80), [scripts/ensure-standalone-pi-runtime.mjs](scripts/ensure-standalone-pi-runtime.mjs)
@@ -341,7 +341,7 @@ Sources: [README.zh-CN.md](README.zh-CN.md#L120-L170), [get_dir_structure](.)
 |----------|--------------|
 | **整体架构理解** | [项目概览](1-xiang-mu-gai-lan) → [四层分离架构详解](6-si-ceng-fen-chi-jia-gou-xiang-jie) → [目录结构与核心模块](4-mu-lu-jie-gou-yu-he-xin-mo-kuai) |
 | **Electron 桌面端开发** | [双模式开发与运行](3-shuang-mo-shi-kai-fa-yu-yun-xing) → [Electron 主进程启动链与双门槛就绪检查](10-electron-zhu-jin-cheng-qi-dong-lian-yu-shuang-men-jian-jiu-xu-jian-cha) → [Preload、CSP、自动更新与系统托盘](12-preload-csp-zi-dong-geng-xin-yu-xi-tong-tuo-pan) |
-| **会话与分支模型** | [Pi 会话文件格式与 .jsonl 解析](13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi) → [三种分支机制](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) |
+| **会话与分支模型** | [Pi 会话文件格式与 .jsonl 解析](13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi) → [四种会话分叉机制](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) |
 | **Agent 交互能力** | [Agent 模式与 Ask 拦截](16-agent-mo-shi-yu-ask-lan-jie-plan-ask-full) → [Extension UI Bridge](17-extension-ui-bridge-yu-yi-bu-rpc-xiang-ying-dui-lie) → [长期记忆](18-chang-qi-ji-yi-sqlite-hou-duan-guan-ce-gou-zi-yu-jian-suo-api) |
 | **前端架构与 UI** | [useAgentSession 主 Hook](22-useagentsession-zhu-hook-yu-zi-hook-chai-fen-ce-lue) → [streamReducer 流式状态机](23-streamreducer-liu-shi-xiao-xi-zhuang-tai-ji-yu-zeng-liang-xuan-ran) → [液态思考球渲染](25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran) |
 | **工程化与发布** | [测试策略](27-ce-shi-ce-lue-node-js-yuan-sheng-ce-shi-ping-tai-zi-ji-yu-mou-yan-ce-shi) → [CI/CD 流水线](28-ci-cd-liu-shui-xian-yu-san-ping-tai-zhuo-mian-bao-fa-bu) → [打包构建流程](11-da-bao-gou-jian-liu-cheng-yu-macos-universal-shuang-jia-gou-chu-li) |

@@ -177,7 +177,7 @@ Sources: [components/AgentModeSelector.tsx](components/AgentModeSelector.tsx#L1-
 
 ### 问题背景
 
-会话支持**三种分支机制**（Fork、会话内分支、Git Worktree Clone），形成父子关系树。子会话文件头部存储 `parentSession: "/absolute/path/to/parent.jsonl"`。当用户删除父会话时，必须决定子会话的归属：
+跨文件 **Fork**、**Branch API** 与 **Clone** 会在子会话头写入 `parentSession: "/absolute/path/to/parent.jsonl"`（父**文件**绝对路径），侧边栏据此画会话树。**会话内分支**只改同一 `.jsonl` 的 `parentId`，不产生新文件，因此**不进入**这条级联。当用户删除父会话文件时，必须决定那些跨文件子会话的归属：
 
 - **选项 A**：级联删除所有后代（破坏性太强，用户数据丢失）
 - **选项 B**：将子会话重挂载到祖父会话（保留历史，维持树结构完整）
@@ -275,7 +275,7 @@ export async function DELETE(...) {
     const { newContent, changed } = rewriteChildHeader(content, filePath, parentSessionPath);
     if (!changed) continue;
 
-    await withFileLock(childPath, () => atomicWriteFile(childPath, newContent));
+    await withFileLock(childPath, () => atomicWriteFile(childPath, newContent)); // 进程内文件锁 + 临时文件 rename
   }
   
   return NextResponse.json({ ok: true });
@@ -286,8 +286,8 @@ export async function DELETE(...) {
 
 | 顺序 | 风险 |
 |------|------|
-| 先改子 → 再删父 | 并发 Fork 在父文件仍存在时 `SessionManager.open(parent)` 成功，读到半改写的子树，创建的新分支 `parentSession` 指向即将被删的父路径 → 孤儿会话 |
-| **先删父 → 再改子** | 并发 Fork 在 `open(parent)` 时遇到 `ENOENT` 或 `existsSync` 守卫失败 → 快速失败，不产生孤儿。剩余竞态窗口缩小到单个子文件的改写，可接受 |
+| 先改子 → 再删父 | 并发 Fork / Branch 在父文件仍存在时 `SessionManager.open(parent)` 成功，读到半改写的子树，新文件 `parentSession` 指向即将被删的父路径 → 孤儿会话 |
+| **先删父 → 再改子** | 并发 Fork 在 `existsSync` / `open(parent)` 时失败 → 快速失败，不产生孤儿。剩余窗口只在单个子文件改写 |
 
 **并发安全措施**：
 - `withFileLock`：进程级单文件写锁（`globalThis.__piWriteLocks`），防止同一文件并发写入
@@ -311,7 +311,7 @@ Sources: [components/session-sidebar/SessionTree.tsx](components/session-sidebar
 1. 用户在 SessionSidebar 选择子会话，点击“导出”
 2. `SessionExportModal` 打开，选择 HTML 格式
 3. `GET /api/sessions/[child-id]/export?format=html` → `exportSessionToHtml(childFilePath)`
-4. Pi 导出器读取子会话 `.jsonl`，**完整包含从根到当前分支的所有条目**（Pi 的 `SessionManager` 创建分支时会复制祖先路径）
+4. Pi 导出器读取子会话 `.jsonl`。跨文件 Fork / Branch 在创建时已把根→叶路径**内联复制**进新文件；会话内分支则仍是同一文件，导出器按当前叶子投影
 5. 导出 HTML 可离线查看完整对话历史
 
 ### 场景：删除父会话后，子会话仍可导出且祖先链完整
@@ -320,11 +320,13 @@ Sources: [components/session-sidebar/SessionTree.tsx](components/session-sidebar
 2. 子会话文件内容（消息条目）**完全不变**，仅头部 `parentSession` 字段变更
 3. 后续导出子会话，Pi 导出器仍能读取完整祖先消息（因分支创建时已内联复制）
 
-### 场景：AgentMode 切换后 Fork，新分支继承模式
+### 场景：AgentMode 切换后 Fork / 跨文件 Branch，新文件继承模式
 
-1. 会话 A 模式切为 `"plan"` → 写入 `desktop_agent_mode` 条目
-2. 用户在某条消息处 Fork → `createBranchedSession` 复制截至该点的条目（含模式条目）
-3. 新会话 B 加载时 `findLastAgentMode` 扫描到 `"plan"` → 自动恢复 Plan 模式
+1. 会话 A 模式切为 `"plan"` → `appendCustomEntry("desktop_agent_mode", { mode })`，磁盘条目为 `{ type: "custom", customType: "desktop_agent_mode", data: { mode: "plan" } }`
+2. 消息 Fork 或 `POST .../branch` → `createBranchedSession` 把路径上的 custom 条目一并复制
+3. 新会话加载时 `findLastAgentMode` 自后向前扫描 `type === "custom" && customType === "desktop_agent_mode"`，取合法 `data.mode`
+
+会话内分支不复制文件；同一 `.jsonl` 里最后一次模式条目对所有叶子可见（投影不剥离 custom 条目的落盘）。
 
 ---
 
@@ -340,5 +342,5 @@ Sources: [components/session-sidebar/SessionTree.tsx](components/session-sidebar
 
 ## 相关页面导航
 
-- 上一页：[三种分支机制：Fork、会话内分支、Git Worktree Clone](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) — 理解会话树结构与 `parentSession` 字段的由来
+- 上一页：[四种会话分叉机制：Fork、会话内分支、跨文件 Branch、Clone](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) — 只有跨文件 Fork / Branch / Clone 才写 `parentSession`；会话内分支只用 `parentId`
 - 下一页：[Agent 模式与 Ask 拦截：Plan / Ask / Full](16-agent-mo-shi-yu-ask-lan-jie-plan-ask-full) — 深入 AgentMode 的运行时行为与工具集合计算

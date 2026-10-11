@@ -48,7 +48,7 @@ Sources: [next.config.ts](next.config.ts#L1-L43), [package.json](package.json#L1
 output: "standalone",
 serverExternalPackages: ["@earendil-works/pi-coding-agent", "@earendil-works/pi-ai", "@earendil-works/pi-mcp"],
 outputFileTracingIncludes: { "/*": ["./node_modules/@earendil-works/pi-ai/**/*"] },
-outputFileTracingExcludes: { '*': ['release/**/*', '.git/**/*', '**/*.test.*', ...] },
+outputFileTracingExcludes: { '*': ['release/**/*', '.git/**/*', 'dist/**/*', '**/*.test.ts', '**/*.test.tsx', '**/*.test.mjs', '**/*.test.js', 'middleware.test.ts', 'package.test.ts'] },
 ```
 
 | 配置项 | 作用 | 影响范围 |
@@ -83,7 +83,7 @@ Sources: [next.config.ts](next.config.ts#L1-L43), [scripts/ensure-standalone-nex
 
 ## 阶段 2：运行时修补脚本链
 
-四个脚本按严格顺序执行，每个解决特定缺口：
+`npm run build:standalone` = `next build` + 五个后续脚本（四个修补 + 冒烟）。**日常 `npm run dev` 不要另跑 `next build`**，会污染 `.next/` 并破坏开发服务器。修补脚本按严格顺序执行：
 
 ```mermaid
 sequenceDiagram
@@ -254,7 +254,7 @@ extraResources:
     to: standalone
     filter:
       - "**/*"
-      - "!node_modules"          # 单独处理
+      - "!node_modules"          # 必须排除：见下方陷阱
       - "!release"
       - "!.git"
       - "!**/*.test.ts"
@@ -262,18 +262,20 @@ extraResources:
       - "!**/*.test.mjs"
       - "!**/*.test.js"
   - from: .next/standalone/node_modules
-    to: standalone/node_modules
+    to: standalone/node_modules   # 独立条目；filter:**/* 会静默丢掉 node_modules
   - from: .next/static
     to: standalone/.next/static
   - from: public
     to: standalone/public
-  # electron-updater 运行时依赖（asar 外部加载）
+  # electron-updater 及其运行时依赖（asar 外部 app/node_modules/...）
   - from: node_modules/electron-updater
     to: app/node_modules/electron-updater
   - from: node_modules/builder-util-runtime
     to: app/node_modules/builder-util-runtime
-  # ... 共 16 个运行时依赖包
+  # ... 共 16 个运行时依赖包（见 lib/electron-updater-runtime-deps.mjs）
 ```
+
+**必读陷阱**：electron-builder 对 `extraResources` 使用 `filter: ["**/*"]` 时会**静默排除 `node_modules`**。因此 standalone 必须拆成两条：`from: .next/standalone`（filter 含 `!node_modules`）+ `from: .next/standalone/node_modules` → `standalone/node_modules`。删掉第二条，打包后的 Next 服务器会缺整棵运行时依赖。
 
 **设计理由**：`asar: true` 将主进程代码打包进 `app.asar`，但 `electron-updater` 在运行时需 `require()` 其依赖包，asar 内无法被 Node.js 原生 `require` 解析，故必须作为 `extraResources` 置于 asar 外部的 `app/node_modules/` 下。
 
@@ -319,7 +321,7 @@ mac:
   icon: build/icon.icns
   category: public.app-category.developer-tools
   darkModeSupport: true
-  # 关键：指定跳过 lipo 合并的架构特异性文件路径
+  # brace 覆盖 standalone 与 standalone/.next；原生模块不要 lipo
   x64ArchFiles: "Contents/Resources/standalone{,/.next}/**/{@earendil-works/pi-tui/native/darwin/prebuilds/**,@mariozechner/clipboard-darwin-{arm64,x64}/**,@img/sharp-darwin-{arm64,x64}/**,@img/sharp-libvips-darwin-{arm64,x64}/**,@esbuild/darwin-{arm64,x64}/**}"
   artifactName: "Pi-Agent-Desktop-${version}-mac-${arch}.${ext}"
 ```
@@ -513,8 +515,10 @@ Sources: [scripts/smoke-packaged-standalone.mjs](scripts/smoke-packaged-standalo
 | `npm run build:electron` | 编译 Electron TypeScript + 复制静态资源 | `electron/dist/` |
 | `npm run pack` | 全量构建 + `--dir` 解包目录（不生成安装包） | `release/win-unpacked/` 等 |
 | `npm run pack:mac` | macOS Universal 解包目录 | `release/mac-universal/` |
-| `npm run dist` | 构建当前宿主 OS 的安装包（不发布；无平台 flag，CI 中仅 Windows/Linux runner 使用，macOS 单独走 `dist:mac`） | Windows: `release/*.exe`；Linux: `release/*.deb` |
-| `npm run dist:mac` | 仅 macOS Universal 安装包 | `release/*-mac-universal.*` |
+| `npm run dist` | 构建当前宿主 OS 的安装包（不发布；无平台 flag，CI 中仅 Windows/Linux runner 使用，macOS 单独走 `dist:mac`） | Windows NSIS `Pi-Agent-Desktop-Setup-${version}.exe`；Linux DEB `Pi-Agent-Desktop-${version}-linux-x64.deb` |
+| `npm run dist:mac` | 仅 macOS Universal 安装包 | `Pi-Agent-Desktop-${version}-mac-universal.dmg` / `.zip` |
+
+> **桌面发布通道**：推 `vX.Y.Z` tag → `.github/workflows/desktop-packages.yml` 打包。**不要**把 `npm run release` 当成桌面发版路径（该脚本会 `npm version patch` 并 `npm publish`）。日常开发只跑 `npm run dev` / `npm run dev:electron`，不要另跑 `next build`。
 
 ---
 

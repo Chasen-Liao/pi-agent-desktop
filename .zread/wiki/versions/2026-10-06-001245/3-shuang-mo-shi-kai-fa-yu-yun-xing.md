@@ -155,19 +155,29 @@ flowchart TD
 **electron-builder 关键配置** (`electron-builder.yml`)：
 
 ```yaml
-# 核心资源打包
+# 核心资源打包（陷阱：第一条 standalone 必须显式排除 node_modules，再单独拷贝）
 files:
   - package.json
   - electron/dist/**/*
 extraResources:
-  - from: .next/standalone          # Next.js 服务器代码
+  - from: .next/standalone
     to: standalone
-  - from: .next/standalone/node_modules
+    filter:
+      - "**/*"
+      - "!node_modules"   # filter:["**/*"] 会静默排除 node_modules
+      - "!release"
+      - "!.git"
+      - "!**/*.test.ts"
+  - from: .next/standalone/node_modules   # 必须与上一项拆开，否则运行时缺依赖
     to: standalone/node_modules
-  - from: .next/static              # _next/static 静态资源
+  - from: .next/static
     to: standalone/.next/static
-  - from: public                    # public/ 静态资源
+  - from: public
     to: standalone/public
+  - from: node_modules/electron-updater   # asar 内主进程更新依赖，另列 extraResources
+    to: app/node_modules/electron-updater
+  # 以及 builder-util-runtime / fs-extra / graceful-fs / jsonfile / js-yaml /
+  # lazy-val / lodash.* / semver / tiny-typed-emitter / universalify / debug / sax / argparse / ms
 ```
 
 **macOS Universal 双架构特殊处理**：

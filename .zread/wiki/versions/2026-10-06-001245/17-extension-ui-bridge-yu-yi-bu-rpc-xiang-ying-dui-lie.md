@@ -1,4 +1,4 @@
-Extension UI Bridge 是 pi-agent-desktop 中**桌面端交互式对话框**的核心基础设施。它将 pi 编码代理（`@earendil-works/pi-coding-agent`）原本为 TUI 设计的 `ExtensionUIContext` 接口，桥接为基于 **HTTP/SSE 的异步 RPC 模式**，使前端 React 组件能够以声明式方式渲染确认、选择、输入、编辑器四类对话框，并通过 `extension_ui_response` 命令将用户决策回传给正在等待的 Agent 循环。
+Extension UI Bridge 是 pi-agent-desktop 中**桌面端交互式对话框**的核心基础设施。它将 pi 编码代理（`@earendil-works/pi-coding-agent`）原本为 TUI 设计的 `ExtensionUIContext` 接口，桥接为基于 **HTTP/SSE 的异步 RPC 模式**，使前端 React 组件能够渲染 **confirm / select / input / editor** 四类对话框以及 **notify** 火即忘通知。请求经 SSE `extension_ui_request` 下发；用户决策必须 `POST /api/agent/[id]`，body 为 `{ type: "extension_ui_response", id, ... }`。**不是** `/command`，也**不是** `/api/extensions`（后者只做扩展/技能配置 CRUD）。
 
 本文档深入剖析 Bridge 的内部状态机、超时/中止语义、与 `AgentSessionWrapper` 的生命周期绑定、以及前端 `ExtensionUiDialog` 组件的事件驱动交互模型。
 
@@ -44,8 +44,8 @@ flowchart LR
 **核心数据流**：
 1. **Agent 侧**：`pi` 调用 `ui.confirm("Allow?", "rm -rf /")` → `ExtensionUiBridge.enqueue()` 生成唯一 `id`，构造 `ExtensionUiRequestEvent`，存入 `pending` Map，返回 `Promise` 挂起
 2. **传输层**：`Wrapper.emitEvent()` 将事件推入 SSE 流 → 前端 `AgentEventsManager` 接收 → `ExtensionUiDialog` 渲染
-3. **用户侧**：用户点击「允许/拒绝/选项/提交」→ `onRespond(payload)` 发起 `POST /api/agent/[id]` 携带 `extension_ui_response`
-4. **响应侧**：`AgentSessionWrapper.send()` 分发到 `extension_ui_response` 分支 → `bridge.respond(response)` 在 `pending` 中查找 `id`，`resolve` 对应的 `Deferred`，Agent 循环继续
+3. **用户侧**：用户点击「允许/拒绝/选项/提交」→ `onRespond(payload)` 发起 `POST /api/agent/[id]`，body `{ type: "extension_ui_response", id, confirmed?/value?/cancelled? }`（`sendAgentCommand`；路径不是 `/command`）
+4. **响应侧**：`AgentSessionWrapper.send()` 分发到 `extension_ui_response` 分支 → `bridge.respond(response)` 在 `pending` 中查找 `id`，`resolve` 对应的 `Deferred`，Agent 循环继续。`/api/extensions` 与此桥无关。
 
 ---
 
@@ -599,7 +599,8 @@ test("extension_ui_response resolves bridge confirm", async () => {
 - **会话封装**：[AgentSession 生命周期与进程内注册表](7-agentsession-sheng-ming-zhou-qi-yu-jin-cheng-nei-zhu-ce-biao) — `AgentSessionWrapper` 如何管理 Bridge 生命周期
 - **事件流**：[SSE 事件流与流式状态机](8-sse-shi-jian-liu-yu-liu-shi-zhuang-tai-ji) — `extension_ui_request` 如何通过 SSE 抵达前端
 - **Agent 模式**：[Agent 模式与 Ask 拦截](16-agent-mo-shi-yu-ask-lan-jie-plan-ask-full) — `desktop-approval-extension` 如何调用 `ui.confirm`
-- **长期记忆**：[长期记忆：SQLite 后端、观测钩子与检索 API](18-chang-qi-ji-yi-sqlite-hou-duan-guan-ce-gou-zi-yu-jian-suo-api) — `desktop-ltm-extension` 同样通过 Bridge 暴露工具
+- **长期记忆**：[长期记忆：SQLite 后端、观测钩子与检索 API](18-chang-qi-ji-yi-sqlite-hou-duan-guan-ce-gou-zi-yu-jian-suo-api) — `desktop-ltm-extension` 注册 `memory_*` 内联工具；Ask 拦截走同一套 `ui.confirm`，但工具本身不经 UI Bridge 暴露
+- **扩展/技能配置**：`GET/POST /api/extensions` 只做 toggle/add/remove，**不是**对话框响应通道
 
 ---
 

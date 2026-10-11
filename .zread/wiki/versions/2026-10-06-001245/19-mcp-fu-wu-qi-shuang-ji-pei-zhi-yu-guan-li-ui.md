@@ -88,7 +88,7 @@ graph TB
 
 ### 合并语义：项目覆盖全局
 
-`getMcpServers(cwd)` 先读取全局，再读取项目（若提供 `cwd`），以 **server id 为键** 合并，项目级同名条目**完全替换**全局条目。返回数组每项带有 `scope: "global" | "project"` 标记，供 UI 展示徽章。
+`getMcpServers(cwd)` 先读取全局，再读取项目（若提供 `cwd`），按 **`mcpServers` 对象的 name 键**（即 server id）合并，项目级同名条目**完全替换**全局条目。返回数组每项带有 `scope: "global" | "project"` 标记，供 UI 展示徽章。注意：管理 API 的 GET 始终合并两级文件；**运行时** `loadDesktopMcpConfig(..., projectTrusted)` 在未信任项目上**只加载 global**，不读项目级 `mcp.json`。
 
 ```typescript
 // 简化合并逻辑
@@ -260,14 +260,14 @@ stateDiagram-v2
 
 | 方法 | 路径 | 用途 | 请求体 | 响应 |
 |------|------|------|--------|------|
-| GET | `/api/mcp?cwd=` | 列出合并后服务器 | — | `{ servers: McpServerStatus[] }` |
+| GET | `/api/mcp?cwd=` | 列出合并后服务器 | — | `{ servers: McpServerStatus[] }`（**不**包 `{success, data}`） |
 | POST | `/api/mcp` | 新建/更新 | `{ scope, cwd?, server: McpServerConfig }` | `{ success: true, server: McpServerStatus }` |
-| DELETE | `/api/mcp` | 删除 | `{ id, scope, cwd? }` | `{ success: true }` / 404 |
+| DELETE | `/api/mcp` | 删除 | `{ id, scope, cwd? }` | `{ success: true }` / 404 `{ success: false, error }` |
 | POST | `/api/mcp/toggle` | 启用/禁用 | `{ id, scope, disabled: boolean, cwd? }` | `{ success: true }` / 404 |
 | POST | `/api/mcp/test` | 连接探测 | `TestMcpServerOptions` | `{ success, message?, toolsCount? }` |
 
 **关键行为：**
-- 写操作（POST/DELETE/TIGGER）成功后调用 `requestSessionResourceReload(cwd)`，触发活跃会话的 `inner.reload()`，使新 MCP 工具立即生效，无需重启会话
+- 写操作（POST / DELETE / toggle）成功后调用 `requestSessionResourceReload(cwd)`，触发活跃会话的 `inner.reload()`，使新 MCP 工具立即生效，无需重启会话
 - `/api/mcp/test` 要求同源校验（`validateRequestOrigin`），防止 CSRF
 
 **Sources:** [app/api/mcp/route.ts](app/api/mcp/route.ts#L1-L81), [app/api/mcp/toggle/route.ts](app/api/mcp/toggle/route.ts#L1-L43), [app/api/mcp/test/route.ts](app/api/mcp/test/route.ts#L1-L30), [lib/rpc-manager.ts](lib/rpc-manager.ts#L830-L835)
@@ -370,7 +370,7 @@ const resolveValues = (values?: Record<string, string>) =>
 
 > **默认值说明**：桌面端存盘默认为 `direct`（`saveMcpServer` 兜底、表单初值同为 `direct`）；但 Pi SDK 原生 `McpServerConfig.exposure` 的默认是 `codemode`，仅在绕过桌面端配置层直接使用 SDK 时生效。
 
-桌面端 **Codmode 开关具备最高优先级**：`loadDesktopMcpConfig` 返回 `autoEnableCodemode: false`，防止 MCP 配置意外开启 Codemode。
+桌面端 **Codemode 开关具备最高优先级**：`loadDesktopMcpConfig` 返回 `autoEnableCodemode: false`，防止 MCP 配置意外开启 Codemode。
 
 **Sources:** [lib/mcp-config.ts](lib/mcp-config.ts#L190-L197), [lib/mcp-config.test.ts](lib/mcp-config.test.ts#L1-L30)
 
@@ -388,7 +388,7 @@ const resolveValues = (values?: Record<string, string>) =>
 
 ### 5. 连接测试实现
 
-`testMcpServerConnection()` 创建临时 `McpClient`，根据 transport 实例化 `StdioTransport` 或 `StreamableHttpTransport`，7 秒超时赛跑 `client.connect()` 与 `client.listTools()`。成功返回工具数量，失败返回错误信息。
+`testMcpServerConnection()` 创建临时 `McpClient`：有 `url` 则用 `StreamableHttpTransport`，否则 `StdioTransport`。`transport === "sse"` **显式抛错**（不支持 legacy SSE）。7 秒超时赛跑 `client.connect()` 与 `client.listTools()`。成功返回工具数量，失败返回错误信息。
 
 - **不复用会话连接**：每次测试独立建立，避免干扰活跃会话
 - **SSE 显式拒绝**：抛错提示改用 Streamable HTTP

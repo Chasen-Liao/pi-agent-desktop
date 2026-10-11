@@ -54,10 +54,10 @@ Sources: [lib/approval-policy.ts](lib/approval-policy.ts#L1-L86), [lib/desktop-a
 | 维度 | Plan (规划) | Ask (询问) | Full (完全自主) |
 |------|-------------|------------|-----------------|
 | **核心理念** | 只读探索 → 产出计划 | 读写执行 → 关键操作需确认 | 无拦截全自主执行 |
-| **可用工具** | 固定 4 个只读工具 | 由 ToolPreset 决定 | 由 ToolPreset 决定 |
+| **可用工具** | 声明期固定 `PLAN_TOOLS`（`read, grep, find, ls`，忽略 preset）；执行期另放行 `memory_recall` | 由 ToolPreset 决定 | 由 ToolPreset 决定 |
 | **写入/命令确认** | N/A（无写入工具） | **全部拦截**，需用户逐个确认 | 无拦截 |
-| **MCP 工具确认** | 不可用（无工具） | **需确认**（ask 模式下） | 无拦截 |
-| **Cod emode** | 禁用 | 受 ToolPreset 与 codemodeEnabled 控制 | 受 ToolPreset 与 codemodeEnabled 控制 |
+| **MCP 工具确认** | 不声明 MCP（`desktopRuntimeTools` 在 plan 提前返回） | **需确认**（`mcp__*` 与 `list_mcp_resources` / `list_mcp_resource_templates` / `read_mcp_resource`） | 无拦截 |
+| **Codemode** | 禁用 | 受 `desktop.codemodeEnabled` 与是否已注册 `codemode` 控制 | 受 `desktop.codemodeEnabled` 与是否已注册 `codemode` 控制 |
 | **典型场景** | 代码库探索、方案设计、只读分析 | 日常开发、敏感操作需把关 | 信任度高的自动化任务、批量重构 |
 | **默认 ToolPreset** | 任意（被忽略） | default | default |
 
@@ -171,10 +171,12 @@ export function toolNamesForPreset(preset: ToolPreset): string[] {
 | **ask** | *(无工具，仅聊天)* | `read, bash, edit, write` + MCP | `bash, read, edit, write, grep, find, ls` + MCP |
 | **full** | *(无工具，仅聊天)* | `read, bash, edit, write` + MCP | `bash, read, edit, write, grep, find, ls` + MCP |
 
-> **注意**：Ask/Full 模式下，`desktopRuntimeTools` 会在基础预设之上**追加**：
-> - 已激活的 MCP 工具（`exposure === "direct"` 或已激活的 deferred/codemode 工具）
-> - `tool_search`（若已注册）
-> - `codemode`（若 `codemodeEnabled === true` 且已注册）
+> **注意**：`desktopRuntimeTools` 是**激活名单过滤器**，不是工具注入器。它从 `effectiveToolsForMode` + `withMemoryTools` 得到基础名字，再**仅当已注册**时纳入：
+> - MCP 工具（`exposure === "direct"`，或当前 active 且 `exposure` 为 `deferred` / `codemode`）
+> - `tool_search`（`registered` 中已有该名）
+> - `codemode`（`desktop.codemodeEnabled === true` **且** 已注册）
+>
+> `plan` 或 `preset === "none"` 时函数提前返回，不扫描 MCP / `tool_search` / `codemode`。记忆工具名由 `withMemoryTools` 写入名单（plan 仅 `memory_recall`；preset 为空数组时不追加任何记忆工具）。
 
 Sources: [lib/approval-policy.ts](lib/approval-policy.ts#L1-L86), [lib/desktop-runtime-tools.ts](lib/desktop-runtime-tools.ts#L1-L23)
 

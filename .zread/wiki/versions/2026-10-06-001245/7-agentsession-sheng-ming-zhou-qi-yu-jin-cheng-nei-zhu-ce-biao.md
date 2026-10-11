@@ -22,10 +22,10 @@ graph TB
         SESSIONS[GET /api/sessions]
     end
 
-    subgraph "进程内注册表 (globalThis)"
+    subgraph "进程内注册表 (globalThis，HMR 安全)"
         REGISTRY[(__piSessions: Map<id, AgentSessionWrapper>)]
         LOCKS[(__piStartLocks: Map<id, Promise>)]
-        TRUST_MAP[(__piSessionOnlyTrust: Map<cwd, boolean>)]
+        TRUST_MAP[(__piSessionOnlyTrust)]
     end
 
     subgraph "运行时核心"
@@ -80,11 +80,18 @@ function getRegistry(): Map<string, AgentSessionWrapper> {
 }
 ```
 
-| 变量 | 类型 | 用途 | 生命周期 |
-|------|------|------|----------|
-| `__piSessions` | `Map<string, AgentSessionWrapper>` | 活跃会话包装器注册表 | 进程存活期，HMR 安全 |
-| `__piStartLocks` | `Map<string, Promise<...>>` | 启动并发去重锁 | 单次启动期间，完成后自动删除 |
-| `__piSessionOnlyTrust` | `Map<string, boolean>` | Project Trust 409 会话级放行标记 | 会话级，手动清理 |
+| 变量 | 来源 | 用途 |
+|------|------|------|
+| `__piSessions` | `rpc-manager.ts` | 活跃 `AgentSessionWrapper` 注册表 |
+| `__piStartLocks` | `rpc-manager.ts` | 同一 `sessionId` 启动中的共享 Promise |
+| `__piSessionOnlyTrust` | `rpc-manager.ts` | Project Trust 会话级放行 |
+| `__piSessionPathCacheState` | `session-reader.ts` | sessionId → `.jsonl` 正向/负向路径缓存 |
+| `__piWriteLocks` | `session-lock.ts` | 单文件写入锁 |
+| `__piAllowedRootsCache` | `allowed-roots.ts` | 文件访问白名单，**5s TTL** |
+| `__piLoginCallbacks` | `auth/login/[provider]` | OAuth 手动输入回调 |
+| `__piGitWorktreeLocks` | `git-worktree.ts` | Worktree 创建/清理并发锁 |
+| `__piUpstreamUsageCache` | `upstream-usage` | 上游额度查询缓存，**120s TTL** |
+| `__piLtmService` / `__piLtmServiceKey` / `__piLtmServiceError` / `__piLtmServiceErrorAt` | `ltm/service.ts` | LTM 单例、配置键、失败缓存与时间戳 |
 
 **HMR 安全性**：Next.js 开发模式下模块热替换会重新执行模块代码，但 `globalThis` 跨模块生命周期持久化，避免注册表丢失导致活跃会话泄漏或重复创建。
 
@@ -108,6 +115,8 @@ export function getRpcSession(sessionId: string): AgentSessionWrapper | undefine
 export function updateSessionCodemode(enabled: boolean): void
 export function requestSessionResourceReload(cwd?: string): void
 ```
+
+`startRpcSession` 顺序：已存活则复用 wrapper；否则与进行中的启动 Promise 共享锁；`SessionManager.open` 或 `create`；`findLastAgentMode` 恢复模式；`DefaultResourceLoader` 注入 codemode / tool_search / mcp / approval / ltm 扩展；`createAgentSession({ noTools: "builtin" })`；包装、`bindExtensions({ uiContext })`、`registry.set(realSessionId)`。空闲 10 分钟销毁。
 
 **所有权守卫删除模式**：`destroy()` 中的 `onDestroy` 回调使用**身份比对**而非无条件删除：
 
@@ -206,7 +215,7 @@ async destroy(): Promise<void> {
   // 3. 清理扩展桥接
   this._uiBridge?.destroy();
   await this.inner.extensionRunner?.emit({ type: "session_shutdown", reason: "quit" });
-  await this.inner.dispose?.();
+  this.inner.dispose?.();  // 当前实现不 await
   
   // 4. 执行 onDestroy 回调（含注册表删除守卫）
   for (const cb of this.onDestroyCallbacks) await cb();
@@ -263,11 +272,11 @@ flowchart TD
     D -- 否 --> F[创建起始 Promise 存入 locks]
     F --> N[SessionManager.open/create]
     N --> O[加载持久化 agentMode/toolPreset]
-    O --> P[构建 ResourceLoader + Extensions]
-    P --> Q[createAgentSession 创建 inner]
-    Q --> R[应用工具集、模式、绑定扩展]
-    R --> S[wrapper.start() 订阅事件 + 启动空闲定时器]
-    S --> T[注册到 registry + onDestroy 守卫删除]
+    O --> P["DefaultResourceLoader + codemode/tool_search/mcp/approval/ltm"]
+    P --> Q["createAgentSession({noTools:\"builtin\"})"]
+    Q --> R[wrap + bindExtensions uiContext]
+    R --> S[wrapper.start() 订阅事件 + 10min 空闲定时器]
+    S --> T[registry.set(realSessionId) + onDestroy 守卫删除]
     T --> U[返回 wrapper 执行原始命令/建立 SSE]
     U --> V[finally 删除 locks 条目]
 ```
@@ -288,7 +297,7 @@ Sources: [lib/rpc-manager.ts#L800-L944](lib/rpc-manager.ts#L800-L944), [app/api/
 | **进程退出** | `SIGINT`/`SIGTERM`/`exit` | 应用关闭、重启、部署更新 |
 | **错误兜底** | `send()` 中异常捕获后 `emitAgentError` 但不自动销毁 | 保留会话供重试，避免数据丢失 |
 
-> **Fork 时的原子性保证**：`fork` 命令先创建新会话文件，**预注册新 wrapper 成功后**再 `destroy()` 旧 wrapper。若预注册失败，清理孤儿 `.jsonl` 文件并抛错，**旧 wrapper 保持可用**。
+> **Fork 顺序**：`send("fork")` → `createBranchedSession`（或首条消息前 `SessionManager.create`）写出新 `.jsonl` → `startRpcSession(newId)` 预注册 → 成功后再 `await this.destroy()` 旧 wrapper。预注册失败则 **旧 wrapper 保持可用**；孤儿 `.jsonl` 的 `unlink` 与路径缓存失效是 **best-effort**（失败不阻断，随后 rethrow）。不存在 `/api/sessions/fork`。
 
 Sources: [lib/rpc-manager.ts#L400-L500](lib/rpc-manager.ts#L400-L500)
 
@@ -390,7 +399,7 @@ export function useAgentEvents({ agentRunning }: UseAgentEventsOptions) {
 | 阶段 | 触发条件 | 动作 |
 |------|----------|------|
 | 连接建立 | `loadSession` 返回 `agentState.running === true` 且 `isStreaming` | `connectEvents(sid)` 创建 `EventSource` |
-| 重连 | 网络抖动导致 `onerror` | `AgentEventsManager` 在 `onerror` 中显式 `disconnect()` 关闭 `EventSource`，自行实现指数退避重连（1s,2s,4s,8s,16s，上限 30s）；超 5 次置 `failed` |
+| 重连 | 网络抖动导致 `onerror` | `AgentEventsManager` 在 `onerror` 中显式 `disconnect()` 关闭 `EventSource`，指数退避重连 **5 次：1s/2s/4s/8s/16s**（公式里的 30s 封顶不可达）；超 5 次置 `failed` |
 | 断开 | 会话切换、组件卸载、显式 `abort` | cleanup 关闭 `EventSource` |
 | 心跳保活 | 服务端 30s 间隔发送 `:\n\n` | 防止反向代理超时；客户端无需显式心跳 |
 
@@ -547,6 +556,6 @@ Sources: [lib/rpc-manager.ts#L600-L944](lib/rpc-manager.ts#L600-L944)
 
 - **上游事件流细节**：[SSE 事件流与流式状态机](8-sse-shi-jian-liu-yu-liu-shi-zhuang-tai-ji)
 - **会话文件格式**：[Pi 会话文件格式与 .jsonl 解析](13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi)
-- **分支机制**：[三种分支机制：Fork、会话内分支、Git Worktree Clone](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone)
+- **分支机制**：[四种会话分叉机制：Fork、会话内分支、跨文件 Branch、Clone](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone)
 - **前端主 Hook**：[useAgentSession 主 Hook 与子 Hook 拆分策略](22-useagentsession-zhu-hook-yu-zi-hook-chai-fen-ce-lue)
 - **流式消息状态机**：[streamReducer 流式消息状态机与增量渲染](23-streamreducer-liu-shi-xiao-xi-zhuang-tai-ji-yu-zeng-liang-xuan-ran)

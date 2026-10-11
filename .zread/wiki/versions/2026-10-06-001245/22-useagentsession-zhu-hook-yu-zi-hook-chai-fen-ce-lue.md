@@ -1,4 +1,4 @@
-本文档深入解析 `useAgentSession` 及其子 Hook 的架构设计，重点阐述**职责分离**、**状态所有权**、**纯函数与副作用边界**、**跨 Hook 协作模式**等核心设计决策。该架构采用「主 Hook 编排 + 子 Hook 专用」的分层模式，将原本单一庞大的组件级 Hook 拆分为 5 个职责单一的子 Hook 与 10 个纯工具模块，实现了可测试性、可维护性与并发安全的统一。
+本文档深入解析 `useAgentSession`（`hooks/useAgentSession.ts`，约 803 行）及其子 Hook 的架构设计，重点阐述**职责分离**、**状态所有权**、**纯函数与副作用边界**、**跨 Hook 协作模式**等核心设计决策。该架构采用「主 Hook 编排 + 子 Hook 专用」的分层模式，将原本单一庞大的组件级 Hook 拆分为 5 个职责单一的子 Hook 与 10 个纯工具模块，实现了可测试性、可维护性与并发安全的统一。
 
 Sources: [useAgentSession.ts](hooks/useAgentSession.ts#L1-L50), [agent-session 目录结构](hooks/agent-session)
 
@@ -183,6 +183,7 @@ sequenceDiagram
 - `applyAgentEvent` 返回 **`AgentEventApplyResult`** —— 一个**纯数据结构**，包含：`agentRunning?`, `phaseOp?`, `streamAction?`, `retryInfo?`, `appendMessages?`, `effects[]`
 - **零副作用**：纯函数不直接调用 `setState`，而是返回「意图描述」，由主 Hook 统一分发
 - **副作用描述符**：`effects` 数组中的每一项都是可序列化的标签联合体（如 `{type: "reloadSession"}`, `{type: "extensionUiRequest", request: ...}`），主 Hook 在 `switch` 中逐个解释执行
+- **队列事件不走 reducer**：`handleAgentEvent` 在调用 `applyAgentEvent` **之前**处理 `follow_up_queue_update`（`acceptFollowUpQueue`）与 `queue_update`（`reconcileSteeringQueue`）。这两类以及 `connected` / `agent_settled` / 未知 `type` 在 `applyAgentEvent` 的 `default` 分支均为 no-op（不产生 `streamAction`）
 
 Sources: [agent-event-apply.ts](hooks/agent-session/agent-event-apply.ts#L80-L200), [useAgentSession.ts](hooks/useAgentSession.ts#L300-L500)
 
@@ -349,6 +350,7 @@ export function applyAgentEvent(
 - `phaseOp` 使用 **`AgentPhaseOp` 标签联合体**（`set`/`addTool`/`removeTool`/`clear`），配合 `applyPhaseOp` 纯函数实现相位状态机
 - `streamAction` 直接复用 `streamReducer` 的 `StreamAction` 类型，统一流式状态转换
 - `message_start`/`message_update` 触发 `phaseOp: {type: "clear"}` —— 清除 `waiting_model` 但**保留** `running_tools`（通过 `applyPhaseOp` 内部逻辑实现）
+- `default` 分支 no-op：`connected`、`agent_settled`、`queue_update`、`follow_up_queue_update` 及未知类型不产生补丁（队列快照由主 Hook 单独消费）
 
 Sources: [agent-event-apply.ts](hooks/agent-session/agent-event-apply.ts#L100-L200), [agent-phase.ts](hooks/agent-session/agent-phase.ts#L1-L18), [stream-state.ts](hooks/agent-session/stream-state.ts#L1-L32)
 
@@ -370,7 +372,7 @@ Sources: [session-lifecycle-reset.ts](hooks/agent-session/session-lifecycle-rese
 
 `AgentEventsManager` 类封装：
 - `EventSource` 生命周期（连接/断开/重连）
-- **指数退避重连**：1s → 2s → 4s → 8s → 16s → 30s (max)，最多 5 次
+- **指数退避重连**：最多 5 次，延迟 1s → 2s → 4s → 8s → 16s（`reconnectDelay * 2^(attempt-1)`）。代码里还有 `Math.min(30000, …)`，但第 6 次（32s→30s）不会发生：`reconnectAttempts > 5` 时直接 `failed`
 - `expectRunning` 参数：允许在 `agentRunning` state 尚未生效前**表达意图**，避免早期 `onerror` 误判为「应断开」
 - `agentRunning` 标志守护：仅当 `agentRunning === true` 时才重连，否则直接 `disconnected`
 
@@ -484,6 +486,8 @@ Sources: [agent-events-manager.ts](hooks/agent-session/agent-events-manager.ts#L
 | 纯函数 | `session-command-target.test.ts` | `resolveSessionCommandTarget` 三种分支 | Node.js |
 | 纯函数 | `session-stats.test.ts` | `calculateSessionStats` 聚合逻辑 | Node.js |
 | 纯函数 | `user-message-reconciliation.test.ts` | pending→canonical 替换、entryIds 平行性 | Node.js |
+| 纯函数 | `prompt-dispatch-gate.test.ts` | `tryStartPromptDispatch` / `finishPromptDispatch` 互斥 | Node.js |
+| 纯函数 | `session-loader-api.test.ts` | `fetchSession` / `fetchContext`（含 `?leafId=`）请求形状 | Node.js |
 | Hook 行为 | `use-session-loader.test.ts` | `latestRequestStale` 纯函数直测 + 源码文本匹配 | Node.js (node:test，未渲染 React) |
 | 纯逻辑（类） | `agent-events-manager.test.ts` | `AgentEventsManager` 连接/重连/状态机 | Node.js (node:test + mock.timers) |
 | Hook 行为 | `use-session-commands.test.ts` | `handleSend`/`handleFork` 等命令流程 | Node.js (node:test + 源码文本匹配) |
@@ -540,5 +544,5 @@ Sources: [useAgentSession.ts](hooks/useAgentSession.ts), [agent-event-apply.ts](
 - **上游架构**：[四层分离架构详解](6-si-ceng-fen-chi-jia-gou-xiang-jie) — 理解整体分层背景
 - **核心数据流**：[SSE 事件流与流式状态机](8-sse-shi-jian-liu-yu-liu-shi-zhuang-tai-ji) — `streamReducer` 与 `applyAgentEvent` 的协作细节
 - **消息渲染**：[streamReducer 流式消息状态机与增量渲染](23-streamreducer-liu-shi-xiao-xi-zhuang-tai-ji-yu-zeng-liang-xuan-ran) — 流式状态如何驱动 UI
-- **会话分支**：[三种分支机制](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) — `handleFork`/`handleNavigate` 的业务语义
+- **会话分支**：[四种会话分叉机制](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) — `handleFork`/`handleNavigate` 的业务语义
 - **长期记忆**：[长期记忆：SQLite 后端、观测钩子与检索 API](18-chang-qi-ji-yi-sqlite-hou-duan-guan-ce-gou-zi-yu-jian-suo-api) — 另一套 Hook 拆分案例对比

@@ -33,7 +33,7 @@ graph TB
     style Q fill:#fff3e0
 ```
 
-**核心区别**：只读模式走 **HTTP 请求-响应** 拉取静态快照；交互模式在 HTTP 基础上**升级为 SSE 长连接**，并启动/恢复后台 Agent 进程（RPC wrapper）。
+**核心区别**：只读模式走 **HTTP 请求-响应**，由 `session-reader.ts` 解析 `.jsonl`，**不创建** `AgentSession`；交互模式走 `rpc-manager` 的 `AgentSessionWrapper`，在 HTTP 基础上升级为 SSE。会话内分支是**同一文件**的 `navigate_tree`；跨文件 Fork 走 `POST /api/agent/[id]` 的 `{type:"fork"}`，没有 `/api/sessions/fork`。磁盘 `toolCall` 为 `{id,name,arguments}`，UI 为 `{toolCallId,toolName,input}`，`normalizeToolCalls` 在加载与 SSE 两处执行。
 
 Sources: [app/api/sessions/[id]/route.ts](app/api/sessions/[id]/route.ts#L1-L80), [app/api/agent/[id]/events/route.ts](app/api/agent/[id]/events/route.ts#L1-L143), [hooks/agent-session/use-session-loader.ts](hooks/agent-session/use-session-loader.ts#L1-L121), [hooks/agent-session/use-agent-events.ts](hooks/agent-session/use-agent-events.ts#L1-L51)
 
@@ -81,7 +81,7 @@ sequenceDiagram
    - `getSessionEntriesAsync(filePath)` 读取并解析 `.jsonl` 全量条目
    - `buildTree(entries)` 构建分支树结构 `SessionTreeNode[]`
    - `getLeafId(entries)` 获取当前叶子节点 ID
-   - `buildSessionContext(entries, leafId)` 生成扁平化消息列表 `AgentMessage[]` 与 `entryIds[]`
+   - `buildSessionContext(entries, leafId)` 生成扁平化消息列表 `AgentMessage[]` 与 `entryIds[]`（此处对 assistant 消息做 `normalizeToolCalls`）
    - 若 `includeState=true`，额外调用 `getRpcSession(id)?.peekState()` 读取运行时状态（**不重置空闲计时器**）；wrapper 存活时返回 `{running:true, state}`，否则返回 `{running:false}`
 3. **响应结构**：
    ```typescript
@@ -163,7 +163,7 @@ sequenceDiagram
 - **快速路径**：若 `getRpcSession(id)?.isAlive()` 直接复用现有 wrapper
 - **冷启动**：`resolveSessionPath` → `getHeaderAsync` 读取 cwd → `evaluateProjectTrust` 检查信任（可能返回 409） → `startRpcSession(id, filePath, cwd)` 创建新 wrapper
 - **清理机制**：`cleanup()` 函数被 `start` 的 `abort` 信号与 `cancel` 双路径调用，**幂等** 关闭 heartbeat interval、移除 listener、关闭 controller
-- **心跳**：30 秒间隔发送 `:\n\n` 注释行，同时调用 `session.keepAlive()` 刷新 Agent 空闲计时器；检测到 `controller.desiredSize === null`（客户端断开）主动清理
+- **心跳**：30 秒间隔发送 `:\n\n` 注释行；**仅在 enqueue 成功后**调用 `session.keepAlive()`；`desiredSize === null` 时主动清理。服务端是 `ReadableStream`，客户端才是 `EventSource`
 
 Sources: [app/api/agent/[id]/events/route.ts](app/api/agent/[id]/events/route.ts#L1-L143), [hooks/agent-session/agent-events-manager.ts](hooks/agent-session/agent-events-manager.ts#L1-L186), [hooks/agent-session/use-agent-events.ts](hooks/agent-session/use-agent-events.ts#L1-L51)
 
@@ -278,7 +278,7 @@ Sources: [hooks/useAgentSession.ts](hooks/useAgentSession.ts#L600-L750), [hooks/
 | **Agent 进程** | 不启动，`peekState` 只读 | `startRpcSession` 启动/复用 | `startRpcSession` 启动/复用 |
 | **空闲计时器** | **不重置**（peekState 设计） | `keepAlive()` 每 30s 刷新 | 随命令隐式刷新 |
 | **典型调用方** | `useSessionLoader.loadSession` | `AgentEventsManager.connect` | `sendAgentCommand` (handleSend 等) |
-| **响应内容** | 静态快照：tree, messages, agentState | 事件流：`AgentEvent[]` | 命令执行结果 `{success, data}` |
+| **响应内容** | 静态快照：tree, messages, agentState | 事件流：SSE `data:` 帧（服务端 `ReadableStream`） | 命令执行结果 `{success, data}`；错误 `{error, errorCode?}` |
 | **错误语义** | 404=会话不存在 | 409=需信任确认, 500=启动失败 | 409=需信任, 400=命令非法, 404=会话不存在 |
 | **并发安全** | 只读，天然安全 | 单会话单连接，重连去抖 | 乐观锁 `revision` (Follow-up) |
 
@@ -400,7 +400,7 @@ Sources: [hooks/useAgentSession.ts](hooks/useAgentSession.ts#L400-L550), [hooks/
 - **上游依赖**：[SSE 事件流与流式状态机](8-sse-shi-jian-liu-yu-liu-shi-zhuang-tai-ji) — 详细阐述 `streamReducer` 与 `AgentEvent` 类型体系
 - **下游消费**：[Agent 模式与 Ask 拦截：Plan / Ask / Full](16-agent-mo-shi-yu-ask-lan-jie-plan-ask-full) — 交互模式下 Agent Mode 的运行时行为
 - **会话持久化**：[Pi 会话文件格式与 .jsonl 解析](13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi) — 只读模式依赖的底层存储格式
-- **分支机制**：[三种分支机制：Fork、会话内分支、Git Worktree Clone](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) — 只读模式下的分支树导航与交互模式下的 Fork 创建
+- **分支机制**：[四种会话分叉机制：Fork、会话内分支、跨文件 Branch、Clone](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) — 只读模式下的分支树导航与交互模式下的 Fork 创建
 - **进程管理**：[AgentSession 生命周期与进程内注册表](7-agentsession-sheng-ming-zhou-qi-yu-jin-cheng-nei-zhu-ce-biao) — RPC wrapper 与 `globalThis.__piSessions` 注册表机制
 
 ---

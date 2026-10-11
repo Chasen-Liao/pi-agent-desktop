@@ -1,10 +1,10 @@
-本页面深入剖析 Pi Agent Desktop 前端聊天界面的三大核心渲染技术：**消息虚拟化列表**、**Markdown 渲染管线**与**代码语法高亮**。这些技术共同支撑了长对话历史的流畅滚动、富文本消息的正确呈现，以及代码片段的专业级着色体验。文档将从架构分层、数据流向、关键实现细节三个维度展开，配合 Mermaid 架构图与对比表格，帮助中级开发者快速掌握核心设计模式并具备二次开发能力。
+本页面深入剖析 Pi Agent Desktop 前端聊天界面的三大核心渲染技术：**消息列表（CSS `content-visibility`，非 windowing）**、**Markdown 渲染管线**与**代码语法高亮**。列表仍全量挂载 DOM，不按视口切片，也没有「万条消息虚拟滚动」实现。文档将从架构分层、数据流向、关键实现细节三个维度展开，配合 Mermaid 架构图与对比表格，帮助中级开发者快速掌握核心设计模式并具备二次开发能力。
 
 Sources: [components/MessageList.tsx](components/MessageList.tsx#L1-L89), [components/MessageView.tsx](components/MessageView.tsx#L1-L864), [components/message-content.ts](components/message-content.ts#L1-L52), [components/ChatMinimap.tsx](components/ChatMinimap.tsx#L1-L408), [lib/ayu-syntax-theme.ts](lib/ayu-syntax-theme.ts#L1-L117)
 
 ## 整体架构与数据流向
 
-聊天消息渲染管线遵循**单向数据流**原则：会话数据 → 状态选择器 → 虚拟化列表 → 消息视图组件 → Markdown/代码渲染器。下图展示了核心组件依赖关系与数据传递路径。
+聊天消息渲染管线遵循**单向数据流**原则：会话数据 → 状态选择器 → 消息列表 → 消息视图组件 → Markdown/代码渲染器。下图展示了核心组件依赖关系与数据传递路径。
 
 ```mermaid
 graph TD
@@ -32,7 +32,7 @@ graph TD
 |------|----------|----------|----------|
 | 数据获取 | `useAgentSession` | `AgentMessage[]` | 从 SSE 事件流增量构建消息数组 |
 | 过滤与索引 | `ChatWindow` | `visibleMessages`, `entryIds`, `toolResultsMap` | 过滤 toolResult、计算导航索引、建立工具结果映射 |
-| 虚拟化列表 | `MessageList` | `React.ReactNode[]` | `React.memo` 优化 + CSS `content-visibility` 原生虚拟化 |
+| 消息列表 | `MessageList` | `React.ReactNode[]` | 全量 `map` + `React.memo` + CSS `content-visibility`（非 windowing） |
 | 消息分发 | `MessageView` | 单条 `AgentMessage` | 根据 `role` 分发到 `UserMessageView` / `AssistantMessageView` / `CustomMessageView` |
 | Assistant 块渲染 | `BlockView` | `AssistantContentBlock[]` | 按 `type` 分发到 `TextBlock` / `ThinkingBlock` / `ToolCallBlock` |
 | Markdown 渲染 | `TextBlock` | `string` | `ReactMarkdown` + `remarkGfm` + 自定义 `code`/`pre` 组件 |
@@ -45,7 +45,7 @@ Sources: [components/MessageList.tsx](components/MessageList.tsx#L1-L89), [compo
 
 ### 设计动机与选型对比
 
-长对话场景下，数百条消息的完整 DOM 渲染会导致首屏渲染阻塞、滚动卡顿、内存占用高。团队评估了三类虚拟化方案，最终选择 **CSS `content-visibility: auto`** 作为主策略，辅以 `ChatMinimap` 提供导航。
+长对话场景下，数百条消息的完整绘制会导致滚动卡顿。项目**没有**接入 `react-window` / `react-virtual`，也没有按视口只挂载可见行。`MessageList` 对 `messages` **全量 `map`**，仅对 user/assistant 外包一层 `content-visibility: auto`，让浏览器跳过离屏布局/绘制；DOM 节点仍在，因此 `ChatMinimap` 能用 `messageRefs` 实测位置。
 
 | 方案 | 优势 | 劣势 | 适用场景 |
 |------|------|------|----------|
@@ -85,8 +85,11 @@ return (
 2. **`contain-intrinsic-size: auto 150px`**：`auto` 让浏览器记住上次渲染高度，`150px` 作为首次估算 fallback。经验值覆盖绝大多数单条消息高度。
 3. **`messageRefs` 稳定引用**：`useMessageRefs` Hook 维护固定长度数组，索引与可见消息一一对应，供 `ChatMinimap` 实时测量位置。
 4. **`React.memo` 组件级隔离**：`MessageList` 与 `MessageView` 均为 `React.memo`，配合 `entryIds` 作为 key，避免列表局部更新触发全量重渲染。
+5. **分叉门控分层**：`MessageList` 上 `canFork = !agentRunning && !isNew && !isFirstUserMessage`、`canNavigate = !agentRunning`（不检查 `entryIds[idx]` 真值）；`UserMessageView` 再要求 `!!entryId && !!onFork`。空 `entryId` 由主 Hook 的 `handleFork` 守卫兜底。
+6. **流式思考抽离**：`ChatWindow` 的 `splitActiveThinking` 把直播 `thinking` 块交给 `AgentThinkingOrb`，`streamingMessage` 只渲染剩余块。
+7. **ToolCall 字段归一化**：SDK/文件侧可能是 `{id, name, arguments}`，UI 使用 `{toolCallId, toolName, input}`。`normalizeToolCalls()` 在 `lib/session-reader.ts` 加载与 `applyAgentEvent` 的 `message_start` / `message_update` / `message_end` 两处转换；`ToolCallBlock` 用 `block.toolCallId` 去 `toolResultsMap` 配对。
 
-Sources: [components/MessageList.tsx](components/MessageList.tsx#L1-L89), [components/ChatMinimap.tsx](components/ChatMinimap.tsx#L399-L408)
+Sources: [components/MessageList.tsx](components/MessageList.tsx#L1-L88), [components/ChatMinimap.tsx](components/ChatMinimap.tsx#L399-L408), [lib/normalize.ts](lib/normalize.ts#L1-L30), [lib/active-thinking.ts](lib/active-thinking.ts)
 
 ### `useMessageRefs` Hook：稳定引用数组工厂
 
@@ -349,7 +352,7 @@ Sources: [lib/ayu-syntax-theme.ts](lib/ayu-syntax-theme.ts#L1-L117)
 
 ### 定位与价值
 
-虚拟化列表隐藏了离屏 DOM，传统滚动条无法反映消息语义分布。`ChatMinimap` 通过 `messageRefs` 实测每条消息在滚动容器中的真实位置，生成**语义感知的迷你地图**，提供：
+`content-visibility` 跳过离屏布局/绘制，但节点仍在 DOM 中。`ChatMinimap` 通过 `messageRefs` 实测每条 user/assistant 消息在滚动容器中的真实位置，生成**语义感知的迷你地图**，提供：
 - 消息类型着色（用户/助手）
 - 悬浮预览首行文本
 - 点击/拖拽跳转
@@ -465,7 +468,7 @@ Sources: [lib/ayu-syntax-theme.ts](lib/ayu-syntax-theme.ts#L1-L117), [components
 
 ## 相关页面导航
 
-- 上一页：[液态思考球：WebGPU 优先 Canvas 降级渲染](25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran) — WebGPU/Canvas 渲染架构
+- 上一页：[液态思考球：WebGPU 优先、CSS 降级渲染](25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran) — WebGPU canvas + CSS fallback
 - 下一页：[测试策略：Node.js 原生测试、平台子集与冒烟测试](27-ce-shi-ce-lue-node-js-yuan-sheng-ce-shi-ping-tai-zi-ji-yu-mou-yan-ce-shi) — 全栈测试体系
 - 关联页面：[streamReducer 流式消息状态机与增量渲染](23-streamreducer-liu-shi-xiao-xi-zhuang-tai-ji-yu-zeng-liang-xuan-ran) — 流式状态如何驱动增量渲染
 - 关联页面：[AppShell 布局系统：面板拖拽、键盘快捷键、主题切换](24-appshell-bu-ju-xi-tong-mian-ban-tuo-zhuai-jian-pan-kuai-jie-jian-zhu-ti-qie-huan) — 主题系统与 `useTheme` Hook 细节

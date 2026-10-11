@@ -56,7 +56,7 @@ flowchart TD
 
     subgraph L4["📁 持久层 · 文件系统 (磁盘)"]
         direction LR
-        F1["~/.pi/agent/sessions/<encoded-cwd>/*.jsonl<br/>会话文件"]
+        F1["~/.pi/agent/sessions/--<encoded>--/<timestamp>_<uuidv7>.jsonl<br/>会话文件"]
         F2["~/.pi/agent/settings.json<br/>全局设置"]
         F3["~/.pi/agent/models.json<br/>模型配置"]
         F4["~/.pi/agent/auth/<br/>认证凭证"]
@@ -122,11 +122,12 @@ Sources: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#L60-L110), [electron/main.t
 
 ### 会话与对话管理
 - **会话浏览器**：按工作目录分组展示所有 Pi 会话，支持搜索、筛选、排序
-- **实时流式对话**：SSE 事件流推送，`streamReducer` 增量渲染，零感知延迟
+- **实时流式对话**：SSE 事件流推送；`applyAgentEvent` 归约事件，`streamReducer` 只维护流式消息四动作
 - **消息队列**：`Enter` 立即 steer，`Alt+Enter` 排队 Follow-up，支持拖拽/键盘重排
-- **会话内分支**：任意节点回退并继续，分支保存在同一 `.jsonl` 文件内
-- **分支导航器**：可视化树形结构切换同一会话的不同分支
-- **Fork & Clone**：从任意节点分叉新会话，或克隆到普通目录 / Git Worktree 新分支
+- **会话内分支**：同一 `.jsonl` 内回退/续写；`navigate_tree` + `GET /api/sessions/[id]/context?leafId=`，UI 为 `BranchNavigator`
+- **Fork**：`POST /api/agent/[id]` `{type:"fork"}` → 新 `.jsonl` + 侧边栏子节点（`createBranchedSession` → `startRpcSession(newId)` → `destroy` 旧 wrapper）
+- **跨文件 Branch**：`POST /api/sessions/[id]/branch` → 同样新建 `.jsonl`（没有 `POST /api/sessions/fork`）
+- **Clone**：`POST /api/sessions/[id]/clone`，`workspaceMode: "directory" | "worktree"`
 - **会话导出**：一键导出 HTML / Markdown，便于归档分享
 
 Sources: [README.zh-CN.md](README.zh-CN.md#L50-L80), [components/ChatWindow.tsx](components/ChatWindow.tsx#L1-L50), [hooks/useAgentSession.ts](hooks/useAgentSession.ts#L1-L80)
@@ -166,7 +167,9 @@ pi-agent-desktop/
 │   │   ├── auth/                 # 登录、API Key 管理
 │   │   ├── mcp/                  # MCP 服务器配置
 │   │   ├── extensions/           # 扩展管理
-│   │   ├── trust/                # 项目信任握手
+│   │   ├── trust/                # 项目信任握手（不在 sessions 路由下）
+│   │   ├── usage/upstream/       # 上游额度查询
+│   │   ├── statusline/           # Git 状态栏
 │   │   └── ...                   # desktop-settings, files, health 等
 │   ├── layout.tsx                # 根布局：字体、主题、I18nProvider
 │   └── page.tsx                  # 入口：Suspense 包裹 AppShell
@@ -175,10 +178,10 @@ pi-agent-desktop/
 │   ├── ChatWindow.tsx            # 对话主窗口：消息列表、输入、分支、小地图
 │   ├── ChatInput.tsx             # 消息输入：附件、模型选择、思考等级
 │   ├── SessionSidebar.tsx        # 会话侧边栏：树形列表、文件浏览
-│   ├── MessageList.tsx           # 虚拟化消息列表
+│   ├── MessageList.tsx           # 消息列表：全量 map + content-visibility
 │   ├── MessageView.tsx           # 单条消息渲染：Markdown、代码高亮
 │   ├── BranchNavigator.tsx       # 分支导航器：树形可视化
-│   ├── LiquidOrbCanvas.tsx       # 液态思考球：WebGPU/Canvas 渲染
+│   ├── LiquidOrbCanvas.tsx       # 液态思考球：WebGPU，失败时 CSS span 降级
 │   └── ...                       # ModelsConfig, SkillsConfig, Modals 等
 ├── electron/                     # Electron 主进程
 │   ├── main.ts                   # 入口：窗口、子进程、托盘、更新、CSP
@@ -189,17 +192,21 @@ pi-agent-desktop/
 │   ├── tray.ts                   # 系统托盘菜单
 │   └── *.test.ts                 # Electron 专用单测
 ├── hooks/                        # React Hooks (按领域拆分)
-│   ├── useAgentSession.ts        # 总入口 Hook，组合 5 个子 Hook
+│   ├── useAgentSession.ts        # 总入口 Hook（803 行），组合 5 个子 Hook
 │   ├── usePanelLayout.ts         # 面板宽度、拖拽、持久化
 │   ├── useFileTabs.ts            # 文件标签页状态
 │   ├── useTheme.ts               # 主题切换、系统跟随
+│   ├── useAudio.ts               # 提示音
+│   ├── useUpstreamUsage.ts       # 上游额度轮询
 │   ├── useDragDrop.ts            # 拖拽文件/路径处理
-│   └── agent-session/            # 会话相关子 Hook 拆分
-│       ├── stream-state.ts       # streamReducer 流式状态机
-│       ├── agent-event-apply.ts  # Agent 事件应用到 UI 状态
-│       ├── use-agent-events.ts   # SSE 连接与事件分发
+│   └── agent-session/            # 会话相关子模块（5 个子 Hook + ~10 个纯函数模块）
 │       ├── use-session-loader.ts # 会话加载、分支解析
-│       └── ...                   # session-commands, agent-phase 等
+│       ├── use-agent-events.ts   # SSE 连接与事件分发
+│       ├── use-session-commands.ts
+│       ├── use-session-model-tools.ts
+│       ├── use-chat-scroll.ts
+│       ├── stream-state.ts       # streamReducer：仅 start/update/end/reset
+│       └── agent-event-apply.ts  # 对 AgentEvent 子集做归约（客户端约 20 种事件）
 ├── lib/                          # 共享工具库 (服务端+客户端通用)
 │   ├── rpc-manager.ts            # AgentSessionWrapper 生命周期管理
 │   ├── session-reader.ts         # .jsonl 解析、会话列表、路径缓存
@@ -272,9 +279,9 @@ sequenceDiagram
     RPC->>SDK: new AgentSession({cwd, model, tools, extensions...})
     SDK->>FS: 追加 user 条目到 .jsonl
     SDK-->>RPC: 事件流 (user_message, assistant_thinking, tool_call, tool_result, agent_end)
-    RPC-->>API: 转发 SSE 事件 (normalize toolCall 字段)
+    RPC-->>API: 转发 SSE 事件（磁盘 toolCall 为 SDK `{id,name,arguments}`，经 `normalizeToolCalls` 转为 UI `{toolCallId,toolName,input}`）
     API-->>useAgentSession: SSE 事件流
-    useAgentSession->>useAgentSession: streamReducer 增量更新 messages[]
+    useAgentSession->>useAgentSession: applyAgentEvent 归约事件；streamReducer 只处理 start/update/end/reset
     useAgentSession-->>ChatInput: 重置输入框
     useAgentSession-->>MessageList: 触发重渲染 (虚拟化)
     SDK->>FS: 追加 assistant/toolResult 条目到 .jsonl
@@ -283,7 +290,7 @@ sequenceDiagram
 
 **关键设计点：**
 1. **进程内直连**：服务端 API 直接 `new AgentSession()`，无 IPC/RPC 开销
-2. **SSE 单向流**：服务端推送，客户端 `EventSource` 消费，`streamReducer` 保证顺序与幂等
+2. **SSE 单向流**：服务端推送，客户端 `EventSource` 消费；`applyAgentEvent` 归约事件子集，`streamReducer` 只维护流式消息四动作
 3. **Append-only 持久化**：所有状态最终落盘 `.jsonl`，天然支持崩溃恢复与时间旅行
 4. **全局注册表**：`globalThis.__piSessions` 存活 wrapper，HMR 热重载不丢会话
 
@@ -315,9 +322,9 @@ Sources: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#L200-L280), [lib/rpc-manage
 |------|------|----------|
 | 如何在浏览器开发 UI？ | `npm run dev` → `http://localhost:30141`，支持热重载 | [快速开始](2-kuai-su-kai-shi) |
 | 如何启动桌面窗口调试？ | `npm run dev:electron`（已内置 `build:electron` 编译步骤） | [双模式开发与运行](3-shuang-mo-shi-kai-fa-yu-yun-xing) |
-| 会话文件存在哪里？ | `~/.pi/agent/sessions/--<encoded-cwd>/--/<session-id>.jsonl`（cwd 中正斜杠、反斜杠、冒号均替换为 `-`，前后包裹 `--`） | [Pi 会话文件格式与 .jsonl 解析](13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi) |
+| 会话文件存在哪里？ | `~/.pi/agent/sessions/--<encoded>--/<ISO timestamp 中 : 与 . 已替换>_<uuidv7>.jsonl`；编码 `--${resolvedCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`。不是 `--<encoded-cwd>/--/<session-id>.jsonl` | [Pi 会话文件格式与 .jsonl 解析](13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi) |
 | 如何添加新的 API 路由？ | 在 `app/api/<name>/route.ts` 导出 `GET`/`POST`，遵循 Next.js App Router 规范 | [四层分离架构详解](6-si-ceng-fen-chi-jia-gou-xiang-jie) |
-| 前端如何发起 Agent 命令？ | `useAgentSession` 返回的 `handleSend` / `handleAbort` / `handleFork` 等 | [useAgentSession 主 Hook 与子 Hook 拆分策略](22-useagentsession-zhu-hook-yu-zi-hook-chai-fen-ce-lue) |
+| 前端如何发起 Agent 命令？ | `POST /api/agent/[id]`（含 `{type:"fork"}` 等）；没有 `POST /api/agent/[id]/command` | [useAgentSession 主 Hook 与子 Hook 拆分策略](22-useagentsession-zhu-hook-yu-zi-hook-chai-fen-ce-lue) |
 | 如何在 Electron 访问原生 API？ | `preload.ts` 暴露 `electronAPI`，渲染进程通过 `window.electronAPI` 调用 | [Preload、CSP、自动更新与系统托盘](12-preload-csp-zi-dong-geng-xin-yu-xi-tong-tuo-pan) |
 | 打包失败常见原因？ | 检查 `scripts/ensure-standalone-*.mjs` 依赖收集、macOS 双架构 Sharp 运行时 | [打包构建流程与 macOS Universal 双架构处理](11-da-bao-gou-jian-liu-cheng-yu-macos-universal-shuang-jia-gou-chu-li) |
 

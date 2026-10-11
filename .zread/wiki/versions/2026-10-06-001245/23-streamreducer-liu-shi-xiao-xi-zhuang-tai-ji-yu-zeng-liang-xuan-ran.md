@@ -96,7 +96,7 @@ flowchart TD
 ### 2.2 AgentEventsManager：SSE 连接与事件分发
 
 `AgentEventsManager` 封装 `EventSource`，负责：
-- 连接管理：`connect(sid, resetAttempts, expectRunning)`、`disconnect()`、指数退避重连（最多 5 次，最大 30s）
+- 连接管理：`connect(sid, resetAttempts, expectRunning)`、`disconnect()`、指数退避重连（最多 5 次，延迟 **1s / 2s / 4s / 8s / 16s**）。源码注释写了 `Math.min(30000, …)`，但第 6 次（本会到 32s 再封顶 30s）不会执行：`reconnectAttempts > 5` 即标 `failed`
 - 状态机：`disconnected → connecting → connected → failed`
 - 事件解析：`onmessage` → `JSON.parse` → `handleAgentEvent(event)`
 
@@ -154,8 +154,12 @@ export type AgentEventApplyResult = {
 | `message_end` | `{ type: "reset" }` | 同时 `appendMessages=[normalized]`、`phaseOp={set: waiting_model}` |
 | `agent_end` | `{ type: "end" }` | `agentRunning=false`，触发 `reloadSession`/`fetchAgentState` |
 | `agent_error` | `{ type: "end" }` | 追加 `custom/agent_error` 消息到 transcript |
+| `tool_execution_*` / `auto_retry_*` / `compaction_*` / `extension_ui_*` | 无 | 只改 phase / retry / compact / effects，**不**驱动 `streamReducer` |
+| `connected` / `agent_settled` / `queue_update` / `follow_up_queue_update` / 未知 | 无（`default` no-op） | 队列事件由 `useAgentSession.handleAgentEvent` **先于** `applyAgentEvent` 消费 |
 
-Sources: [hooks/agent-session/agent-event-apply.ts](hooks/agent-session/agent-event-apply.ts#L1-L150)
+**不要把 `streamReducer` 说成「处理 16 种 SSE 事件」**：它只认识 `start` / `update` / `end` / `reset` 四种 `StreamAction`。SSE `AgentEvent` 判别联合由 `applyAgentEvent` 映射；未映射类型走 default。
+
+Sources: [hooks/agent-session/agent-event-apply.ts](hooks/agent-session/agent-event-apply.ts#L1-L207)
 
 ### 2.4 useAgentSession：dispatch 与渲染桥接
 
@@ -188,7 +192,7 @@ Sources: [hooks/useAgentSession.ts](hooks/useAgentSession.ts#L1-L100)
 `MessageList` 维护两条渲染轨道：
 
 ```tsx
-{/* 1. 历史消息：虚拟化 + content-visibility:auto */}
+{/* 1. 历史消息：全量 map，user/assistant 外包一层 content-visibility:auto */}
 {messages.map((msg, idx) => (
   <div ref={el => messageRefs.current[refIdx++] = el}
        style={{ contentVisibility: "auto", containIntrinsicSize: "auto 150px" }}>
@@ -202,8 +206,8 @@ Sources: [hooks/useAgentSession.ts](hooks/useAgentSession.ts#L1-L100)
 )}
 ```
 
-- **历史消息**走虚拟化列表（`content-visibility: auto`），减少布局开销。
-- **流式消息**作为**额外节点**追加在列表末尾，**不进入 `messages` 数组**，避免污染会话历史；`message_end` 到达后 `applyAgentEvent` 将完整消息 `appendMessages` 到 `messages`，同时 `streamReducer` `reset` 清空占位，实现**无闪烁切换**。
+- **历史消息不是 windowing 虚拟列表**（无 `react-window` / 无按视口切片）：`messages` 全量渲染，仅对 user/assistant 外包 `content-visibility: auto` 让浏览器跳过离屏布局/绘制。
+- **流式消息**作为**额外节点**追加在列表末尾，**不进入 `messages` 数组**；`ChatWindow` 会先用 `splitActiveThinking` 把正在流式的 `thinking` 块抽到 `AgentThinkingOrb`，再把剩余内容作为 `visibleStreamingMessage` 传入。`message_end` 到达后 `applyAgentEvent` 将完整消息 `appendMessages` 到 `messages`，同时 `streamReducer` `reset` 清空占位，实现**无闪烁切换**。
 
 Sources: [components/MessageList.tsx](components/MessageList.tsx#L1-L89)
 
@@ -279,8 +283,8 @@ function BlockView({ block, toolResults, streamingDuration, toolCallDurations })
 ```
 
 - **TextBlock**：`ReactMarkdown` 直接渲染 `block.text`，流式更新时 React 仅重渲染文本节点。
-- **ThinkingBlock**：`duration` prop 来自 `streamingDurations`（流式）或 `thinkingDurationFromFile`（历史），折叠面板内展示原始思考文本。
-- **ToolCallBlock**：输入参数 `JSON.stringify(block.input, null, 2)` 实时展开；结果仅在展开时渲染（`PairedResult`）。
+- **ThinkingBlock**：`duration` prop 来自 `streamingDurations`（流式）或 `thinkingDurationFromFile`（历史），折叠面板内展示原始思考文本。直播流中的 thinking 块已被 `splitActiveThinking` 抽走，历史消息仍走本组件。
+- **ToolCallBlock**：UI 字段为归一化后的 `{toolCallId, toolName, input}`（`applyAgentEvent` 对 `message_*` 调用 `normalizeToolCalls`）；输入参数 `JSON.stringify(block.input, null, 2)` 实时展开；结果仅在展开时渲染（`PairedResult`）。
 
 Sources: [components/MessageView.tsx](components/MessageView.tsx#L598-L700)
 

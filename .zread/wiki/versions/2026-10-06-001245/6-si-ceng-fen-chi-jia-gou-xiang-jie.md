@@ -1,4 +1,4 @@
-Pi Agent Desktop 采用**四层分离架构**，将关注点清晰地划分为浏览器层（UI 与交互）、服务端层（API 与会话编排）、SDK 层（AI 对话引擎）、持久层（文件系统存储）。这种分层确保了**单一职责**、**可独立演进**、**易于测试**，且在 Web 与 Electron 双模式下共享同一套核心逻辑。
+Pi Agent Desktop 采用**四层分离架构**：浏览器层（React UI）、服务端层（Next.js API + SSE）、SDK 层（`pi-coding-agent`）、持久层（文件系统）。Electron **不是**第五层、也不是另一套四层模型——它只是桌面宿主：打包后托管 Next.js standalone `server.js`（macOS：`utilityProcess.fork`；Windows/Linux：`ELECTRON_RUN_AS_NODE=1`），BrowserWindow 仍走同一套四层。
 
 Sources: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#L57-L127)
 
@@ -36,7 +36,7 @@ flowchart TD
 
     subgraph L4["📁 持久层 · 文件系统"]
         direction LR
-        F1["~/.pi/agent/sessions/<encoded-cwd>/*.jsonl"]
+        F1["~/.pi/agent/sessions/--encoded--/*.jsonl"]
         F2["~/.pi/agent/desktop-settings.json"]
         F3["~/.pi/agent/models.json"]
         F4["~/.pi/agent/auth.json"]
@@ -52,7 +52,7 @@ flowchart TD
 | 层 | 职责 | 关键约束 |
 |---|---|---|
 | **浏览器层** | UI 渲染、用户交互、SSE 消费、URL 状态 | 零状态库；流式消息由 `streamReducer` 增量更新 |
-| **服务端层** | API 路由、AgentSession 包装、文件解析 | 活跃 session 必须存 `globalThis`（HMR 安全） |
+| **服务端层** | API 路由、AgentSession 包装、文件解析 | 活跃 session 等必须挂 `globalThis`（HMR 安全，见第 7 篇清单） |
 | **SDK 层** | 真正的 AI 对话引擎、模型调度、工具执行 | 由 `@earendil-works/pi-coding-agent` 提供 |
 | **持久层** | 所有状态最终落到磁盘 `.jsonl` 文件 | append-only；header 含 `parentSession` 显示元数据 |
 
@@ -167,7 +167,7 @@ Sources: [hooks/useAgentSession.ts](hooks/useAgentSession.ts#L200-L350), [hooks/
 1. **零外部状态库** — 仅使用 React 内置 `useReducer`/`useState`/`useRef`，避免依赖漂移
 2. **单向数据流** — 用户动作 → 命令 Hook → API → SSE 事件 → Reducer → 状态更新 → 重渲染
 3. **乐观更新与服务端同步** — 命令发出后立即更新本地状态，SSE 事件作为最终一致性校验
-4. **组件边界显式化** — `ChatWindow` 通过 props 向 `AppShell` 推送 stats/context usage/model 信息，避免全局事件总线（正在迁移中）
+4. **组件边界显式化** — `ChatWindow` 通过 props 向 `AppShell` 推送 stats/context usage/model 信息，避免全局事件总线
 
 Sources: [components/ChatWindow.tsx](components/ChatWindow.tsx#L120-L180), [components/AppShell.tsx](components/AppShell.tsx#L200-L280)
 
@@ -240,7 +240,7 @@ flowchart LR
 1. **AgentSessionWrapper** — 封装上游 `AgentSession`，统一事件转发、模式切换、工具集管理、Extension UI Bridge 集成
 2. **进程内注册表** — `globalThis.__piSessions: Map<string, AgentSessionWrapper>` 存活会话，HMR 安全
 3. **并发启动锁** — `globalThis.__piStartLocks` 防止同一 sessionId 并发启动
-4. **Fork 协议** — 预注册新 wrapper → 启动 → 原子切换，避免竞态
+4. **Fork 协议** — `send("fork")` 写出新 `.jsonl` → `startRpcSession(newId)` 预注册 → 成功后再 `destroy()` 旧 wrapper；失败则保留旧 wrapper，孤儿 `.jsonl` 删除为 best-effort
 5. **Idle 回收** — 10 分钟无活动自动销毁，释放 SDK 资源
 6. **资源热重载** — `requestResourceReload()` 触发 `inner.reload()` 后重新应用 AgentMode/ToolPreset
 
@@ -327,7 +327,7 @@ Sources: [lib/session-cascade.ts](lib/session-cascade.ts#L1-L54), [lib/session-l
 所有 API 路由遵循三件套：
 1. `getRequestId(req)` — 从 `x-request-id` 头或生成 UUID
 2. `logApiError({route, method, requestId, error, params})` — 结构化日志
-3. `jsonError(req, status, message, meta?)` — 统一 JSON 错误响应，回传 `x-request-id` 头
+3. `jsonError(req, status, message, extra?)` — 统一 JSON 错误体 `{ error, errorCode? }`，回传 `x-request-id` 头。不存在 `/api/sessions/fork`；Fork 走 `POST /api/agent/[id]` 的 `{type:"fork"}`
 
 便于生产环境日志聚合与请求链路追踪。
 
@@ -351,7 +351,7 @@ Sources: [lib/api-error.ts](lib/api-error.ts), [app/api/agent/new/route.ts](app/
 | `AgentSession` | 单次对话会话状态机、模型流式调用、工具执行编排 | `rpc-manager.ts` 封装为 `AgentSessionWrapper` |
 | `SessionManager` | 会话文件 CRUD、列表、投影、分支操作 | `session-reader.ts` 直接调用 `listAll()`、`buildSessionProjection()` |
 | `ModelRegistry` | 模型元数据、能力查询、提供商适配 | `models-config` API 透传 |
-| `ModelRuntime` | 模型实例化、流式生成、工具绑定 | 内部封装，上层通过 `set_model` 命令切换 |
+| `ModelRuntime` | 模型实例化、流式生成、工具绑定 | 上层 `set_model` 切换；`createPiRuntime` **必须**再走 `createAgentSessionServices`，否则扩展注册的 provider 不会进选择器 |
 | `DefaultResourceLoader` | 系统提示、工具定义、技能加载 | `desktop-runtime-tools.ts`、`desktop-ltm-extension.ts` 注入扩展 |
 
 ### 关键接口契约
@@ -398,13 +398,13 @@ Sources: [lib/pi-types.ts](lib/pi-types.ts#L1-L69), [lib/rpc-manager.ts](lib/rpc
 ```
 ~/.pi/agent/
 ├── sessions/
-│   └── <encoded-cwd>/           # 按工作区编码隔离：--<去掉首分隔符后，/ \ : 全替换为 ->--
+│   └── --encoded--/             # 目录名就是 --encoded--：`--${cwd 去掉前导 /\\，再把 / \\ : 换成 -}--`
 │       └── <timestamp>_<sessionId>.jsonl   # 会话主文件（append-only），Fork/分支产生新文件
 ├── settings.json                # pi 自身设置（非桌面端设置）
 ├── desktop-settings.json        # 全局桌面端设置
 ├── models.json                  # 模型配置（提供商、API Key、思考等级映射）
 ├── auth.json                    # OAuth token 缓存（单文件）
-└── mcp.json                     # MCP 服务器配置（项目级 + 用户级）
+└── mcp.json                     # 全局 MCP；项目级在 `<cwd>/.pi/mcp.json`
 ```
 
 ### JSONL 会话文件格式
@@ -417,6 +417,8 @@ Sources: [lib/pi-types.ts](lib/pi-types.ts#L1-L69), [lib/rpc-manager.ts](lib/rpc
 {"type":"session_info","id":"e4","parentId":"e3","timestamp":"2026-01-01T00:00:04.000Z","name":"Initial session"}
 {"type":"label","id":"e5","parentId":"e4","timestamp":"2026-01-01T00:00:05.000Z","targetId":"e2","label":"important"}
 ```
+
+磁盘上的 `toolCall` 是 SDK 字段 `{id,name,arguments}`（上例）。UI 使用 `{toolCallId,toolName,input}`，由 `normalizeToolCalls` 在 **JSONL 加载** 与 **SSE 流** 两处转换。
 
 **关键设计**：
 - **Append-only** — 绝不修改历史行，仅追加；修改通过新条目（label、toolResult 覆盖、compactionSummary）实现
@@ -507,8 +509,8 @@ Sources: [app/api/agent/new/route.ts](app/api/agent/new/route.ts#L1-L92), [lib/r
 |---|---|---|---|---|
 | **Session ID** | URL `?session=xxx`、SSE 连接标识 | 路由参数 `[id]`、注册表键 | `AgentSession.sessionId` | `.jsonl` 文件名（`<timestamp>_<sessionId>.jsonl`）、header `id` |
 | **消息格式** | `AgentMessage[]` (归一化后) | `normalizeToolCalls` 统一 | 上游原始格式 | JSONL 行 `type:"message"`（内嵌 `message.role` 区分 user/assistant/toolResult） |
-| **工具调用** | `ChatInput` 提交 → `useSessionCommands` | `validateAgentCommand` 校验 | `AgentSession` 内部执行 | assistant 消息 content 内的 `toolCall` block + `role:"toolResult"` 消息条目 |
-| **分支标识** | `BranchNavigator` 切换 `leafId` | `session-reader.buildTree` | `SessionManager.fork` | `parentSession` header、`label` 条目 |
+| **工具调用** | UI `{toolCallId,toolName,input}`（归一化后） | `normalizeToolCalls`（加载 + SSE） | SDK 磁盘 `{id,name,arguments}` | assistant 消息 content 内的 `toolCall` block + `role:"toolResult"` 消息条目 |
+| **分支标识** | `BranchNavigator` 切换 `leafId` | `session-reader.buildTree`；跨文件 Fork 走 `POST /api/agent/[id]` | 跨文件 `createBranchedSession`；同文件 `navigate_tree` | `parentSession` header、`label` 条目 |
 | **模式/预设** | `AgentModeSelector`、`PresetSelector` | `approval-policy.ts` 验证 | `setActiveToolsByName` | `desktop_agent_mode` 自定义条目 |
 
 ---
@@ -518,8 +520,8 @@ Sources: [app/api/agent/new/route.ts](app/api/agent/new/route.ts#L1-L92), [lib/r
 | 维度 | Web 模式 (`npm run dev`) | Desktop 模式 (`npm run dev:electron`) |
 |---|---|---|
 | **浏览器层** | 完全相同的 React SPA | 完全相同的 React SPA (BrowserWindow 加载) |
-| **服务端层** | Next.js dev server `:30141` 同进程 | Standalone `server.js` 子进程 `127.0.0.1:PORT` |
-| **进程内调用** | `new AgentSession()` 直接调用 | 同进程内直接调用（子进程隔离） |
+| **服务端层** | Next.js dev server `:30141` 同进程 | Electron 托管 standalone `server.js`：macOS `utilityProcess.fork`；Win/Linux `ELECTRON_RUN_AS_NODE=1`，监听 `127.0.0.1:PORT` |
+| **进程内调用** | Next.js 进程内 `createAgentSession()` | 同一套四层，发生在 **Next 子进程内**（不是 Electron 主进程） |
 | **SSE** | 直连 Next.js | 直连 Standalone server |
 | **文件访问** | 受 `allowed-roots` 限制 | 同策略，额外有原生目录选择器 |
 | **持久层** | `~/.pi/agent/` | 相同目录（共享数据） |
@@ -551,7 +553,7 @@ Sources: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#L720-L850), [docs/ARCHITECT
 | [SSE 事件流与流式状态机](8-sse-shi-jian-liu-yu-liu-shi-zhuang-tai-ji) | `useAgentEvents` 连接管理、心跳、`streamReducer` 状态机细节 |
 | [会话的两种访问模式](9-hui-hua-de-liang-chong-fang-wen-mo-shi-zhi-du-liu-lan-yu-jiao-hu-dui-hua) | 只读浏览（`session-reader`）vs 交互对话（`AgentSessionWrapper`） |
 | [Pi 会话文件格式与 .jsonl 解析](13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi) | JSONL 结构、`buildSessionProjection`、分支树构建 |
-| [三种分支机制](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) | Fork、会话内分支、Git worktree clone 的实现差异 |
+| [四种会话分叉机制](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) | Fork、会话内分支、跨文件 Branch、Clone 的实现差异 |
 
 ---
 

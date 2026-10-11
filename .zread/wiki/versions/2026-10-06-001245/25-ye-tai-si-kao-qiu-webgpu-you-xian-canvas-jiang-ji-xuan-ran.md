@@ -1,4 +1,4 @@
-液态思考球是 Pi Agent Desktop 的视觉标识组件，用于在 Agent 思考、等待模型响应、执行工具等阶段提供实时视觉反馈。它采用 **WebGPU 优先、Canvas 降级** 的双渲染路径架构，在支持 WebGPU 的现代浏览器中运行高性能的 WGSL 着色器，在不支持的环境中自动降级到纯 CSS 动画，保证视觉体验的连续性。该组件既作为桌面应用中的状态指示器（`AgentThinkingOrb`），也被同步构建到登录页（`docs/index.html`）作为品牌动画展示。
+液态思考球是 Pi Agent Desktop 的视觉标识组件，用于在 Agent 思考、等待模型响应、执行工具等阶段提供实时视觉反馈。它采用 **WebGPU 优先、CSS 降级** 的双路径：成功路径在 `<canvas>` 上跑 WGSL（`canvas.getContext("webgpu")`），失败路径**不是 Canvas 2D**，而是隐藏 canvas 并渲染 `<span class="liquid-thinking-fallback">` 的纯 CSS 动画。该组件既作为桌面应用中的状态指示器（`AgentThinkingOrb`），也被同步构建到登录页（`docs/index.html`）作为品牌动画展示。
 
 Sources: [components/AgentThinkingOrb.tsx](components/AgentThinkingOrb.tsx#L1-L124), [docs/index.html](docs/index.html#L828-L835)
 
@@ -137,7 +137,9 @@ Sources: [components/LiquidOrbCanvas.tsx](components/LiquidOrbCanvas.tsx#L30-L60
 
 ### CSS Fallback 实现
 
-纯 CSS 通过伪元素实现旋转锥形渐变 + 内阴影模拟玻璃质感：
+桌面端（`app/globals.css` `.liquid-thinking-fallback`）与登录页（`docs/index.html` `.orb-live-fallback`）是两套样式：桌面约 38px、冷蓝灰；登录页约 42px、跟 `--primary` 品牌色。不要把登录页 class 当成桌面组件的 API。
+
+纯 CSS 通过伪元素实现旋转锥形渐变 + 内阴影模拟玻璃质感（登录页示意）：
 
 ```css
 .orb-live-fallback {
@@ -205,15 +207,17 @@ Sources: [scripts/sync-landing-orb.mjs](scripts/sync-landing-orb.mjs#L1-L228)
 
 ## AgentThinkingOrb：产品级集成
 
-`AgentThinkingOrb` 封装 `LiquidOrbCanvas` 并提供语义化状态标签：
+`AgentThinkingOrb` 封装 `LiquidOrbCanvas` 并提供语义化状态标签。`AgentPhase` **没有** `thinking` 变体，只有 `waiting_model` | `running_tools` | `null`；`null` 走默认文案。
 
-| AgentPhase.kind | 显示标签 (zh-CN) | 来源 |
-|-----------------|------------------|------|
-| `thinking` | "正在思考…" | `t("agent.thinking")` |
-| `waiting_model` | "正在等待模型…" | `t("agent.waitingModel")` |
-| `running_tools` (0工具) | "正在运行工具…" | `t("agent.runningTools")` |
-| `running_tools` (≤3工具) | "正在运行 read, edit…" | `t("agent.runningTool", {tools})` |
-| `running_tools` (>3工具) | "正在运行 ls, read…（另有 3 项）" | `t("agent.runningManyTools", {tools, count})` |
+| phase | 显示标签 (zh-CN) | 来源 |
+|-------|------------------|------|
+| `null`（及其他非工具/等待） | "正在思考…" | `t("agent.thinking")` |
+| `{ kind: "waiting_model" }` | "正在等待模型…" | `t("agent.waitingModel")` |
+| `running_tools`（0 个工具） | "正在运行工具…" | `t("agent.runningTools")` |
+| `running_tools`（≤3 个） | "正在运行 {tools}…" | `t("agent.runningTool", { tools: names.join(", ") })` |
+| `running_tools`（>3 个） | "正在运行 {tools}（另有 {count} 项）…" | 前 2 个名字 + `count = names.length - 2` |
+
+**流式思考面板**：`ChatWindow` 用 `splitActiveThinking` 从 `streamingMessage` 抽出 `thinking` 块文本，经 `thinking` prop 传入。有内容时可展开手风琴（`t-acc`），直播思考不再进入 `MessageView` 的 `ThinkingBlock`。
 
 **标签过渡动画**：
 - 标签变化时，旧标签 `is-exit` 淡出，新标签 `is-enter-start` 淡入

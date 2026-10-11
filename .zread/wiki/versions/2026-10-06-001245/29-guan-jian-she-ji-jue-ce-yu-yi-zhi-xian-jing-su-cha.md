@@ -41,15 +41,16 @@ Sources: [ARCHITECTURE.md](docs/ARCHITECTURE.md#L550-L580), [lib/rpc-manager.ts]
 
 ## 二、会话与分支模型
 
-### 2.1 `.jsonl` Append-Only 文件格式与三种分支机制
+### 2.1 `.jsonl` Append-Only 文件格式与四种会话分叉机制
 
-**决策**：会话以单文件 `.jsonl` 存储，每行一个 `SessionEntry`（header + 消息/工具/压缩/分支/标签等条目）。三种分支机制共存：
+**决策**：会话以单文件 `.jsonl` 存储，每行一个 `SessionEntry`（header + 消息/工具/压缩/标签等条目）。**Fork、会话内分支、Git Worktree Clone 不要混用同一套词**；侧边栏还有一条与 Fork 同类的跨文件 Branch API：
 
 | 机制 | 触发方式 | 文件关系 | 适用场景 |
 |---|---|---|---|
-| **Fork** | `POST /api/sessions/fork` | 新 `.jsonl`，header `parentSession` 指向旧文件 | 对话中途另起炉灶，保留上下文 |
-| **会话内分支** | `BranchCloneModal` → `branch` | 同一文件，`parentId` 指向分叉入口 entry | 同一会话内并行探索，轻量 |
-| **Git Worktree Clone** | `BranchCloneModal` → `clone` | 新工作区 + 复制 `.jsonl` + `git worktree add` | 需要独立文件系统隔离的长期并行 |
+| **Fork** | `POST /api/agent/[id]` `{ type: "fork", entryId }`（消息 Fork 按钮）。**没有** `POST /api/sessions/fork` | 新 `.jsonl`，`parentSession` = 父文件绝对路径；`startRpcSession` 预注册后 `destroy()` 旧 wrapper | 对话中途另起炉灶，侧边栏子节点 |
+| **会话内分支** | Continue / `BranchNavigator`：`navigate_tree` + `GET /api/sessions/[id]/context?leafId=`。**不是** `POST /api/sessions/[id]/branch`，也不是 `BranchCloneModal` | **同一** `.jsonl`，条目 `parentId` 成树 | 同会话并行探索 |
+| **跨文件 Branch API** | `BranchCloneModal` → `branch` → `POST /api/sessions/[id]/branch` `{ targetEntryId, name? }` | 新 `.jsonl`，同样 `createBranchedSession` | 从历史节点抽出线性会话 |
+| **Clone / Git Worktree** | `BranchCloneModal` → `clone` → `POST /api/sessions/[id]/clone`；`workspaceMode: "directory"` 或 `"worktree"` | 新 `.jsonl`（`forkFrom`）；worktree 在源仓库外，身份无法证明则 fail closed | 模板复用或代码级隔离 |
 
 **权衡**：Append-only 天然适合并发读、便于流式重放；但**随机访问需全量扫描**（故引入 `session-path-cache`），且**跨进程并发追加在 Windows 上实测健壮**（单 syscall `appendFileSync`），但 SDK 自身 loader 未单独压测。
 
@@ -103,7 +104,7 @@ Sources: [lib/approval-policy.ts](lib/approval-policy.ts#L1-L86), [lib/desktop-a
 
 ### 3.2 Extension UI Bridge：进程内异步 RPC 响应队列
 
-**决策**：`ExtensionUiBridge` 在服务端进程内实现 `ExtensionUIContext` 的对话子集（`confirm/select/input/editor/notify`），通过 SSE 向前端下发 `extension_ui_request` 事件，前端渲染 `ExtensionUiDialog` 并经 `POST /api/agent/[id]/command` 回传 `extension_ui_response` 解除 Promise。
+**决策**：`ExtensionUiBridge` 在服务端进程内实现 `ExtensionUIContext` 的对话子集（`confirm/select/input/editor/notify`），通过 SSE 向前端下发 `extension_ui_request` 事件，前端渲染 `ExtensionUiDialog` 并经 `POST /api/agent/[id]` body `{ type: "extension_ui_response", id, ... }`（`sendAgentCommand`，**没有** `/api/agent/[id]/command`）回传结果以解除 Promise。
 
 **关键机制**：
 - 每个请求分配 `randomUUID()`，挂载 `Deferred{resolve, timer}` 于 `pending: Map<id, Deferred>`
@@ -287,7 +288,7 @@ Sources: [hooks/agent-session/stream-state.ts](hooks/agent-session/stream-state.
 
 ### 5.3 消息虚拟化 + Markdown 渲染管线
 
-**决策**：`MessageList` 使用定高虚拟化（`file-viewer-virtualization.ts` 复用于文件查看），`MessageView` 内部 `ReactMarkdown + remarkGfm + react-syntax-highlighter(ayu 主题)`。**代码块语言未知时 Prism 内部 try/catch 回退纯文本**，不抛错。
+**决策**：`MessageList` 对消息全量 `map`，user/assistant 外包 `content-visibility: auto`（非 windowing，也**不**复用 `file-viewer-virtualization.ts`）。`FileViewer` 才用窗口虚拟化。`MessageView` 内部 `ReactMarkdown + remarkGfm + react-syntax-highlighter(ayu 主题)`。**代码块语言未知时 Prism 内部 try/catch 回退纯文本**，不抛错。
 
 **现状**：消息 `content` 渲染已统一经 `components/message-content.ts` 的 `getTextContent()`/`getImageContent()` 取值——带 `Array.isArray` 守卫并把异形内容降级为空串，不会再因 SSE 下发异形 `content` 渲染期崩溃（Issue #20 候选机制一已消除）。
 
@@ -295,9 +296,9 @@ Sources: [components/MessageView.tsx](components/MessageView.tsx#L140-L210), [co
 
 ---
 
-### 5.4 液态思考球：WebGPU 优先 + Canvas 降级
+### 5.4 液态思考球：WebGPU 优先 + CSS 降级
 
-**决策**：`LiquidOrbCanvas` 优先尝试 `navigator.gpu` → `requestAdapter` → `createRenderPipelineAsync`，任一环节失败或 `device.lost` / `uncapturederror` 触发 `stopWithFallback()` → `setWebGpuFailed(true)` → 父组件 `AgentThinkingOrb` 渲染 Canvas 降级版（`liquid-orb-source.ts` 生成的 2D 实现）。
+**决策**：`LiquidOrbCanvas` 优先尝试 `navigator.gpu` → `requestAdapter` → `createRenderPipelineAsync`，任一环节失败或 `device.lost` / `uncapturederror` 触发 `stopWithFallback()` → `setWebGpuFailed(true)` → 隐藏 `<canvas>` 并渲染 `<span class="liquid-thinking-fallback">` 的纯 CSS 动画。**不是** Canvas 2D。
 
 **资源管理**：`IntersectionObserver` + `ResizeObserver` + `visibilitychange` 精确控制渲染循环，**卸载时显式 `device.destroy()`、`context.unconfigure()`、移除所有监听器**。
 
@@ -434,7 +435,7 @@ flowchart TD
     A[用户操作 / 外部事件] --> B{分类}
     B -->|发起对话| C[SSE /api/agent/[id]/events]
     B -->|创建会话| D[POST /api/agent/new]
-    B -->|Fork 会话| E[POST /api/sessions/fork]
+    B -->|Fork 会话| E["POST /api/agent/[id] {type:fork}"]
     B -->|配置模型/技能/MCP| F[PUT /api/models-config 等]
     B -->|文件读写| G[/api/files/[...path]]
     B -->|长期记忆| H[/api/memory/*]
@@ -481,7 +482,7 @@ flowchart TD
 |---|---|---|
 | 四层架构 | `docs/ARCHITECTURE.md` | §3 |
 | globalThis 注册表 | `lib/rpc-manager.ts`, `lib/session-reader.ts`, `lib/session-lock.ts` | §1.2 |
-| 会话分支 | `lib/session-reader.ts`, `components/BranchCloneModal.tsx` | §2.1 |
+| 会话分支 | `lib/rpc-manager.ts`（fork / navigate_tree）、`app/api/sessions/[id]/branch/route.ts`、`clone/route.ts`、`components/BranchNavigator.tsx`、`BranchCloneModal.tsx` | §2.1 |
 | 审批策略 | `lib/approval-policy.ts`, `lib/desktop-approval-extension.ts` | §3.1 |
 | Extension UI Bridge | `lib/extension-ui-bridge.ts`, `app/api/agent/[id]/events/route.ts` | §3.2 |
 | LTM SQLite | `lib/ltm/sqlite-backend.ts`, `lib/ltm/observe-hooks.ts` | §3.3 |

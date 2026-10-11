@@ -1,4 +1,4 @@
-本页面深入解析 π Agent Desktop 中的 **Follow-up Queue（后续追问队列）** 机制，以及基于 **revision（版本号）** 的乐观并发控制如何保证队列操作的原子性与一致性。该机制支撑用户在 Agent 运行期间提交多条后续追问、拖拽重排执行顺序、并在多标签页或并发请求场景下避免竞态条件。
+本页面深入解析 π Agent Desktop 中的 **Follow-up Queue（后续追问队列）** 机制，以及基于 **revision（版本号）** 的乐观并发控制如何保证队列操作的原子性与一致性。Agent 运行中 **Enter = 立即 steer**，**Alt+Enter = 入队**；队列由 `AgentSessionWrapper` 持有，经 SSE `follow_up_queue_update` 同步快照 `{ revision, items: { id, message, attachmentCount, createdAt } }`。重排走 `reorder(orderedIds, expectedRevision)` 乐观锁。该机制支撑用户在 Agent 运行期间提交多条后续追问、拖拽重排执行顺序、并在多标签页或并发请求场景下避免竞态条件。
 
 Sources: [lib/follow-up-queue.ts](lib/follow-up-queue.ts#L1-L79), [lib/rpc-manager.ts](lib/rpc-manager.ts#L1-L944), [hooks/useAgentSession.ts](hooks/useAgentSession.ts#L1-L804), [components/chat-input/QueuedMessageList.tsx](components/chat-input/QueuedMessageList.tsx#L1-L146)
 
@@ -227,8 +227,8 @@ Sources: [components/chat-input/QueuedMessageList.tsx](components/chat-input/Que
 
 | 队列 | 触发时机 | 持久化 | 并发控制 | 用途 |
 |------|----------|--------|----------|------|
-| **Follow-up Queue** | Agent 运行中按 Alt+Enter 排队（此时 Enter 为立即 steer；无独立 "Follow-up" 按钮） | 否 (内存) | revision 乐观锁 | 追问、补全、多轮对话排队 |
-| **Steering Queue** | Agent 运行中用户点击"Steer" (干预) | 否 | 无 (单条替换) | 打断当前生成、重新引导 |
+| **Follow-up Queue** | Agent 运行中 **Alt+Enter** 排队（无独立 Follow-up 按钮）。队列由 **`AgentSessionWrapper` 持有**（`FollowUpQueue`），命令 `type: "follow_up"`，**不**调用 `inner.followUp()` | 否 (内存) | `reorder(orderedIds, expectedRevision)` 乐观锁 | 追问、补全、多轮对话排队 |
+| **Steering Queue** | Agent 运行中 **Enter**（或发送按钮）立即 `type: "steer"` → `inner.steer()`；无独立 "Steer" 按钮。`canSteer` 不可用时 Enter 回退为 follow-up | 否 | 无 (pi 侧 `queue_update.steering`) | 打断当前生成、重新引导 |
 | **Pending Prompt** | 用户发送新对话 (非运行中) | 否 | 无 (单条) | 普通用户消息发送 |
 
 - `follow_up_queue_update` SSE 事件仅对应 Follow-up Queue

@@ -1,4 +1,9 @@
-Pi Agent Desktop 将每个对话会话持久化为 **JSON Lines (.jsonl)** 格式的文件，存放在 `~/.pi/agent/sessions/` 目录下，并按会话工作目录（cwd）编码划分子目录（目录名形如 `--<编码后的 cwd>--`）。这种格式兼具**流式追加写入**的高性能与**行级解析**的简洁性，适合大模型对话场景中频繁的增量记录与随机访问需求。本文档详细说明文件结构、条目类型、解析流程、上下文重建算法，以及分支/克隆操作对文件的影响。
+Pi Agent Desktop 将每个对话会话持久化为 **JSON Lines (.jsonl)** 格式的文件。路径由上游 `SessionManager` 决定：
+
+- 目录：`~/.pi/agent/sessions/--${resolvedCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--/`
+- 文件名：`${isoTimestamp.replace(/[:.]/g, "-")}_${sessionId}.jsonl`（`sessionId` 为 uuidv7）
+
+这种格式兼具**流式追加写入**的高性能与**行级解析**的简洁性。本文档说明文件结构、条目类型、解析流程、上下文重建算法，以及跨文件 Fork / Branch / Clone 与同文件会话内分支对文件的影响。
 
 ## 文件整体结构
 
@@ -24,12 +29,14 @@ graph TD
 **示例文件片段**：
 
 ```jsonl
-{"type":"session","version":3,"id":"sess-abc123","timestamp":"2026-09-30T10:00:00.000Z","cwd":"/home/user/project","parentSession":null}
+{"type":"session","version":3,"id":"01234567-89ab-7cde-8f01-23456789abcd","timestamp":"2026-09-30T10:00:00.000Z","cwd":"/home/user/project","parentSession":"/home/user/.pi/agent/sessions/--home-user-project--/2026-09-29T09-00-00-000Z_parent-uuid.jsonl"}
 {"type":"message","id":"e1","parentId":null,"timestamp":"2026-09-30T10:00:05.000Z","message":{"role":"user","content":"帮我重构 auth.ts"}}
-{"type":"message","id":"e2","parentId":"e1","timestamp":"2026-09-30T10:00:10.000Z","message":{"role":"assistant","model":"claude-3-5-sonnet","provider":"anthropic","content":[{"type":"thinking","thinking":"需要先理解现有结构..."},{"type":"text","text":"好的，我来分析一下..."},{"type":"toolCall","toolCallId":"tc-1","toolName":"read","input":{"path":"/home/user/project/auth.ts"}}]}}
+{"type":"message","id":"e2","parentId":"e1","timestamp":"2026-09-30T10:00:10.000Z","message":{"role":"assistant","model":"claude-3-5-sonnet","provider":"anthropic","content":[{"type":"thinking","thinking":"需要先理解现有结构..."},{"type":"text","text":"好的，我来分析一下..."},{"type":"toolCall","id":"tc-1","name":"read","arguments":{"path":"/home/user/project/auth.ts"}}]}}
 {"type":"message","id":"e3","parentId":"e2","timestamp":"2026-09-30T10:00:15.000Z","message":{"role":"toolResult","toolCallId":"tc-1","toolName":"read","content":[{"type":"text","text":"export const auth = ..."}],"isError":false}}
 {"type":"session_info","id":"e4","parentId":"e3","timestamp":"2026-09-30T10:05:00.000Z","name":"重构认证模块 v2"}
 ```
+
+磁盘上的 `toolCall` 块使用 SDK 字段 `{id, name, arguments}`。前端 `lib/types.ts` 的 `ToolCallContent` 是 `{toolCallId, toolName, input}`；`normalizeToolCalls()` 在文件加载（`session-reader.ts`）与 SSE 流（`agent-event-apply.ts`）两条路径上做转换。下文 JSONL 示例一律写磁盘格式。
 
 Sources: [lib/types.ts](lib/types.ts#L1-L50), [lib/session-reader.ts](lib/session-reader.ts#L200-L230), [lib/session-export.test.ts](lib/session-export.test.ts#L60-L80)
 
@@ -43,7 +50,7 @@ Sources: [lib/types.ts](lib/types.ts#L1-L50), [lib/session-reader.ts](lib/sessio
 |------|------|------|------|
 | `type` | `"session"` | ✓ | 字面量常量，用于识别首行 |
 | `version` | `number` | ✗ | 格式版本，当前为 3 |
-| `id` | `string` | ✓ | 会话全局唯一 ID (UUID v7，由 `createSessionId()` 生成) |
+| `id` | `string` | ✓ | 会话全局唯一 ID（uuidv7，`createSessionId()`） |
 | `timestamp` | `string` | ✓ | 创建时间，ISO 8601 格式 |
 | `cwd` | `string` | ✓ | 会话关联的工作目录绝对路径 |
 | `parentSession` | `string` | ✗ | 父会话文件路径，分支/克隆时设置 |
@@ -70,7 +77,7 @@ interface SessionEntryBase {
 }
 ```
 
-`parentId` 构成了**条目树**（非线性历史），支持会话内分支、Fork 等操作。`buildTree` 根据 `parentId` 重建树结构，并按时间戳排序子节点。
+`parentId` 构成**同一 `.jsonl` 内的条目树**（非线性历史）。**会话内分支**靠它切换叶子；跨文件 Fork / Branch 则把根→叶路径复制进**新文件**，新文件头的 `parentSession` 才是会话级父子指针。`buildTree` 根据 `parentId` 重建树，并按时间戳排序子节点。`SessionContext.entryIds[]` 与 `messages[]` 一一对应，把 UI 消息映射回条目 ID（Fork 的 `entryId`、Branch API 的 `targetEntryId`、`?leafId=` 都用它）。
 
 Sources: [lib/types.ts](lib/types.ts#L16-L22), [lib/session-reader.ts](lib/session-reader.ts#L167-L200)
 
@@ -113,7 +120,7 @@ Sources: [lib/types.ts](lib/types.ts#L16-L22), [lib/session-reader.ts](lib/sessi
     "content": [
       {"type": "thinking", "thinking": "需要先理解现有结构..."},
       {"type": "text", "text": "好的，我来分析一下..."},
-      {"type": "toolCall", "toolCallId": "tc-1", "toolName": "read", "input": {"path": "/home/user/project/auth.ts"}}
+      {"type": "toolCall", "id": "tc-1", "name": "read", "arguments": {"path": "/home/user/project/auth.ts"}}
     ],
     "stopReason": "tool_use",
     "usage": {
@@ -127,7 +134,7 @@ Sources: [lib/types.ts](lib/types.ts#L16-L22), [lib/session-reader.ts](lib/sessi
   }
 }
 ```
-- `content`: `AssistantContentBlock[]`，支持 `text` | `thinking` | `toolCall` | `image`
+- `content`：磁盘上 `toolCall` 为 `{type, id, name, arguments}`；经 `normalizeToolCalls` 后前端为 `{type, toolCallId, toolName, input}`
 - `usage`: Token 统计与成本，用于 StatsBar 显示
 
 #### Tool Result Message
@@ -332,7 +339,7 @@ Sources: [lib/types.ts](lib/types.ts#L158-L162), [lib/session-reader.ts](lib/ses
 
 ### 10. 上下文编辑 (`type: "context_edit"`)
 
-**核心机制**：允许在不删除原条目的前提下，**从上下文投影中省略或替换**特定条目。支持 Fork、会话内分支、压缩后的上下文控制。
+**核心机制**：允许在不删除原条目的前提下，**从上下文投影中省略或替换**特定条目。用于同一文件内的会话内分支、压缩，以及跨文件 Fork/Branch 复制路径时已存在的 `context_edit`。
 
 ```json
 {"type":"context_edit","id":"e15","parentId":"e14","timestamp":"2026-09-30T10:21:00.000Z","targetId":"e1","replacement":null}
@@ -571,9 +578,9 @@ function getCachedSessionPath(state, sessionId, now = Date.now()) {
 ```
 
 **设计权衡**：
-- 正向缓存永久有效（直到显式失效）
-- 负向缓存 30s TTL：防止“先查后建”竞态（Fork 创建新文件后立即查询）
-- 若存在存活的 RPC 会话包装器，直接丢弃负向缓存重扫
+- 正向缓存永久有效（直到 `invalidateSessionPathCache` / `invalidateSessionPathEntry`）
+- 负向缓存 30s TTL：挡住随机 ID 全盘扫描，同时缩短“先查后建”误 404 窗口
+- 存活的 RPC wrapper（`globalThis.__piSessions` 且 `isAlive()`）**绕过过期前的负向命中**：删 miss 后 `listAllSessions()` 重扫，避免 Fork 预注册后被 30s 负向缓存挡住
 
 Sources: [lib/session-reader.ts](lib/session-reader.ts#L25-L80), [lib/session-path-cache.ts](lib/session-path-cache.ts#L1-L57)
 
@@ -581,15 +588,17 @@ Sources: [lib/session-reader.ts](lib/session-reader.ts#L25-L80), [lib/session-pa
 
 ## 分支与克隆对文件的影响
 
-| 操作 | 来源 | 产物文件 | 首行 `parentSession` | 条目内容 |
+| 操作 | 触发 | 产物文件 | 首行 `parentSession` | 条目内容 |
 |------|------|----------|---------------------|----------|
-| **Fork (分支)** | 现有会话 + `targetEntryId` | 新 `.jsonl` | 父会话**文件路径** | 上游 `SessionManager.createBranchedSession` 复制 `getBranch(leafId)` 根→叶整条路径（含叶条目）作为**初始线性历史**；交互式 fork 命令传入 fork 点的 `parentId`，即复制到 fork 点之前为止 |
-| **Clone (目录复制)** | 现有会话整体 | 新 `.jsonl` | 父会话**文件路径** | 完整复制所有条目（含分支树），新 UUID，时间戳更新 |
-| **Clone (Worktree)** | 同上 | 新 `.jsonl` | 父会话**文件路径** | 同目录复制，但关联 Git worktree 隔离工作区 |
+| **Fork** | `POST /api/agent/[id]` `{type:"fork", entryId}`（消息 Fork 按钮）。**没有** `POST /api/sessions/fork` | 新 `.jsonl` | 父会话**文件绝对路径** | `entry.parentId === null`（首条消息前）：`SessionManager.create` + `newSession({ parentSession })`；否则 `createBranchedSession(entry.parentId)`，复制到 fork 点**之前**（不含该条）。随后 `startRpcSession(newId)` 预注册，再 `destroy()` 旧 wrapper |
+| **会话内分支** | Continue / `BranchNavigator`：`navigate_tree` + `GET /api/sessions/[id]/context?leafId=`。**不是** `POST /api/sessions/[id]/branch` | **同一** `.jsonl` | 不改会话头 | 条目 `parentId` 成树；投影按叶子路径，原始文件不动 |
+| **跨文件 Branch API** | `POST /api/sessions/[id]/branch` `{ targetEntryId, name? }`（侧边栏从节点分叉） | 新 `.jsonl` | 父会话**文件绝对路径** | `createBranchedSession(targetEntryId)` 复制根→叶（**含**目标条目） |
+| **Clone（directory）** | `POST /api/sessions/[id]/clone`，`workspaceMode: "directory"`（默认） | 新 `.jsonl` | 父会话**文件绝对路径** | `SessionManager.forkFrom` 复制全部非头条目（含整棵条目树） |
+| **Clone（worktree）** | 同上，`workspaceMode: "worktree"` | 新 `.jsonl` + 仓库外 worktree | 父会话**文件绝对路径** | 同 `forkFrom`；目标路径 / `gitDir` / HEAD / 分支所有权无法证明时 fail closed |
 
 **代码关键点**：
 
-分支与克隆均由上游 `SessionManager` 完成：`createBranchedSession(leafId)` 复制 `getBranch(leafId)` 根→叶整条路径（含叶条目）并写出带 `parentSession: 源文件路径` 的新会话头；`forkFrom` 复制源文件全部非头条目并写入同样的父指针。`lib/session-branch-clone.ts` 中的 `extractAncestryPath` / `createBranchedHeader` 为**死代码**（仅定义与测试引用，无生产调用）。
+跨文件 Fork / Branch 走 `createBranchedSession`（或首条前的 `create`）；Clone 走 `forkFrom`。`lib/session-branch-clone.ts` 的 `extractAncestryPath` / `createBranchedHeader` 为**死代码**（仅定义与测试引用，无生产调用）。
 
 Sources: [node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js](node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js#L1205-L1248), [lib/rpc-manager.ts](lib/rpc-manager.ts#L436-L501), [app/api/sessions/[id]/branch/route.ts](app/api/sessions/%5Bid%5D/branch/route.ts#L1-L87), [app/api/sessions/[id]/clone/route.ts](app/api/sessions/%5Bid%5D/clone/route.ts#L1-L100)
 
@@ -604,7 +613,7 @@ Sources: [node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager
 | 条目类型 | Markdown 输出 |
 |----------|---------------|
 | User | `## User\n\n{content}` |
-| Assistant | `## Assistant\n\n{thinking}\n{text}\n### Tool Call: \`name\`\n\`\`\`json\n{input}\n\`\`\`` |
+| Assistant | `## Assistant\n\n{thinking}\n{text}\n### Tool Call: \`name\`\n\`\`\`json\n{arguments 或 input}\n\`\`\``（导出前会归一化） |
 | ToolResult | `### Tool Result: \`name\`{(Error)}\n\`\`\`\n{content}\n\`\`\`` |
 | Compaction | `> *Session compacted: {summary}*` |
 | Custom | `## Custom ({customType})\n\n{content}` |
@@ -680,5 +689,5 @@ Sources: [lib/session-path-cache.ts](lib/session-path-cache.ts#L1-L57), [lib/ses
 ## 相关页面导航
 
 - **上一页**：[会话的两种访问模式：只读浏览与交互对话](9-hui-hua-de-liang-chong-fang-wen-mo-shi-zhi-du-liu-lan-yu-jiao-hu-dui-hua) — 理解只读浏览如何复用同一解析管线
-- **下一页**：[三种分支机制：Fork、会话内分支、Git Worktree Clone](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) — 深入分支操作的文件层面实现
+- **下一页**：[四种会话分叉机制：Fork、会话内分支、跨文件 Branch、Clone](14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone) — 深入分支操作的文件层面实现
 - **关联**：[会话导出、AgentMode 持久化与级联删除](15-hui-hua-dao-chu-agentmode-chi-jiu-hua-yu-ji-lian-shan-chu) — 导出格式与删除时的级联重写细节

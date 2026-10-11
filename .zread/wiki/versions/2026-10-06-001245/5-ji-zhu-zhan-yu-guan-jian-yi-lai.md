@@ -1,4 +1,4 @@
-Pi Agent Desktop 是一个基于 **Electron + Next.js** 的桌面应用，采用**四层分离架构**（Electron 主进程、Next.js 服务端、React 客户端、Pi Agent 核心运行时），为 Pi 编码代理提供原生桌面体验。本文档系统梳理核心技术选型、关键依赖库及其在项目中的具体角色。
+Pi Agent Desktop 是一个基于 **Electron + Next.js** 的桌面应用。架构主切面是 **浏览器层 / Next.js 服务端 / SDK / 文件系统** 四层（见 [项目概览](1-xiang-mu-gai-lan)）；Electron 是桌面托管切面（主进程托管 Next standalone），不是替换那四层。本文档系统梳理核心技术选型、关键依赖库及其在项目中的具体角色。
 
 Sources: [package.json](package.json#L1-L81), [next.config.ts](next.config.ts#L1-L43), [electron/main.ts](electron/main.ts#L1-L200)
 
@@ -10,7 +10,7 @@ Sources: [package.json](package.json#L1-L81), [next.config.ts](next.config.ts#L1
 graph TB
     subgraph "用户交互层"
         UI[React 19 客户端组件]
-        ORB[LiquidOrbCanvas WebGPU/Canvas]
+        ORB[LiquidOrbCanvas WebGPU / CSS fallback]
         MD[ReactMarkdown + SyntaxHighlighter]
     end
 
@@ -22,8 +22,8 @@ graph TB
     end
 
     subgraph "Next.js 服务端层"
-        API[App Router API Routes]
-        MIDDLEWARE[Middleware 信任握手]
+        API[App Router 路由处理器（非 Server Actions）]
+        MIDDLEWARE[Middleware：/api Origin 检查 + 页面 CSP]
         RUNTIME[Pi Runtime 适配器]
     end
 
@@ -66,7 +66,7 @@ graph TB
 | 分层 | 技术 | 版本 | 关键作用 |
 |------|------|------|----------|
 | **前端框架** | React | ^19.2.4 | 并发特性、Server Components、Suspense 流式渲染 |
-| **全栈框架** | Next.js | 16.3.6 | App Router、Standalone 输出、Turbopack、Server Actions |
+| **全栈框架** | Next.js | 16.3.6 | App Router 路由处理器、Standalone 输出、Turbopack；`"use server"` 未使用 |
 | **桌面运行时** | Electron | ^43.7.7 | 原生窗口、进程管理、系统集成、安全沙箱 |
 | **构建打包** | electron-builder | 26.15.3 | 多平台分发、macOS Universal、NSIS/Deb/DMG |
 | **语言与类型** | TypeScript | 5.x | 严格模式、路径别名 `@/*`、增量编译 |
@@ -77,7 +77,7 @@ graph TB
 | **图标系统** | @lobehub/icons | 5.6.0 | 统一图标库、Tree-shaking 友好 |
 | **字体** | next/font/google (Inter + Noto Sans Mono) | — | 构建时自托管、零网络依赖；`@fontsource/inter`/`@fontsource/jetbrains-mono` 虽在 devDependencies 声明但代码零引用 |
 | **自动更新** | electron-updater | 6.8.9 | GitHub Releases、差分更新、安装门控 |
-| **测试运行器** | Node.js 原生 `--test` | 24.x | 零配置、平台子集、冒烟测试 |
+| **测试运行器** | Node.js 原生 `node --test --test-force-exit` | 24.x | 无 ts-node/esm loader、平台子集、冒烟测试 |
 | **代码规范** | ESLint 9 + Next.js 配置 | 9.x | Core Web Vitals、TypeScript、React Hooks 规则 |
 
 Sources: [package.json](package.json#L1-L81), [tsconfig.json](tsconfig.json#L1-L45), [tailwind.config.ts](tailwind.config.ts#L1-L16), [eslint.config.mjs](eslint.config.mjs#L1-L27)
@@ -92,14 +92,14 @@ Sources: [package.json](package.json#L1-L81), [tsconfig.json](tsconfig.json#L1-L
 
 | 包名 | 版本 | 职责 | 集成方式 |
 |------|------|------|----------|
-| `@earendil-works/pi-coding-agent` | ^0.99.1 | 会话生命周期、AgentSession、工具系统、权限策略、长期记忆 | 通过 `lib/pi-runtime.ts` 创建 `ModelRuntime` + `ModelRegistry`，暴露 `AgentSessionLike` 接口供前端调用 |
+| `@earendil-works/pi-coding-agent` | ^0.99.1 | 会话生命周期、AgentSession、工具系统、权限策略、长期记忆 | `createPiRuntime` 必须再走 `createAgentSessionServices`，扩展注册的模型才会进选择器 |
 | `@earendil-works/pi-ai` | ^0.99.1 | 模型提供商抽象、OAuth/API Key 认证、模型注册表 | `pi-runtime.ts` 中的 `listOAuthProviders`、`loginProvider`、`setProviderApiKey` 直接调用 |
 | `@earendil-works/pi-mcp` | ^0.99.1 | MCP 服务器配置、资源/工具/提示词协议 | 双级配置（用户级 + 项目级），通过 `lib/mcp-config.ts` 管理 |
 
 **架构关键点**：
 - Next.js 配置 `serverExternalPackages` 将三包标记为外部依赖，不打包进 server bundle、运行时 require
 - `outputFileTracingIncludes` 显式包含 `@earendil-works/pi-ai` 的原生资源
-- `lib/pi-runtime.ts` 作为**薄适配层**，隔离 SDK 破坏性变更，提供 `createPiRuntime`、`loginProvider` 等稳定 API
+- `lib/pi-runtime.ts` 作为**薄适配层**：`ModelRuntime.create` 之后必须调用 `createAgentSessionServices`，再 `new ModelRegistry(services.modelRuntime)`；不要退回 create-only，否则扩展模型从选择器消失
 
 Sources: [package.json](package.json#L49-L51), [next.config.ts](next.config.ts#L12-L14), [lib/pi-runtime.ts](lib/pi-runtime.ts#L1-L116), [lib/pi-types.ts](lib/pi-types.ts#L1-L69)
 
@@ -155,7 +155,7 @@ Sources: [next.config.ts](next.config.ts#L1-L43)
 
 | 领域 | 库/实现 | 关键特性 |
 |------|---------|----------|
-| **思考动画** | `LiquidOrbCanvas` + WebGPU/Canvas 降级 | `navigator.gpu.requestAdapter()` → Shader 编译 → `requestAnimationFrame` 循环、`prefers-reduced-motion` 尊重、IntersectionObserver 可见性优化 |
+| **思考动画** | `LiquidOrbCanvas` + WebGPU / CSS 降级 | `navigator.gpu.requestAdapter()` → Shader 编译 → `requestAnimationFrame` 循环；失败则隐藏 canvas 用 CSS span；`prefers-reduced-motion`、IntersectionObserver |
 | **Markdown** | `react-markdown` + `remark-gfm` | GFM 表格、删除线、任务列表、自动链接；`components/message-content.ts` 预处理图片/思考块 |
 | **代码高亮** | `react-syntax-highlighter` (Prism) | `ayuLightSyntaxTheme`/`ayuDarkSyntaxTheme` 双主题、`lib/ayu-syntax-theme.ts` 定制 |
 | **虚拟化列表** | `file-viewer-virtualization.ts` + `FileViewer.tsx` | `FileViewer.tsx` 内 Myers diff 行级对比、`getVirtualLineWindow` 视口窗口、大文件分片加载 |
@@ -174,11 +174,11 @@ graph LR
         MAIN[useAgentSession<br/>主入口]
         SUB1[useAgentEvents<br/>SSE 事件订阅]
         SUB2[useSessionLoader<br/>会话加载/分支]
-        SUB3[streamReducer<br/>流式消息状态机]
+        SUB3["useSessionCommands<br/>POST /api/agent/{id}"]
         SUB4[useChatScroll<br/>自动滚动/锚点]
-        SUB5[useSessionCommands<br/>fork/navigate/branch]
-        SUB6[useSessionModelTools<br/>模型/工具选择]
-        SUB7[agent-event-apply.ts<br/>事件应用纯函数]
+        SUB5[useSessionModelTools<br/>模型/工具选择]
+        SUB6[streamReducer<br/>仅 start/update/end/reset]
+        SUB7[agent-event-apply.ts<br/>归约 AgentEvent 子集]
         SUB8[session-lifecycle-reset.ts<br/>生命周期重置补丁]
     end
 
@@ -190,12 +190,12 @@ graph LR
     MAIN --> SUB6
     SUB1 --> SUB7
     SUB2 --> SUB8
-    SUB3 --> SUB7
+    SUB6 --> SUB7
 ```
 
-- **单一数据流**：SSE 事件 → `useAgentEvents` → `applyAgentEvent` 纯函数 → `streamReducer` → 组件订阅
-- **流式状态机**：`streamReducer` 仅含 `start`/`update`/`end`/`reset` 四动作；SSE 事件由 `agent-event-apply.ts` 归约，覆盖 `agent_start`/`agent_end`/`message_*`/`tool_execution_*`/`auto_retry_*`/`compaction_*`/`extension_ui_*` 等 16 种事件类型
-- **会话命令**：`useSessionCommands` 封装 `fork`/`navigate`/`branch`/`edit`，乐观更新 + 服务端确认
+- **单一数据流**：SSE 事件 → `useAgentEvents` → `applyAgentEvent` 纯函数（对约 20 种客户端 `AgentEvent` 的子集归约）→ 需要时再 `dispatch` `streamReducer`
+- **流式状态机**：`streamReducer` **只有** `start`/`update`/`end`/`reset`；不要把它说成覆盖 16 种 SSE 事件
+- **会话命令**：`useSessionCommands` 向 `POST /api/agent/[id]` 发送 `fork`/`navigate_tree`/`prompt` 等；跨文件 Branch/Clone 走 `/api/sessions/[id]/branch` 与 `/clone`
 
 Sources: [hooks/useAgentSession.ts](hooks/useAgentSession.ts#L1-L100), [hooks/agent-session/stream-state.ts](hooks/agent-session/stream-state.ts), [hooks/agent-session/agent-event-apply.ts](hooks/agent-session/agent-event-apply.ts), [hooks/agent-session/use-session-commands.ts](hooks/agent-session/use-session-commands.ts)
 
@@ -209,7 +209,7 @@ Sources: [hooks/useAgentSession.ts](hooks/useAgentSession.ts#L1-L100), [hooks/ag
 | `ensure-standalone-macos-universal-runtimes.mjs` | macOS 双架构合并 | 保留 x64/arm64 并存、不 lipo、运行时选择 |
 | `dereference-standalone-symlinks.mjs` | 解引用符号链接 | 规避 `electron-builder` 复制 symlink 问题 |
 | `smoke-standalone-server.mjs` | 冒烟测试 | 启动 standalone server、健康检查 `/api/health` |
-| `electron-builder.yml` | 多平台打包配置 | NSIS (Win)、Deb (Linux)、DMG+Zip (macOS Universal)、asar、extraResources 精细控制 |
+| `electron-builder.yml` | 多平台打包配置 | NSIS / Deb / DMG+Zip；extraResources 第一条 standalone `filter` 排除 `node_modules`，`node_modules` 单独一条，另拷 electron-updater 依赖 |
 | `scripts/sync-landing-orb.mjs` | 官网同步 Liquid Orb | 将 WebGPU Shader 同步到文档站 |
 
 Sources: [package.json](package.json#L13-L22), [electron-builder.yml](electron-builder.yml#L1-L133), [scripts/ensure-standalone-next-runtimes.mjs](scripts/ensure-standalone-next-runtimes.mjs), [scripts/smoke-standalone-server.mjs](scripts/smoke-standalone-server.mjs)
@@ -223,7 +223,7 @@ Sources: [package.json](package.json#L13-L22), [electron-builder.yml](electron-b
 "test:macos": "...平台特定子集..."
 ```
 
-- **运行器**：Node.js 24 原生 `node --test`，零依赖、原生 TypeScript 支持 (通过 `--loader ts-node/esm` 或类似)
+- **运行器**：Node.js 24 原生 `node --test --test-force-exit`，**不**使用 ts-node 或 esm loader
 - **测试分层**：
   - 单元测试：`lib/**/*.test.ts`、`hooks/**/*.test.ts`、`components/**/*.test.ts`
   - Electron 主进程测试：`electron/**/*.test.ts` (进程树、端口选择、重启策略、CSP)
@@ -355,8 +355,8 @@ Sources: [docs/research/pi-core-upgrade-2026-09-30.md](docs/research/pi-core-upg
 
 按照 **Get Started** 目录的逻辑顺序，建议继续阅读：
 
-1. **[四层分离架构详解](6-si-ceng-fen-chi-jia-gou-xiang-jie)** — 深入理解 Electron/Next.js/React/Pi Agent 四层如何协作
+1. **[四层分离架构详解](6-si-ceng-fen-chi-jia-gou-xiang-jie)** — 浏览器 / Next.js 服务端 / SDK / 文件系统；Electron 为桌面托管切面
 2. **[AgentSession 生命周期与进程内注册表](7-agentsession-sheng-ming-zhou-qi-yu-jin-cheng-nei-zhu-ce-biao)** — 核心会话状态管理机制
 3. **[Electron 主进程启动链与双门槛就绪检查](10-electron-zhu-jin-cheng-qi-dong-lian-yu-shuang-men-jian-jiu-xu-jian-cha)** — 桌面端启动流程与容错设计
 
-或跳转至 **Deep Dive** 板块的专题文档，如 [液态思考球：WebGPU 优先 Canvas 降级渲染](25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran) 了解动画实现细节。
+或跳转至 **Deep Dive** 板块的专题文档，如 [液态思考球：WebGPU 优先 CSS 降级渲染](25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran) 了解动画实现细节。

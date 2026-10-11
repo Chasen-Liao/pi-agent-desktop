@@ -9,26 +9,25 @@ Sources: [electron/main.ts](electron/main.ts#L1-L100), [electron/server-wait.ts]
 ```mermaid
 flowchart TD
     A[app.requestSingleInstanceLock] -->|获取锁失败| B[app.quit 退出]
-    A -->|获取锁成功| C[choosePort 预留端口]
-    C --> D[startNextServer 启动 Next.js 进程]
+    A -->|获取锁成功| C[choosePort 从 30141 线性探测最多 10 次]
+    C --> O[createWindow 创建 BrowserWindow]
+    O --> P[显示 startup.html]
+    P --> Q[startupUiReady = true]
+    Q --> R[createTray]
+    R --> D[startNextServer 启动 Next.js 进程]
     D --> E{环境判断}
-    E -->|开发环境| F[spawn node next dev -p PORT]
-    E -->|生产环境 macOS| G[utilityProcess.fork server.js]
-    E -->|生产环境 其他| H[spawn ELECTRON_RUN_AS_NODE=1 server.js]
-    F --> I[waitForNextServerReady 双门槛就绪检查]
+    E -->|开发 !app.isPackaged| F[spawn node next/dist/bin/next dev -p PORT]
+    E -->|打包 darwin| G[utilityProcess.fork server.js]
+    E -->|打包 win32/linux| H["spawn(process.execPath) + ELECTRON_RUN_AS_NODE=1"]
+    F --> I[waitForNextServerReady]
     G --> I
     H --> I
-    I -->|就绪| J[showApp 加载应用 URL]
+    I -->|开发 Promise.any stdout Ready 或 HTTP /api/health| J[showApp 加载应用 URL]
+    I -->|打包 requireHttpHealth 仅 HTTP /api/health| J
     I -->|超时/失败| K[showStartupState error/stopped]
     J --> L[loadPageWithRetry 重试导航]
     L --> M[serverState = ready]
-    M --> N[注册自动更新检查 30s 延迟]
-    
-    O[createWindow 创建 BrowserWindow] -.->|并行| D
-    O -.-> P[显示 startup.html 动画指示器]
-    P -.-> Q[startupUiReady = true]
-    
-    R[createTray 创建系统托盘] -.->|并行| O
+    M --> N[打包版 30s 后检查自动更新]
     
     style A fill:#1e3a5f,color:#fff
     style I fill:#5f3a1e,color:#fff
@@ -134,7 +133,12 @@ return monitorNextServerProcess(wrapChildServerProcess(proc, killProcessTree), "
 ```typescript
 const standaloneDir = path.join(process.resourcesPath, "standalone");
 const serverScript = path.join(standaloneDir, "server.js");
-const serverEnv = { ...pickApiKeys(process.env), NODE_ENV: "production", PORT: String(port), HOSTNAME: "127.0.0.1" };
+const serverEnv = {
+  ...pickApiKeys(process.env),
+  NODE_ENV: process.env.NODE_ENV ?? "production",
+  PORT: String(port),
+  HOSTNAME: "127.0.0.1",
+};
 
 const proc = process.platform === "darwin"
   ? (() => {
@@ -158,8 +162,10 @@ const proc = process.platform === "darwin"
 
 | 平台 | 启动方式 | 关键差异 |
 |------|----------|----------|
-| **macOS** | `utilityProcess.fork` | 避免 Dock 出现第二个跳动图标；`serviceName` 显示在活动监视器中 |
-| **Windows/Linux** | `spawn(process.execPath, ..., { env: { ELECTRON_RUN_AS_NODE: "1" } })` | 复用 Electron 二进制作为 Node 运行时，加载 `standalone/server.js` |
+| **macOS 打包** | `utilityProcess.fork(server.js)` | **禁止** `spawn(process.execPath)` + `ELECTRON_RUN_AS_NODE`：Dock 会出现持续弹跳的黑色 `exec` 图标；`serviceName: "Pi Agent Next Server"` 显示在活动监视器 |
+| **Windows/Linux 打包** | `spawn(process.execPath, [server.js], { env: { ELECTRON_RUN_AS_NODE: "1" } })` | 复用 Electron 二进制作为 Node 运行时 |
+
+就绪判定由 `waitForNextServerReady(..., { requireHttpHealth: app.isPackaged })` 切换：开发 `Promise.any(stdout "Ready" \|\| HTTP /api/health)`；打包**只认** HTTP `/api/health`。
 
 - **standalone 产物**：由 `next.config.ts` 的 `output: "standalone"` 生成，包含最小运行时依赖
 - **进程包装**：`ServerProcess` 类统一暴露 `stdout`/`stderr`/`pid`/`exitCode`/`killed`/`terminate()`，屏蔽 `ChildProcess` 与 `UtilityProcess` 差异
@@ -524,7 +530,7 @@ Sources: [electron/env-filter.ts](electron/env-filter.ts#L1-L28)
 |--------|------|------|
 | **单实例锁** | `app.requestSingleInstanceLock()` | 原生 API，跨平台一致，无需文件锁 |
 | **端口分配** | 线性探测 30141~30150 | 简单可靠，避免随机端口防火墙拦截 |
-| **生产环境 macOS 启动** | `utilityProcess.fork` | 避免 Dock 第二图标，`serviceName` 可识别 |
+| **打包 macOS 启动** | 仅 `utilityProcess.fork(server.js)` | 切勿改回 `spawn(process.execPath)` + `ELECTRON_RUN_AS_NODE`（Dock 黑图标弹跳） |
 | **就绪检查双门槛** | 开发：stdout Ready \|\| HTTP health；生产：仅 HTTP health | 平衡开发体验与生产可靠性 |
 | **重启窗口** | 60s / 3次 | 够吸收瞬时抖动，防无限循环 |
 | **渲染崩溃恢复** | 独立策略，同 60s/3次 | 进程隔离，互不干扰 |

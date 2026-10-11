@@ -1,360 +1,269 @@
-Pi Agent Desktop 提供了三种截然不同的分支/克隆机制，分别服务于不同的工作流场景：**会话内分支** 用于在同一会话历史中探索替代方案，**Fork（目录克隆）** 用于创建完全独立的会话副本，**Git Worktree Clone** 用于在隔离的文件系统工作区中并行开发。三者在数据隔离程度、文件系统占用、Git 集成深度上形成清晰的梯度。
+Pi Agent Desktop 有三套**不要混用同一套词**的机制，外加一条与 Fork 同类、但入口不同的跨文件 Branch API。混用后果是改错文件、清错 worktree，或把同文件切叶子当成“新建会话”。
 
-> **术语对应**：本文所称「Fork（目录克隆）」指 `POST /api/sessions/[id]/clone`（`workspaceMode: "directory"`）的克隆操作；代码库（含 wiki 9/13/15）中的 "Fork" 另指 `POST /api/agent/[id]` 的 `{type:"fork"}` 交互式命令——它在同一会话目录内创建带 `parentSession` 的分支会话，行为上更接近本文的「会话内分支」。
+| 机制 | 一句话 | 文件 | 主要 API |
+|------|--------|------|----------|
+| **Fork** | 消息 Fork 按钮：从某条消息另起炉灶，侧边栏出现子节点 | **新** `.jsonl` | `POST /api/agent/[id]` body `{ type: "fork", entryId }`。**没有** `POST /api/sessions/fork` |
+| **会话内分支** | Continue / `BranchNavigator`：同一对话树里换叶子 | **同一** `.jsonl` | `navigate_tree`（同上 agent POST）+ `GET /api/sessions/[id]/context?leafId=`。**不是** `POST /api/sessions/[id]/branch` |
+| **跨文件 Branch API** | 侧边栏从某节点分叉出新会话 | **新** `.jsonl` | `POST /api/sessions/[id]/branch` `{ targetEntryId, name? }` |
+| **Clone** | 整份会话复制到新 cwd；可选 Git worktree | **新** `.jsonl` | `POST /api/sessions/[id]/clone`；`workspaceMode: "directory"`（默认）或 `"worktree"` |
 
-Sources: [lib/session-branch-clone.ts](lib/session-branch-clone.ts#L1-L50), [app/api/sessions/[id]/branch/route.ts](app/api/sessions/[id]/branch/route.ts#L1-L87), [app/api/sessions/[id]/clone/route.ts](app/api/sessions/[id]/clone/route.ts#L1-L100)
+Fork 与跨文件 Branch 都调用上游 `SessionManager.createBranchedSession()`（Fork 在首条消息前则走 `SessionManager.create` + `newSession({ parentSession })`），header `parentSession` 都是**父文件绝对路径**。Clone 走 `SessionManager.forkFrom()`，不是 Fork 命令。
+
+Sources: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#L387-L416), [lib/rpc-manager.ts](lib/rpc-manager.ts#L436-L506), [app/api/sessions/[id]/branch/route.ts](app/api/sessions/%5Bid%5D/branch/route.ts#L1-L87), [app/api/sessions/[id]/clone/route.ts](app/api/sessions/%5Bid%5D/clone/route.ts#L1-L226)
 
 ---
 
 ## 核心概念对比
 
-| 维度 | 会话内分支 | Fork（目录克隆） | Git Worktree Clone |
-|------|-----------|-----------------|-------------------|
-| **数据隔离** | 共享公共历史，分叉点后独立 | 完整复制历史，完全独立 | 完整复制历史，完全独立 |
-| **文件系统** | 同一工作目录 | 同一或不同工作目录 | 隔离的 Git worktree 目录 |
-| **Git 集成** | 无 | 无 | 原生 `git worktree` + 专用分支 |
-| **会话文件** | 新建 `.jsonl`，`parentSession` 指向源会话 | 新建 `.jsonl`，`parentSession` 指向源会话 | 新建 `.jsonl`，`parentSession` 指向源会话 |
-| **适用场景** | 探索对话分支、对比方案 | 存档实验、跨项目复用 | 并行功能开发、长期隔离实验 |
-| **清理语义** | 删除分支会话文件 | 删除克隆会话文件 | 自动清理 worktree、分支、所有权标记 |
+| 维度 | Fork | 会话内分支 | 跨文件 Branch API | Clone（directory / worktree） |
+|------|------|-----------|-------------------|------------------------------|
+| **UI** | 用户消息上的 Fork 按钮 | Continue / `BranchNavigator` | 侧边栏「分支」→ `BranchCloneModal` `mode: "branch"` | 侧边栏「克隆」→ `BranchCloneModal` `mode: "clone"` |
+| **数据隔离** | 新文件；复制到 fork 点之前 | 共享同一文件的条目树 | 新文件；复制根→叶（含目标条目） | 新文件；整棵条目树 |
+| **文件系统 / Git** | 同一 cwd | 同一 cwd | 同一 cwd | directory：指定 `targetCwd`；worktree：仓库**外**独立 worktree + 专用分支 |
+| **会话文件** | 新 `.jsonl`，`parentSession` = 父文件绝对路径 | 不新建文件、不改 header | 新 `.jsonl`，`parentSession` = 父文件绝对路径 | 新 `.jsonl`，`parentSession` = 父文件绝对路径 |
+| **运行时** | `startRpcSession(newId)` 预注册后 `destroy()` 旧 wrapper | `inner.navigateTree(targetId)`；再按 `leafId` 投影 | 只写文件并 `cacheSessionPath`，不预注册 wrapper | `forkFrom`；worktree 失败只清理**已证明属于本次创建**的资源 |
+| **适用场景** | 对话中途另起炉灶，侧边栏留父子 | 同会话并行探索、对比方案 | 从历史节点抽出一条线性会话 | 模板复用；或代码级隔离的长期并行 |
 
-Sources: [lib/session-branch-clone.ts](lib/session-branch-clone.ts#L50-L150), [lib/git-worktree.ts](lib/git-worktree.ts#L1-L100), [app/api/sessions/[id]/clone/route.ts](app/api/sessions/[id]/clone/route.ts#L100-L226)
+Sources: [lib/rpc-manager.ts](lib/rpc-manager.ts#L436-L506), [lib/git-worktree.ts](lib/git-worktree.ts#L1-L100), [app/api/sessions/[id]/clone/route.ts](app/api/sessions/%5Bid%5D/clone/route.ts#L100-L226)
 
 ---
 
-## 会话内分支
+## Fork（跨文件，消息按钮）
 
 ### 架构定位
 
-会话内分支是**最轻量**的分叉机制。它不复制整个会话历史，而是在现有会话的特定条目（`targetEntryId`）处创建分叉点。新会话继承分叉点之前的所有历史，随后的对话独立演进。这类似于 Git 的 `git checkout -b` 但在会话层面操作。
+Fork 是用户在**某条已落盘消息**上点 Fork：磁盘上长出新 `.jsonl`，侧边栏把它挂成父会话的子节点。新会话可立即收命令，因此必须先把新 wrapper 写进 `globalThis.__piSessions`，再拆掉旧 wrapper。
 
 ### 数据模型
-
-新会话的 header 包含 `parentSession` 字段指向**源会话文件绝对路径**，形成**会话级父子关系树**：
 
 ```typescript
 interface SessionHeader {
   type: "session";
-  id: string;                    // 新会话唯一 ID
-  timestamp: string;             // 创建时间
-  cwd: string;                   // 工作目录（继承自分叉点所在会话）
-  parentSession: string;         // 指向源会话文件绝对路径
+  version: 3;
+  id: string;              // uuidv7
+  timestamp: string;
+  cwd: string;
+  parentSession: string;   // 父会话 .jsonl 的绝对路径，不是父会话 id
 }
 ```
 
-BranchNavigator 的树可视化直接消费 `buildTree` 产物，并用 `compress()` 折叠无分叉的线性链路；`lib/session-branch-clone.ts` 的 `extractAncestryPath()` 为死代码（无生产调用）。
+### API 与执行顺序
 
-Sources: [components/BranchNavigator.tsx](components/BranchNavigator.tsx#L44-L93), [lib/session-branch-clone.ts](lib/session-branch-clone.ts#L154-L210), [lib/types.ts](lib/types.ts#L1-L30)
+**端点**：`POST /api/agent/[id]`，body `{ type: "fork", entryId }`。流式中拒绝（半行 JSONL + `destroy()` 会掐掉正在跑的 loop）。
 
-### API 实现
+```text
+1. isPersisted / sessionFile / existsSync 守卫；文件已删则 { cancelled: true }
+2. getEntry(entryId)；没有则抛错
+3. 写新文件
+   - entry.parentId == null（首条消息前）：SessionManager.create(cwd, sessionDir) + newSession({ parentSession: currentFile })
+   - 否则：open(currentFile).createBranchedSession(entry.parentId)  // 不含 fork 点本身
+4. cacheSessionPath(newSessionId, newSessionFile)
+5. await startRpcSession(newSessionId, newSessionFile, newCwd)   // 预注册
+6. 若 5 失败：invalidateSessionPathCache + unlink 孤儿文件（best-effort）后 rethrow；旧 wrapper 保持可用
+7. await this.destroy()                                         // 仅在预注册成功后
+8. return { cancelled: false, newSessionId }
+```
+
+前端 `handleFork` 经 `sendAgentCommand` 打到同一 POST；`AppShell` 用 `resolveForkedSession()`（退避 50/100/200/400/800ms + 单会话直查）等到列表出现新 ID。
+
+Sources: [lib/rpc-manager.ts](lib/rpc-manager.ts#L436-L501), [hooks/agent-session/use-session-commands.ts](hooks/agent-session/use-session-commands.ts#L384-L408), [lib/fork-session-wait.ts](lib/fork-session-wait.ts#L1-L50)
+
+---
+
+## 会话内分支（同文件）
+
+### 架构定位
+
+最轻量：不复制文件。条目用 `parentId` 成树；当前对话是根到某个叶子的路径。换叶子 = 换投影，JSONL 只追加后续消息，不改 header。
+
+### 切换路径
+
+1. UI：`BranchNavigator` 点节点 → `onLeafChange(leafId)`
+2. 命令：`POST /api/agent/[id]` `{ type: "navigate_tree", targetId: leafId }` → `inner.navigateTree`
+3. 只读投影：`GET /api/sessions/[id]/context?leafId=` → `buildSessionContext(entries, leafId)`
+4. `entryIds[]` 与 `messages[]` 平行，前端用它定位条目
+
+线性链路由 `compress()` 折成 `+N`。`lib/session-branch-clone.ts` 的 `extractAncestryPath()` 无生产调用。
+
+```mermaid
+graph TD
+    Root[根条目 parentId: null] --> Msg1[用户消息]
+    Msg1 --> Msg2[助手回复]
+    Msg2 --> BranchPoint{同一文件内分叉}
+    BranchPoint --> Main[主线叶子]
+    BranchPoint --> Branch1[方案 A 叶子]
+    BranchPoint --> Branch2[方案 B 叶子]
+```
+
+Sources: [lib/rpc-manager.ts](lib/rpc-manager.ts#L503-L506), [app/api/sessions/[id]/context/route.ts](app/api/sessions/%5Bid%5D/context/route.ts), [components/BranchNavigator.tsx](components/BranchNavigator.tsx#L1-L100)
+
+---
+
+## 跨文件 Branch API（侧边栏分叉）
+
+### 架构定位
+
+与 Fork 同类（新 `.jsonl` + `parentSession`），入口是侧边栏而不是消息按钮，且**包含** `targetEntryId` 那条（Fork 交互命令传的是 fork 点的 `parentId`，不含该条）。不预注册 RPC wrapper。
+
+### API
 
 **端点**：`POST /api/sessions/[id]/branch`
 
 ```typescript
-// 请求体
-{
-  targetEntryId: string;  // 必填：分叉点条目 ID
-  name?: string;          // 可选：分支显示名称
-}
+// 请求
+{ targetEntryId: string; name?: string }
 
 // 响应
-{
-  success: true,
-  sessionId: string,      // 新会话 ID
-  sessionFile: string     // 新会话文件路径
-}
+{ success: true, sessionId: string, sessionFile: string }
 ```
 
-实现流程：
-1. `resolveSessionPath(id)` 定位源会话文件
-2. `validateBranchPayload()` 校验 `targetEntryId`
-3. `SessionManager.open(sessionFile).getEntry(targetEntryId)` 验证条目存在
-4. `sm.createBranchedSession(targetEntryId)` 创建分支会话文件
-5. 可选写入 `name` 到 `session_info` 条目
-6. 缓存新会话路径并返回
+流程：`resolveSessionPath` → `validateBranchPayload` → `getEntry(targetEntryId)` → `createBranchedSession(targetEntryId)` → 可选 `appendSessionInfo(name)` → `cacheSessionPath`。
 
-Sources: [app/api/sessions/[id]/branch/route.ts](app/api/sessions/[id]/branch/route.ts#L1-L87), [lib/session-branch-clone.ts](lib/session-branch-clone.ts#L120-L150)
+`createBranchedSession` 会把打开的 `SessionManager` 切到新文件（`sessionId` / `sessionFile` 被改写），因此随后的 `getSessionId()` 是新 id。
 
-### 可视化与交互
-
-`BranchNavigator` 组件以树状图渲染会话历史，**线性链路压缩**（`compress()` 函数）将无分叉的连续节点折叠为单行显示 `+N` 指示器。活跃路径高亮，支持点击任意节点跳转上下文。
-
-```mermaid
-graph TD
-    Root[根条目] --> Msg1[用户消息]
-    Msg1 --> Msg2[助手回复]
-    Msg2 --> BranchPoint{分叉点}
-    BranchPoint --> Main[主线继续]
-    BranchPoint --> Branch1[分支 A: 方案 1]
-    BranchPoint --> Branch2[分支 B: 方案 2]
-    Main --> Msg3[后续对话]
-    Branch1 --> B1Msg1[探索方案 1]
-    Branch2 --> B2Msg1[探索方案 2]
-```
-
-Sources: [components/BranchNavigator.tsx](components/BranchNavigator.tsx#L1-L100), [components/session-sidebar/SessionTree.tsx](components/session-sidebar/SessionTree.tsx#L1-L100)
+Sources: [app/api/sessions/[id]/branch/route.ts](app/api/sessions/%5Bid%5D/branch/route.ts#L1-L87)
 
 ---
 
-## Fork（目录克隆）
+## Clone（目录或 Git Worktree）
 
 ### 架构定位
 
-Fork 创建会话的**完全独立副本**，包括完整历史。新会话的 `parentSession` 仍指向源会话文件路径（`forkFrom` 一律写入），因此同样进入会话树（侧边栏可见父子关系）。适合需要将会话作为模板复用、或在不同上下文中并行推进的场景。
+Clone 复制**整份**会话（含条目树），不是从叶子抽线性历史。`forkFrom` 一律写 `parentSession` 指向源文件，所以侧边栏仍有父子。`workspaceMode: "worktree"` 时先在源仓库**外**建 worktree，再在新 cwd 上 `forkFrom`。
 
 ### 数据模型
 
-克隆会话 header 由上游 `forkFrom` 写入：生成新 `id` 和 `timestamp`，`cwd` 为目标工作目录，并**一律写入 `parentSession` 指向源会话文件绝对路径**：
+新 header：新 uuidv7 `id`、新 `timestamp`、`cwd` 为目标工作目录，`parentSession` 为源文件绝对路径。
+
+### API
+
+**端点**：`POST /api/sessions/[id]/clone`
 
 ```typescript
-interface SessionHeader {
-  type: "session";
-  id: string;                    // 新会话 ID
-  timestamp: string;             // 克隆时间
-  cwd: string;                   // 目标工作目录（可自定义）
-  parentSession: string;         // 源会话文件绝对路径（forkFrom 一律写入）
+{
+  targetCwd?: string;
+  name?: string;
+  workspaceMode?: "directory" | "worktree";  // 默认 directory
+  branchName?: string;                       // 仅 worktree
 }
 ```
 
-### API 实现
+directory：`SessionManager.forkFrom(sourceFile, targetCwd, undefined, { id: newUuid })`。后续失败按 `*_${sessionId}.jsonl` 清残留。
 
-**端点**：`POST /api/sessions/[id]/clone`（`workspaceMode: "directory"` 或省略）
+worktree：`withGitWorktree({ sourceCwd, targetCwd, branchName }, worktree => cloneSession(worktree.cwd, ...))`。
 
-```typescript
-// 请求体
-{
-  targetCwd?: string;     // 目标工作目录，默认同源会话
-  name?: string;          // 可选：克隆名称
-  workspaceMode?: "directory" | "worktree";  // 必须为 "directory" 或省略
-  // branchName 不允许在 directory 模式下使用
-}
-
-// 响应
-{
-  success: true,
-  sessionId: string,
-  sessionFile: string,
-  workspace: { mode: "directory", cwd: string }
-}
-```
-
-实现流程：
-1. 校验载荷（`validateClonePayload` 禁止 `branchName` 与 `directory` 模式共存）
-2. `SessionManager.forkFrom(sourceFile, targetCwd, undefined, { id: newUuid })` 复制会话
-3. 可选写入 `name`
-4. 缓存并返回
-
-**关键实现细节**：`forkFrom` 在 pi-coding-agent 内部逐条目复制 JSONL 内容，生成全新会话文件。若后续操作失败，`removeForkedSessionFiles()` 会按 `*_${sessionId}.jsonl` 模式清理残留文件。
-
-Sources: [app/api/sessions/[id]/clone/route.ts](app/api/sessions/[id]/clone/route.ts#L100-L200), [lib/session-branch-clone.ts](lib/session-branch-clone.ts#L30-L50), [lib/session-reader.ts](lib/session-reader.ts#L1-L50)
-
-### 与分支的本质区别
-
-| 特性 | 会话内分支 | Fork |
-|------|-----------|------|
-| 历史共享 | 是（分叉点前） | 否（完整复制） |
-| `parentSession` | 指向源会话文件路径 | 指向源会话文件路径 |
-| 会话树关系 | 父子节点 | 父子节点 |
-| 存储增量 | 极小（仅新条目） | 等同源会话大小 |
-| 回溯能力 | 可追溯至共同祖先 | 仅自身历史 |
+Sources: [app/api/sessions/[id]/clone/route.ts](app/api/sessions/%5Bid%5D/clone/route.ts#L100-L226)
 
 ---
 
-## Git Worktree Clone
+## Git Worktree Clone 细节
 
-### 架构定位
-
-Git Worktree Clone 是**最重度**的隔离机制。它利用 Git 原生 `git worktree add` 创建**隔离的文件系统工作区**，包含独立的 `.git` 管理目录、独立的工作树、专用 Git 分支。配合会话 Fork，实现「代码隔离 + 会话隔离」的双重保障，适合长周期并行开发、代码审查前的实验性重构、多任务并行。
-
-### 核心组件：`lib/git-worktree.ts`
-
-该模块约 1300 行，实生产级 worktree 生命周期管理：
+### 创建流程
 
 ```mermaid
 flowchart TD
-    A[创建请求] --> B[resolveGitRoot 定位仓库根目录]
-    B --> C[校验分支名 validateWorktreeBranchName]
-    C --> D[计算目标路径 targetPath]
-    D --> E[withWorktreeLocks 进程间锁]
+    A[workspaceMode: worktree] --> B[resolveGitRoot]
+    B --> C[validateWorktreeBranchName]
+    C --> D[targetPath 必须在源仓库外]
+    D --> E[withWorktreeLocks]
     E --> F[git worktree list --porcelain -z 预检]
-    F --> G[git worktree add --no-checkout -b branch target HEAD]
-    G --> H[写入所有权标记文件 ownerMarkerPath]
-    H --> I[recordBranchOwnership 记录所有权]
-    I --> J[git checkout --force HEAD]
-    J --> K[验证身份一致性]
-    K --> L[返回 GitWorktreeResult]
-    L --> M[执行业务操作 fork session]
-    M --> N{成功?}
-    N -- 是 --> O[释放锁 返回结果]
-    N -- 否 --> P[cleanupWorktreeWithRetry 清理]
-    P --> Q[抛出异常]
+    F --> G["git worktree add --no-checkout -b branch target HEAD"]
+    G --> H[owner marker + reflog ownership]
+    H --> I[checkout --force HEAD]
+    I --> J[校验 gitDir / HEAD / 分支]
+    J --> K[forkFrom 到 worktree cwd]
+    K --> L{成功?}
+    L -- 是 --> M[返回 workspace.mode/cwd/branchName]
+    L -- 否 --> N[只清理已证明所有权的资源]
 ```
 
-### 所有权验证机制
+目标路径、分支、`gitDir`、HEAD、branch ownership marker 对不上则**拒绝**（fail closed）。无法证明 branch 所有权时**保留 branch**，避免删外部 Git 资源。Git 没有按 worktree identity 的原子 remove，非协作外部进程仍有极窄 TOCTOU。
 
-防止并发/崩溃导致的 worktree 泄漏或误删他人 worktree：
+### 所有权
 
-1. **创建时**：生成随机 `ownerToken`，写入 worktree 内 `.git/pi-agent-desktop-worktree-owner` 文件
-2. **提交标记**：创建临时 commit（`commit-tree`），消息含 `ownerToken`，通过 `update-ref` 原子替换分支指针，再恢复原 HEAD，在 reflog 留下可验证痕迹
-3. **清理时**：读取 reflog 与标记文件，**双重验证** `head` 与 `ownerToken` 均匹配才允许删除 worktree 与分支
-
-```typescript
-// 所有权标记消息格式
-"pi-agent-desktop worktree owner <uuid>"
-
-// reflog 验证逻辑
-branchOwnerReflogMatches(stdout, head, ownerToken) {
-  const [reflogHead, message] = stdout.trimEnd().split("\0");
-  return reflogHead === head && message === branchOwnerMessage(ownerToken);
-}
-```
+1. 随机 `ownerToken` 写入 worktree `.git/pi-agent-desktop-worktree-owner`
+2. `commit-tree` + `update-ref` 在 reflog 留下 `pi-agent-desktop worktree owner <uuid>`
+3. 清理时 head 与 token 都匹配才删 worktree / 分支
 
 ### 进程间锁
 
-`withWorktreeLocks()` 基于文件系统目录锁（`mkdir` 原子性）+ heartbeat 机制，跨进程同步对同一 `repoRoot` 和 `targetPath` 的操作。锁键经 SHA-256 哈希规范化，支持 Windows/macOS 大小写不敏感文件系统。
-
-Sources: [lib/git-worktree.ts](lib/git-worktree.ts#L200-L400), [lib/git-worktree.ts](lib/git-worktree.ts#L400-L600), [lib/git-worktree.ts](lib/git-worktree.ts#L800-L1000)
-
-### API 实现
-
-**端点**：`POST /api/sessions/[id]/clone`（`workspaceMode: "worktree"`）
-
-```typescript
-// 请求体
-{
-  targetCwd?: string;     // 可选：worktree 父目录，默认 repo 同级
-  name?: string;          // 可选：克隆名称
-  workspaceMode: "worktree",  // 必填
-  branchName?: string     // 可选：自定义分支名，自动生成 pi-agent/worktree-*
-}
-
-// 响应
-{
-  success: true,
-  sessionId: string,
-  sessionFile: string,
-  workspace: {
-    mode: "worktree",
-    cwd: string,          // worktree 实际路径
-    branchName: string    // 创建的分支名
-  }
-}
-```
-
-实现流程：
-1. 校验载荷（`branchName` 要求 `workspaceMode === "worktree"`）
-2. `withGitWorktree({ sourceCwd, targetCwd, branchName }, worktree => cloneSession(worktree.cwd, ...))`
-3. `cloneSession` 内部调用 `SessionManager.forkFrom()` 在 worktree 目录创建会话
-4. 成功返回；失败自动触发 `cleanupUnidentifiedWorktree` 或 `cleanupWorktreeWithRetry`
-
-Sources: [app/api/sessions/[id]/clone/route.ts](app/api/sessions/[id]/clone/route.ts#L100-L226), [lib/git-worktree.ts](lib/git-worktree.ts#L1000-L1200)
+`withWorktreeLocks()`：目录锁（`mkdir`）+ heartbeat；锁键 SHA-256，兼容大小写不敏感盘。
 
 ### 清理语义
 
-| 清理场景 | 行为 |
-|----------|------|
-| 正常创建后业务失败 | 删除 worktree、删除分支、验证所有权 |
-| 创建 worktree 成功但未完成所有权记录 | `cleanupUnidentifiedWorktree`：仅删除 worktree 目录，保留分支（无法验证所有权） |
-| 显式调用 `removeGitWorktree()` | 双重验证后删除 worktree、可选删除分支 |
-| 进程崩溃残留 | 下次操作同资源时 `removeStaleInterprocessLock()` 回收过期锁（>30s 且进程不存活） |
+| 场景 | 行为 |
+|------|------|
+| 业务失败且身份已证明 | 删 worktree、删分支 |
+| 未完成所有权记录 | `cleanupUnidentifiedWorktree`：能核验 marker 才动；否则 fail closed，保留无法证明的 branch |
+| `removeGitWorktree()` | 双重验证后再删 |
+| 崩溃残留锁 | `removeStaleInterprocessLock()`（>30s 且进程不存活） |
 
-Sources: [lib/git-worktree.ts](lib/git-worktree.ts#L1000-L1322)
+Sources: [lib/git-worktree.ts](lib/git-worktree.ts#L200-L1322)
 
 ---
 
-## 前端集成：BranchCloneModal
+## 前端：BranchCloneModal 与 BranchNavigator
 
-统一的模态框组件处理三种操作的用户交互：
+`BranchCloneModal` **只覆盖跨文件 Branch + Clone**，不管会话内分支：
 
 ```typescript
 type BranchCloneMode = "branch" | "clone";
-
-interface BranchCloneModalProps {
-  mode: BranchCloneMode;
-  sessionId: string;
-  targetEntryId?: string;  // 仅 branch 模式
-  cwd?: string;            // 仅 clone 模式默认值
-  onSuccess?: (newSessionId, newSessionFile) => void;
-}
 ```
 
-**分支模式**：只显示名称输入框，`targetEntryId` 只读显示
-**克隆模式**：
-- 工作区模式单选：Directory / Worktree
-- Worktree 模式下显示分支名输入框、目标目录输入框
-- Directory 模式下仅显示目标目录
+- `branch`：名称 + 只读 `targetEntryId` → `POST /api/sessions/[id]/branch`
+- `clone`：Directory / Worktree；Worktree 才显示 `branchName`
 
-错误码通过 `CLONE_ERROR_TRANSLATIONS` 映射为 i18n 键，统一错误提示。
+会话内分支在聊天区 `BranchNavigator`，命令是 `navigate_tree`。
 
-Sources: [components/BranchCloneModal.tsx](components/BranchCloneModal.tsx#L1-L200), [components/BranchCloneModal.tsx](components/BranchCloneModal.tsx#L200-L309)
+错误码走 `CLONE_ERROR_TRANSLATIONS`。
+
+Sources: [components/BranchCloneModal.tsx](components/BranchCloneModal.tsx#L1-L309), [components/BranchNavigator.tsx](components/BranchNavigator.tsx)
 
 ---
 
-## 会话树中的分支可视化
+## 会话树中的跨文件父子
 
-`SessionTree` 组件递归渲染 `SessionTreeNode`，通过 `parentSessionId` 重建会话层级：
+`SessionTree` 用列表里的 `parentSessionId`（由 `parentSession` **文件路径**反查 id）画会话级树。同文件内的 `parentId` 树不出现在这一层。
 
-```mermaid
-graph TD
-    Session1[会话 A<br/>parentSession: null] --> Session2[会话 B<br/>parentSession: A]
-    Session1 --> Session3[会话 C<br/>parentSession: A]
-    Session2 --> Session4[会话 D<br/>parentSession: B]
-    Session3 --> Session5[会话 E<br/>parentSession: C]
-    Session5 -.->|Git Worktree| WT1[Worktree: feature-x]
-    Session5 -.->|Git Worktree| WT2[Worktree: feature-y]
-```
+每个节点：分支（Branch API）、克隆、导出、重命名、删除。`onBranchSession` 带当前叶子 `targetEntryId`，`onCloneSession` 带完整 `SessionInfo`。
 
-每个会话节点提供右键菜单：**分支**、**克隆**、**导出**、**重命名**、**删除**。`onBranchSession` 传递 `targetEntryId`（当前叶子条目），`onCloneSession` 传递完整 `SessionInfo`。
-
-Sources: [components/session-sidebar/SessionTree.tsx](components/session-sidebar/SessionTree.tsx#L1-L100), [components/session-sidebar/helpers.ts](components/session-sidebar/helpers.ts#L1-L50)
+Sources: [components/session-sidebar/SessionTree.tsx](components/session-sidebar/SessionTree.tsx#L1-L100)
 
 ---
 
-## 错误码完整对照表
+## 错误码对照
 
-| 错误码 | 触发场景 | 归属机制 |
-|--------|----------|----------|
-| `INVALID_BRANCH_PAYLOAD` | branch 载荷非对象 | 会话内分支 |
-| `INVALID_TARGET_ENTRY_ID` | 缺少或空 `targetEntryId` | 会话内分支 |
-| `INVALID_BRANCH_NAME` | `name` 非字符串 | 会话内分支 |
-| `TARGET_ENTRY_NOT_FOUND` | 分叉点条目不存在 | 会话内分支 |
-| `BRANCH_CREATE_FAILED` | `createBranchedSession` 返回 null | 会话内分支 |
-| `INVALID_CLONE_PAYLOAD` | clone 载荷非对象 | Fork / Worktree |
-| `INVALID_TARGET_CWD` | `targetCwd` 非字符串 | Fork / Worktree |
-| `INVALID_CLONE_NAME` | `name` 非字符串 | Fork / Worktree |
-| `INVALID_WORKSPACE_MODE` | 非 `directory`/`worktree` | Fork / Worktree |
-| `INVALID_BRANCH_NAME` | `branchName` 非字符串 | Worktree |
-| `BRANCH_NAME_REQUIRES_WORKTREE` | directory 模式下传了 `branchName` | Fork |
-| `GIT_UNAVAILABLE` | 系统无 git 命令 | Worktree |
-| `NOT_GIT_REPOSITORY` | `sourceCwd` 不在 Git 仓库内 | Worktree |
-| `INVALID_BRANCH` | 分支名不合法（Git 规则） | Worktree |
-| `TARGET_INSIDE_REPOSITORY` | worktree 目标在仓库内部 | Worktree |
-| `TARGET_EXISTS` | 目标目录已存在或已被注册 | Worktree |
-| `WORKTREE_CREATE_FAILED` | `git worktree add` 失败 | Worktree |
-| `WORKTREE_CLEANUP_FAILED` | 清理 worktree/分支失败 | Worktree |
-| `SESSION_NOT_FOUND` | 源会话文件不存在 | 所有 |
-| `INVALID_JSON_PAYLOAD` | 请求体非合法 JSON | 所有 |
-| `BRANCH_OPERATION_FAILED` / `CLONE_OPERATION_FAILED` | 未分类异常兜底 | 所有 |
+| 错误码 | 场景 | 归属 |
+|--------|------|------|
+| `INVALID_BRANCH_PAYLOAD` / `INVALID_TARGET_ENTRY_ID` / `TARGET_ENTRY_NOT_FOUND` / `BRANCH_CREATE_FAILED` | branch 载荷或 `createBranchedSession` | 跨文件 Branch API |
+| `INVALID_CLONE_PAYLOAD` / `INVALID_TARGET_CWD` / `INVALID_WORKSPACE_MODE` | clone 载荷 | Clone |
+| `BRANCH_NAME_REQUIRES_WORKTREE` | directory 却传了 `branchName` | Clone directory |
+| `GIT_UNAVAILABLE` / `NOT_GIT_REPOSITORY` / `INVALID_BRANCH` / `TARGET_INSIDE_REPOSITORY` / `TARGET_EXISTS` / `WORKTREE_CREATE_FAILED` / `WORKTREE_CLEANUP_FAILED` | git / 路径 / 身份 | Clone worktree |
+| `SESSION_NOT_FOUND` / `INVALID_JSON_PAYLOAD` | 源文件或 JSON | Branch / Clone |
+| Fork 流式中 / 无效 `entryId` | `send("fork")` 抛错，经 agent 路由变成错误响应 | Fork |
+| `navigate_tree` cancelled | 目标叶子不可用 | 会话内分支 |
 
-Sources: [components/BranchCloneModal.tsx](components/BranchCloneModal.tsx#L1-L50), [lib/git-worktree.ts](lib/git-worktree.ts#L30-L80), [app/api/sessions/[id]/branch/route.ts](app/api/sessions/[id]/branch/route.ts#L1-L87), [app/api/sessions/[id]/clone/route.ts](app/api/sessions/[id]/clone/route.ts#L1-L100)
+Sources: [app/api/sessions/[id]/branch/route.ts](app/api/sessions/%5Bid%5D/branch/route.ts), [app/api/sessions/[id]/clone/route.ts](app/api/sessions/%5Bid%5D/clone/route.ts), [lib/git-worktree.ts](lib/git-worktree.ts#L30-L80)
 
 ---
 
-## 选型决策指南
+## 选型
 
 ```
-需要在同一对话中探索多个方案、保留共同上下文？
-  ├─ 是 → 会话内分支
-  └─ 否 → 需要文件系统级隔离（独立代码修改、可提交 Git）？
-          ├─ 是 → Git Worktree Clone
-          └─ 否 → 仅需会话历史副本模板化复用？
-                    ├─ 是 → Fork（目录克隆）
-                    └─ 否 → 重新评估需求
+只要换叶子、不新建会话文件？
+  └─ 是 → 会话内分支（BranchNavigator / navigate_tree）
+需要新 .jsonl、侧边栏子节点、同一 cwd？
+  ├─ 消息上 Fork（不含该条）→ Fork 命令
+  └─ 侧边栏从节点抽出（含该条）→ 跨文件 Branch API
+需要另一份工作目录或整树副本？
+  ├─ 只要会话模板 → Clone directory
+  └─ 还要独立 Git 工作区 → Clone worktree（目标必须在源仓库外）
 ```
 
 ---
 
 ## 相关页面导航
 
-- **上游依赖**：[Pi 会话文件格式与 .jsonl 解析](13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi) — 会话文件结构与 `SessionManager` API
-- **下游应用**：[会话导出、AgentMode 持久化与级联删除](15-hui-hua-dao-chu-agentmode-chi-jiu-hua-yu-ji-lian-shan-chu) — 分支/克隆后的生命周期管理
-- **UI 集成**：[AppShell 布局系统：面板拖拽、键盘快捷键、主题切换](24-appshell-bu-ju-xi-tong-mian-ban-tuo-zhuai-jian-pan-kuai-jie-jian-zhu-ti-qie-huan) — BranchNavigator 与 SessionTree 的布局容器
+- **上游依赖**：[Pi 会话文件格式与 .jsonl 解析](13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi) — header、`parentId` 树、`parentSession` 路径
+- **下游应用**：[会话导出、AgentMode 持久化与级联删除](15-hui-hua-dao-chu-agentmode-chi-jiu-hua-yu-ji-lian-shan-chu) — 只有跨文件父子才走 `parentSession` 重写
+- **UI 集成**：[AppShell 布局系统：面板拖拽、键盘快捷键、主题切换](24-appshell-bu-ju-xi-tong-mian-ban-tuo-zhuai-jian-pan-kuai-jie-jian-zhu-ti-qie-huan) — BranchNavigator 与 SessionTree

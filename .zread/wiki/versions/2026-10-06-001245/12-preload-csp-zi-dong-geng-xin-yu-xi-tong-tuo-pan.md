@@ -96,7 +96,7 @@ graph TD
 | Web（开发/预览） | `connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*` | 端口不固定，需通配符覆盖所有回环地址 |
 | Electron（生产） | `connect-src 'self' http://127.0.0.1:<port> ws://127.0.0.1:<port>` | 端口由主进程动态选定并锁定，**精确钉死**，缩小攻击面 |
 
-`electron/csp.ts` 仅镜像 `lib/csp.ts` 的 `buildElectronCspHeader` 实现（因 Electron 编译根目录限制无法直接引用 `../lib`）。`lib/csp.test.ts` 只测试 lib 版 `csp.ts`，未覆盖 `electron/csp.ts`；electron 侧仅有 `main-update-gate.test.ts` 对 main.ts import 并调用 `buildElectronCspHeader` 的形式断言。
+`electron/csp.ts` 仅镜像 `lib/csp.ts` 的 `buildElectronCspHeader` 实现（因 Electron 编译根目录限制无法直接引用 `../lib`）。Electron 头钉死 `connect-src 'self' http://127.0.0.1:<port> ws://127.0.0.1:<port>`，`script-src 'self' 'unsafe-inline' 'unsafe-eval'`。`lib/csp.test.ts` 只测试 lib 版 `csp.ts`，未覆盖 `electron/csp.ts`；electron 侧 `main-update-gate.test.ts` 断言 main.ts import 并调用 `buildElectronCspHeader`，并额外断言打包就绪 `requireHttpHealth: app.isPackaged`、macOS 打包走 `utilityProcess.fork`（darwin 分支不含 `ELECTRON_RUN_AS_NODE`）。
 
 Sources: [lib/csp.ts](lib/csp.ts#L1-L63), [electron/csp.ts](electron/csp.ts#L1-L22), [lib/csp.test.ts](lib/csp.test.ts#L1-L43)
 

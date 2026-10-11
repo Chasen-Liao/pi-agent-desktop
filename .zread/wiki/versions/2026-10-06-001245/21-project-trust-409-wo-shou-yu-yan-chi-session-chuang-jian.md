@@ -1,4 +1,8 @@
-**Project Trust** 是 Pi Agent 桌面端的安全机制：当用户在包含**需信任资源**（如 `.pi/skills` 自定义技能目录）的项目中发起首次对话时，服务端拦截请求并返回 **HTTP 409**，要求用户通过 UI 明确授权后才会创建会话文件（`.jsonl`）并启动 Agent 进程。这种 **延迟 Session 创建** 设计确保了：未受信项目的代码永远不会被 Agent 读取、工具永远不会被调用、会话文件永远不会落盘。
+**Project Trust** 是 Pi Agent 桌面端的安全机制：在 `startRpcSession` / SSE 订阅之前，路由层调用 `evaluateProjectTrust(cwd)`。若项目含需信任资源且尚无决策，返回 **HTTP 409**，body 为 `NeedsTrustPayload`：`{ needsTrust: true, cwd, options }`。用户 `POST /api/trust { cwd, optionId }` → `applyTrustDecision` 后，前端再重试原请求。
+
+**延迟 Session 创建**只约束**新建**路径（`POST /api/agent/new`）：409 之前不会创建 `.jsonl`、不会启动 Agent。恢复已有会话时 `.jsonl` 已在磁盘上，但仍会在 `POST /api/agent/[id]` 与 `GET /api/agent/[id]/events` 上 409，直到信任通过才 `startRpcSession`。
+
+**Next.js `middleware.ts` 不是信任握手**：它只做 `/api/*` Origin 校验与页面 CSP。信任门控在上述路由处理器内、调用 `startRpcSession` 之前完成。已在注册表中且 `isAlive()` 的会话走 fast path，不再重复 `evaluateProjectTrust`。
 
 本文档详细剖析 409 握手的完整流程、信任决策的持久化策略、会话级临时信任的内存实现，以及前后端协作的代码路径。
 
@@ -276,9 +280,12 @@ interface Props {
 
 | 路由 | 方法 | 职责 | 关键逻辑 |
 |------|------|------|----------|
-| `/api/agent/new` | POST | 创建新会话并发送首条消息 | 调用 `evaluateProjectTrust`，若 `prompt` 返回 409 |
-| `/api/trust` | POST | 接收用户决策，持久化或写内存 | `applyTrustDecision`，返回 `{trusted, persisted}` |
+| `/api/agent/new` | POST | 创建新会话并发送首条消息 | **先** `evaluateProjectTrust`，`prompt` 则 409；通过后才 `startRpcSession` |
+| `/api/agent/[id]` | POST | 向已有会话发命令 | 无存活 wrapper 时同样先 `evaluateProjectTrust`；存活会话 fast path 跳过 |
+| `/api/agent/[id]/events` | GET | SSE | 无存活 wrapper 时先 `evaluateProjectTrust`，409 则不建流 |
+| `/api/trust` | POST | `{ cwd, optionId }` | `applyTrustDecision` → `{ success: true, trusted, persisted }`；`optionId`：`trust` / `trust-parent` / `trust-session` / `deny` / `deny-session` |
 | `/api/trust` | GET | 查询当前目录信任状态 | `evaluateProjectTrust`，供调试/预检 |
+| `middleware.ts` | — | Origin / CSP | **不参与** 409 握手 |
 
 **`/api/agent/new` 信任检查节点**：
 

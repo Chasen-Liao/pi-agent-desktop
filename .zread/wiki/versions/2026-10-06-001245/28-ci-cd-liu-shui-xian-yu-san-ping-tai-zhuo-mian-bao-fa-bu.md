@@ -7,20 +7,23 @@ Sources: [.github/workflows/ci.yml](.github/workflows/ci.yml#L1-L119), [.github/
 ```mermaid
 flowchart TD
     subgraph CI["持续集成 (ci.yml)"]
-        A1[Pull Request / Push to main] --> A2[lint · typecheck · test]
+        A1[Pull Request / Push to main] --> A2[lint · typecheck · test ubuntu 5min]
+        A1 --> A4[Windows 测试子集]
+        A1 --> A5[macOS 测试子集]
         A2 --> A3[Next.js standalone 构建]
-        A2 --> A4[Windows 测试子集]
-        A2 --> A5[macOS 测试子集]
     end
 
     subgraph CD["桌面包发布 (desktop-packages.yml)"]
-        B1[Tag v* 推送 / workflow_dispatch] --> B2[并行三平台打包矩阵]
-        B2 --> B3[Windows: NSIS 安装包]
-        B2 --> B4[Linux: DEB 包]
+        B1[Tag vX.Y.Z 推送] --> B2[并行三平台打包矩阵]
+        B0[workflow_dispatch] --> B2
+        B2 --> B3[Windows: NSIS]
+        B2 --> B4[Linux: DEB]
         B2 --> B5[macOS: Universal DMG + ZIP]
         B3 & B4 & B5 --> B6[冒烟测试验证]
         B6 --> B7[上传 Artifact]
-        B7 --> B8[发布 GitHub Release]
+        B1 --> B8[publish job: GitHub Release 10 资产]
+        B7 --> B8
+        B0 -.->|不发 Release| B7
     end
 
     subgraph Local["本地构建与验证"]
@@ -30,9 +33,11 @@ flowchart TD
         C4 --> C5[scripts/smoke-packaged-standalone.mjs]
     end
 
-    CI -.->|PR 合并后| CD
+    CI -.->|合并 main 后打 vX.Y.Z tag| CD
     Local -.->|fallback 复现| CD
 ```
+
+桌面发版路径是 **推 `vX.Y.Z` tag → CI 打包**。`npm run release` 只发 npm CLI 包（还会 `npm version patch`），**不是**桌面 Release。日常 `npm run dev` 期间不要另跑 `next build`（污染 `.next/`）。
 
 ---
 
@@ -86,15 +91,15 @@ Sources: [package.json](package.json#L23-L30)
 
 ## 二、三平台桌面包构建：desktop-packages.yml
 
-Release 工作流在 **Git tag 推送（`v*`）** 或 **手动触发** 时运行，**不取消进行中作业**（`cancel-in-progress: false`），避免并行打包时的资源争用。
+Release 工作流在 **Git tag 推送（`v*`）** 或 **手动 `workflow_dispatch`** 时运行，**不取消进行中作业**（`cancel-in-progress: false`）。`publish` job 仅在 `refs/tags/v*` 上创建/上传 GitHub Release；手动触发只打包并上传 Actions artifact，**不发 Release**。
 
 ### 2.1 矩阵策略与产物映射
 
 | 平台 | Runner | 构建脚本 | 产物 | 验证步骤 |
 |------|--------|----------|------|----------|
-| Windows | `windows-latest` | `npm run dist` | `Setup-*.exe`, `.blockmap`, `latest.yml` | 冒烟测试 |
-| Linux | `ubuntu-latest` | `npm run dist` | `*-linux-*.deb`, `latest-linux.yml` | `dpkg-deb -I` + 冒烟测试 |
-| macOS | `macos-latest` | `npm run dist:mac` | `*-mac-universal.dmg/.zip`, `.blockmap`, `latest-mac.yml` | `hdiutil verify` + `unzip -t` + `lipo` 双架构校验 + 冒烟测试 |
+| Windows | `windows-latest` | `npm run dist` | `Pi-Agent-Desktop-Setup-${version}.exe` + `.blockmap` + `latest.yml` | 冒烟测试 |
+| Linux | `ubuntu-latest` | `npm run dist` | `Pi-Agent-Desktop-${version}-linux-x64.deb` + `latest-linux.yml` | `dpkg-deb -I` + 冒烟测试 |
+| macOS | `macos-latest` | `npm run dist:mac` | `Pi-Agent-Desktop-${version}-mac-universal.dmg/.zip` + `.blockmap` + `latest-mac.yml` | `hdiutil verify` + `unzip -t` + `lipo` 双架构校验 + 冒烟测试 |
 
 **关键环境变量**：
 ```yaml
@@ -149,15 +154,15 @@ sequenceDiagram
 **资产清单（共 10 个）**：
 | 文件模式 | 平台 | 说明 |
 |----------|------|------|
-| `Pi-Agent-Desktop-Setup-*.exe` | Windows | NSIS 安装包 |
-| `Pi-Agent-Desktop-Setup-*.exe.blockmap` | Windows | 差量更新清单 |
+| `Pi-Agent-Desktop-Setup-${version}.exe` | Windows | NSIS 安装包 |
+| `Pi-Agent-Desktop-Setup-${version}.exe.blockmap` | Windows | 差量更新清单 |
 | `latest.yml` | Windows | electron-updater 更新元数据 |
-| `Pi-Agent-Desktop-*-linux-*.deb` | Linux | DEB 安装包 |
+| `Pi-Agent-Desktop-${version}-linux-x64.deb` | Linux | DEB（`artifactName` 的 `${arch}` 为 `x64`；工作流 glob 为 `*-linux-*.deb`） |
 | `latest-linux.yml` | Linux | 更新元数据 |
-| `Pi-Agent-Desktop-*-mac-universal.dmg` | macOS | Universal DMG |
-| `Pi-Agent-Desktop-*-mac-universal.dmg.blockmap` | macOS | 差量更新 |
-| `Pi-Agent-Desktop-*-mac-universal.zip` | macOS | Universal ZIP（备选分发） |
-| `Pi-Agent-Desktop-*-mac-universal.zip.blockmap` | macOS | 差量更新 |
+| `Pi-Agent-Desktop-${version}-mac-universal.dmg` | macOS | Universal DMG |
+| `Pi-Agent-Desktop-${version}-mac-universal.dmg.blockmap` | macOS | 差量更新 |
+| `Pi-Agent-Desktop-${version}-mac-universal.zip` | macOS | Universal ZIP（备选分发） |
+| `Pi-Agent-Desktop-${version}-mac-universal.zip.blockmap` | macOS | 差量更新 |
 | `latest-mac.yml` | macOS | 更新元数据 |
 
 **发布说明来源**：若 `docs/releases/vX.Y.Z.md` 存在则作为 `--notes-file`，否则自动生成。
@@ -166,9 +171,9 @@ Sources: [.github/workflows/desktop-packages.yml](.github/workflows/desktop-pack
 
 ---
 
-## 三、立构建管线：build:standalone 深度解析
+## 三、独立构建管线：build:standalone 深度解析
 
-`npm run build:standalone` 是桌面包构建的**核心前置步骤**，由 5 个串行脚本组成：
+`npm run build:standalone` 是桌面包构建的**核心前置步骤**（`npm run build` 只是它的别名），由 `next build` + 5 个后续脚本串行组成。日常开发请用 `npm run dev`，不要为了“验证一下”去跑 `next build`。
 
 ```json
 "build:standalone": "next build && node scripts/ensure-standalone-next-runtimes.mjs && node scripts/ensure-standalone-pi-runtime.mjs && node scripts/ensure-standalone-macos-universal-runtimes.mjs && node scripts/dereference-standalone-symlinks.mjs && node scripts/smoke-standalone-server.mjs"
@@ -232,7 +237,7 @@ uniqueToArm64: ../../../node_modules/.../semver/bin/semver.js
 
 Sources: [scripts/dereference-standalone-symlinks.mjs](scripts/dereference-standalone-symlinks.mjs#L1-L78)
 
-### 3.5 立构建冒烟测试：`smoke-standalone-server.mjs`
+### 3.5 独立构建冒烟测试：`smoke-standalone-server.mjs`
 
 **验证目标**：standalone 服务器在隔离环境中能正常启动、健康检查通过、会话 API 与导出功能工作。
 
@@ -281,14 +286,14 @@ files:
 extraResources:
   - from: .next/standalone
     to: standalone
-    filter: [ "**/*", "!node_modules", "!release", ... ]
+    filter: [ "**/*", "!node_modules", "!release", ... ]   # filter:**/* 会静默丢掉 node_modules
   - from: .next/standalone/node_modules
-    to: standalone/node_modules
+    to: standalone/node_modules   # 必需的第二条；不要合并进上一条
   - from: .next/static
     to: standalone/.next/static
   - from: public
     to: standalone/public
-  # electron-updater 运行时依赖链（16 个包）
+  # electron-updater 及其运行时依赖（16 个包）拷到 app/node_modules/...
   - from: node_modules/electron-updater
     to: app/node_modules/electron-updater
   - from: node_modules/builder-util-runtime
@@ -432,17 +437,17 @@ npm run dist:mac
 ```
 release/
 ├── win-unpacked/           # Windows 解包目录（冒烟测试用）
-├── Pi-Agent-Desktop-Setup-*.exe
-├── Pi-Agent-Desktop-Setup-*.exe.blockmap
+├── Pi-Agent-Desktop-Setup-${version}.exe
+├── Pi-Agent-Desktop-Setup-${version}.exe.blockmap
 ├── latest.yml
 ├── linux-unpacked/         # Linux 解包目录
-├── Pi-Agent-Desktop-*-linux-*.deb
+├── Pi-Agent-Desktop-${version}-linux-x64.deb
 ├── latest-linux.yml
 ├── mac-universal/          # macOS Universal 合并后 .app
-├── Pi-Agent-Desktop-*-mac-universal.dmg
-├── Pi-Agent-Desktop-*-mac-universal.dmg.blockmap
-├── Pi-Agent-Desktop-*-mac-universal.zip
-├── Pi-Agent-Desktop-*-mac-universal.zip.blockmap
+├── Pi-Agent-Desktop-${version}-mac-universal.dmg
+├── Pi-Agent-Desktop-${version}-mac-universal.dmg.blockmap
+├── Pi-Agent-Desktop-${version}-mac-universal.zip
+├── Pi-Agent-Desktop-${version}-mac-universal.zip.blockmap
 └── latest-mac.yml
 ```
 
@@ -497,7 +502,7 @@ Sources: [docs/RELEASING.md](docs/RELEASING.md#L40-L47), [scripts/smoke-packaged
 ☐ docs/releases/vX.Y.Z.md 发布说明已编写
 ☐ 本地跑通：lint / tsc / electron tsc / test / check:electron-deps / npm audit
 ☐ PR 合并至 main，CI 全绿
-☐ git tag vX.Y.Z && git push origin vX.Y.Z
+☐ git tag vX.Y.Z && git push origin vX.Y.Z（桌面发版；不要用 `npm run release`）
 ☐ GitHub Actions desktop-packages.yml 三平台全绿
 ☐ GitHub Release 10 个资产齐全、latest*.yml version/SHA512 正确
 ☐ Release Notes 披露：Windows 无签名 SmartScreen、macOS 无签名无公证 Gatekeeper

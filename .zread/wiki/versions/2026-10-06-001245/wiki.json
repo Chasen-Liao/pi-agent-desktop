@@ -1,6 +1,6 @@
 {
   "id": "2026-10-06-001245",
-  "generated_at": "2026-10-05T16:12:45.9002375Z",
+  "generated_at": "2026-10-11T06:57:43.0000000Z",
   "language": "zh",
   "pages": [
     {
@@ -104,7 +104,7 @@
     },
     {
       "slug": "14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone",
-      "title": "三种分支机制：Fork、会话内分支、Git Worktree Clone",
+      "title": "四种会话分叉机制：Fork、会话内分支、跨文件 Branch、Clone",
       "file": "14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone.md",
       "section": "Deep Dive",
       "group": "会话管理与分支模型",
@@ -192,7 +192,7 @@
     },
     {
       "slug": "25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran",
-      "title": "液态思考球：WebGPU 优先 Canvas 降级渲染",
+      "title": "液态思考球：WebGPU 优先 CSS 降级渲染",
       "file": "25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran.md",
       "section": "Deep Dive",
       "group": "前端架构与 UI 系统",

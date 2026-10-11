@@ -174,11 +174,13 @@ db.prepare(`INSERT INTO memories_fts(id, project_id, title, content) VALUES (?, 
   .run(id, projectId, title, content);
 ```
 
-**去重阈值**（`jaccard.ts`）：
+**去重阈值**（`lib/ltm/jaccard.ts`，**不是**全程 Jaccard）：
+
+导出函数名为 `jaccardSimilarity`，但 `isNearDuplicate` 按脚本文档切换阈值：双方都有 CJK bigram 时实际返回 **Dice**（阈值 **0.5**）；否则走拉丁 **Jaccard**（阈值 **0.7**）。
 
 | 文本特征 | 算法 | 阈值 | 说明 |
 |----------|------|------|------|
-| 含 CJK（中日韩统一表意文字、平假名、片假名、谚文） | **Dice 系数**（bigram） | **0.5** | CJK 无词间距，单字 bigram 集合大，Jaccard 严重低估；Dice 分子 `2*|A∩B|` 更宽容 |
+| 含 CJK（中日韩统一表意文字、平假名、片假名、谚文） | **Dice 系数**（CJK 连续 run 的字符 bigram） | **0.5** | CJK 无词间距，bigram 集合大，Jaccard 严重低估；Dice 分子 `2*|A∩B|` 更宽容。混合中英时只对 CJK bigram 打分，避免一个共享拉丁词把无关中文记忆判成超集 |
 | 纯拉丁（含空格分词） | **Jaccard** | **0.7** | 保持 v1 行为，`token.length > 2` 过滤停用词 |
 
 > **单字 CJK 回退**：`"好"` 与 `"好"` 无 bigram，回退精确匹配返回 1.0，防止退化。
@@ -350,8 +352,8 @@ Sources: [lib/ltm/config.ts](lib/ltm/config.ts#L1-L60), [lib/ltm/observe-hooks.t
 | `/api/memory/recall` | GET | `cwd`(必填) `q`(必填) `limit?` | `{ hits: RecallHit[] }` | 400/503/500 |
 | `/api/memory/remember` | POST | `cwd` `content` `type?` `concepts?` `files?` | `{ id, type }` | 400/503/500 |
 | `/api/memory/forget` | POST | `cwd` `memoryIds?` `observationIds?`（至少提供一个，否则 400） | `{ deleted: number }` | 400/503/500 |
-| `/api/memory/stats` | GET | `cwd` | `{ memoryCount, observationCount }` | 400/503/501/500 |
-| `/api/memory/health` | GET | — | `{ ok, backend, detail?, enabled }` | 503/500 |
+| `/api/memory/stats` | GET | `cwd`（必填，`parseStatsQuery`） | **直接** `{ memoryCount, observationCount }`（不包 `{success,data}`）。`memoryCount` 只计 `is_latest=1`；`observationCount` 为该项目全部观测。非 `SqliteBackend` → 501 `ltm_stats_not_supported`；未启用 → 503 `ltm_disabled` | 400/503/501/500 |
+| `/api/memory/health` | GET | — | `{ ok, backend, detail?, enabled }`（`health()` 展开后再加 `enabled`） | 503/500 |
 
 **错误码语义：**
 

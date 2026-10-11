@@ -30,7 +30,7 @@ Sources: [package.json](package.json#L1-L81), [scripts/smoke-standalone-server.m
 
 **设计原则**：
 
-1. **零外部依赖**：仅使用 Node.js 20+ 内置的 `node:test` 与 `node:assert`，无 Jest/Vitest/Mocha 运行时开销
+1. **零测试框架、无 ts-node**：CI 与本地均用 **Node 24** 内置 `node:test` / `node:assert` 直接跑 `*.test.ts`；**不要**加 `ts-node` / `--loader ts-node/esm`。无 Jest/Vitest/Mocha
 2. **平台分层**：通用单元测试全平台运行；平台相关逻辑（路径规范化、文件锁、进程树、macOS 通用二进制分发）由专用脚本子集覆盖
 3. **构建即测试**：`build:standalone` 与 `pack/dist` 命令内嵌冒烟测试，**构建失败即测试失败**，无需额外 CI 阶段
 4. **源码级契约测试**：部分测试通过读取源文件 AST/文本验证实现模式（如 `useAgentSession` 的纯函数更新器、`FileViewer` 的渲染分支顺序），而非运行时渲染
@@ -51,7 +51,7 @@ Sources: [package.json](package.json#L13-L28), [.github/workflows/ci.yml](.githu
 
 | 标志 | 作用 | 理由 |
 |------|------|------|
-| `--test` | 启用原生测试运行器 | Node.js 18+ 稳定，无需额外安装 |
+| `--test` | 启用原生测试运行器 | Node 24 原生跑 TypeScript 测试文件，**不用 ts-node** |
 | `--test-force-exit` | 测试完成后强制退出进程 | SQLite 连接池、HTTP 服务器等异步句柄会阻塞自然退出 |
 | glob 模式显式列举 | 精确控制测试发现范围 | 避免误拾 `.test.ts` 之外的文件；`middleware.test.ts` 需在根目录显式引入 |
 
@@ -90,8 +90,8 @@ Sources: [lib/path-policy.test.ts](lib/path-policy.test.ts#L1-L110), [lib/sessio
 全量测试套件包含 **Next.js 中间件**、**Web 服务器路由**、**React 组件契约** 等与平台无关的测试。但 **Electron 主进程**、**文件系统路径规范化**、**进程树管理**、**macOS 通用二进制分发** 等模块存在显著平台差异。为避免在非目标平台上运行无关测试（或因平台 API 不存在而失败），引入两个专用脚本：
 
 ```json
-"test:windows": "node --test --test-force-exit \"electron/**/*.test.ts\" \"lib/file-paths.test.ts\" \"lib/path-policy.test.ts\" \"lib/session-lock.test.ts\" \"lib/session-path-cache.test.ts\" \"lib/file-browser.test.ts\" \"lib/custom-path-selection.test.ts\" \"lib/git-worktree.test.ts\" \"app/api/...\"",
-"test:macos": "node --test --test-force-exit \"electron/**/*.test.ts\" \"lib/file-paths.test.ts\" \"lib/path-policy.test.ts\" \"lib/session-lock.test.ts\" \"lib/session-path-cache.test.ts\" \"lib/file-browser.test.ts\" \"lib/custom-path-selection.test.ts\" \"lib/git-worktree.test.ts\" \"app/api/...\" \"lib/electron-*.test.mjs\" \"scripts/ensure-standalone-macos-universal-runtimes.test.mjs\""
+"test:windows": "node --test --test-force-exit \"electron/**/*.test.ts\" \"lib/file-paths.test.ts\" \"lib/path-policy.test.ts\" \"lib/session-lock.test.ts\" \"lib/session-path-cache.test.ts\" \"lib/file-browser.test.ts\" \"lib/custom-path-selection.test.ts\" \"lib/git-worktree.test.ts\" \"app/api/sessions/[[]id]/routes.test.ts\" \"lib/electron-*.test.mjs\" \"lib/installer-script.test.mjs\" \"lib/electron-builder-config.test.mjs\" \"package.test.ts\"",
+"test:macos": "node --test --test-force-exit \"electron/**/*.test.ts\" \"lib/file-paths.test.ts\" \"lib/path-policy.test.ts\" \"lib/session-lock.test.ts\" \"lib/session-path-cache.test.ts\" \"lib/file-browser.test.ts\" \"lib/custom-path-selection.test.ts\" \"lib/git-worktree.test.ts\" \"app/api/sessions/[[]id]/routes.test.ts\" \"lib/electron-*.test.mjs\" \"lib/electron-builder-config.test.mjs\" \"scripts/ensure-standalone-macos-universal-runtimes.test.mjs\" \"package.test.ts\""
 ```
 
 **差异点**：
@@ -99,9 +99,10 @@ Sources: [lib/path-policy.test.ts](lib/path-policy.test.ts#L1-L110), [lib/sessio
 | 维度 | Windows 子集 | macOS 子集 |
 |------|-------------|-----------|
 | Electron 测试 | 全部 `electron/**/*.test.ts` | 全部 `electron/**/*.test.ts` |
-| 核心 lib 测试 | 路径、策略、锁、缓存、浏览器、Git worktree | 同上 |
-| macOS 专属 | ❌ | `ensure-standalone-macos-universal-runtimes.test.mjs`、`lib/electron-*.test.mjs` |
-| 中间件测试 | ❌ (仅全量套件) | ❌ (仅全量套件) |
+| 核心 lib 测试 | 路径、策略、锁、缓存、浏览器、Git worktree、`sessions/[id]` 路由 | 同上 |
+| 打包契约 | `lib/electron-*.test.mjs`、`electron-builder-config.test.mjs`、`package.test.ts` | 同上 |
+| 平台专属 | `lib/installer-script.test.mjs`（NSIS） | `scripts/ensure-standalone-macos-universal-runtimes.test.mjs` |
+| 中间件测试 | ❌（仅全量 `npm test`） | ❌（仅全量 `npm test`） |
 
 > **关键约束**：`middleware.test.ts` 仅在全量 `npm test` 中运行，**不**包含在平台子集中，避免重复执行且保持平台子集聚焦。
 
@@ -228,7 +229,8 @@ function findPackagedOutput() {
     // release/win-unpacked/resources/standalone + Pi Agent Desktop.exe
   }
   if (process.platform === "linux") {
-    // release/linux-unpacked/resources/standalone + pi-agent-desktop/Pi Agent Desktop
+    // release/linux-unpacked/resources/standalone
+    // 可执行文件优先 pi-agent-desktop，其次 "Pi Agent Desktop"
   }
   if (process.platform === "darwin") {
     // 遍历 release/mac[-arm64|-x64|-universal]/*.app/Contents/Resources/standalone
@@ -420,17 +422,17 @@ Sources: [package.test.ts](package.test.ts#L1-L141), [scripts/ensure-standalone-
 ```mermaid
 flowchart TD
     A[PR / Push to main] --> B[lint-typecheck-test ubuntu-latest]
-    B --> C1[build ubuntu-latest]
-    B --> D1[test-windows windows-latest]
-    B --> D2[test-macos macos-latest]
+    A --> D1[test-windows windows-latest]
+    A --> D2[test-macos macos-latest]
+    B --> C1[build ubuntu-latest npm run build]
     C1 --> E[完成]
     D1 --> E
     D2 --> E
 ```
 
-- **并行度**：`lint-typecheck-test` 通过后，`build`、`test-windows`、`test-macos` **三路并行**
-- **超时控制**：全量测试 5 分钟，平台子集 10 分钟
-- **Node 版本**：统一 Node 24（通过 `actions/setup-node@v4`）
+- **并行度**：`lint-typecheck-test`、`test-windows`、`test-macos` **同时启动**；仅 `build` 依赖 Linux 全量作业通过
+- **超时控制**：Ubuntu 全量 `npm test` **5 分钟**；平台子集 **10 分钟**
+- **Node 版本**：统一 Node 24（`actions/setup-node@v4`），无 ts-node
 
 Sources: [.github/workflows/ci.yml](.github/workflows/ci.yml#L1-L119)
 
@@ -438,15 +440,19 @@ Sources: [.github/workflows/ci.yml](.github/workflows/ci.yml#L1-L119)
 
 ```mermaid
 flowchart TD
-    A[Tag v* / workflow_dispatch] --> B[package matrix: windows, linux, macos]
-    B --> C1[Windows: build + electron-builder --dir + smoke]
-    B --> C2[Linux: build + electron-builder --dir + smoke + dpkg-deb验证]
-    B --> C3[macOS: build + electron-builder --mac --universal --dir + smoke + hdiutil/lipo验证]
+    A[Tag vX.Y.Z] --> B[package matrix: windows / linux / macos]
+    W[workflow_dispatch] --> B
+    B --> C1[Windows: npm run dist + smoke]
+    B --> C2[Linux: npm run dist + smoke + dpkg-deb]
+    B --> C3[macOS: npm run dist:mac + smoke + hdiutil/lipo]
     C1 --> D[Upload Artifacts]
     C2 --> D
     C3 --> D
-    D --> E[Publish to GitHub Release]
+    A --> E[publish job: GitHub Release 10 资产]
+    D --> E
 ```
+
+桌面发版是打 `vX.Y.Z` tag，不是 `npm run release`。`workflow_dispatch` 只上传 artifact。
 
 **macOS 通用二进制验证**：
 
@@ -519,7 +525,7 @@ node scripts/smoke-standalone-server.mjs .next/standalone $(which node)
 | `npm test` | 全量（所有平台无关 + 平台相关） | ~60s | 本地开发全量验证、CI 主作业 |
 | `npm run test:windows` | Windows 相关子集 | ~30s | Windows CI、本地 Windows 开发 |
 | `npm run test:macos` | macOS 相关子集 | ~30s | macOS CI、本地 macOS 开发 |
-| `npm run build` | 构建 + 立即冒烟 | ~120s | 发布前验证、CI build 作业 |
+| `npm run build` | 即 `build:standalone`（`next build` + 修补链 + 冒烟） | ~120s | 发布前 / CI `build` 作业；**不要**在日常 `npm run dev` 期间另跑 `next build` |
 | `npm run pack` | 构建 + 打包目录 + 冒烟 | ~180s | 安装包结构检查 |
 | `npm run dist` | 构建 + 打包安装程序 + 冒烟 | ~300s | 正式发布制品生产 |
 
