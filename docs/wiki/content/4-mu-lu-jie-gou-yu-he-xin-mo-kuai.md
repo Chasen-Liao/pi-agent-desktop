@@ -200,7 +200,7 @@ graph TB
     end
 
     subgraph NextJS_Server["Next.js 服务端 (Port 30141)"]
-        API_Agent[/api/agent/[id]/]
+        API_Agent["/api/agent/[id]/"]
         API_Sessions[/api/sessions/]
         API_MCP[/api/mcp/]
         API_Memory[/api/memory/]

@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="./wiki.css" />
   </head>
   <body>
+    <div class="wiki-progress" aria-hidden="true"><i id="wiki-progress-bar"></i></div>
     <header class="wiki-header">
       <a class="brand" href="../">
         <img src="../assets/logo.png" alt="" width="28" height="28" />
@@ -29,16 +30,23 @@
     </header>
     <div class="wiki-shell">
       <aside class="wiki-sidebar" id="wiki-nav" aria-label="架构目录"></aside>
-      <main class="wiki-main">
-        <p class="wiki-kicker" id="wiki-crumb">Architecture</p>
-        <h1 class="wiki-title" id="wiki-page-title">架构解析</h1>
-        <p class="wiki-status" id="wiki-status"></p>
-        <article class="wiki-article" id="wiki-article"></article>
-        <nav class="wiki-pager" id="wiki-pager" aria-label="上下篇"></nav>
-      </main>
+      <div class="wiki-body">
+        <main class="wiki-main">
+          <p class="wiki-kicker" id="wiki-crumb">Architecture</p>
+          <h1 class="wiki-title" id="wiki-page-title">架构解析</h1>
+          <label class="wiki-toc-select-wrap">
+            <span class="visually-hidden">跳转到本章章节</span>
+            <select id="wiki-toc-select" class="wiki-toc-select" hidden></select>
+          </label>
+          <p class="wiki-status" id="wiki-status"></p>
+          <article class="wiki-article" id="wiki-article"></article>
+          <nav class="wiki-pager" id="wiki-pager" aria-label="上下篇"></nav>
+        </main>
+        <nav class="wiki-toc" id="wiki-toc" aria-label="本章章节" hidden></nav>
+      </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11.6.0/dist/mermaid.min.js"></script>
-    <script src="./wiki.js"></script>
+    <script type="module" src="./wiki.js"></script>
   </body>
 </html>
