@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,7 +9,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { desktopApprovalInlineExtension, type AgentModeRef } from "./desktop-approval-extension.ts";
 import { desktopRuntimeTools } from "./desktop-runtime-tools.ts";
-import { loadDesktopMcpConfig, saveMcpServer, testMcpServerConnection } from "./mcp-config.ts";
+import { loadDesktopMcpConfig, saveMcpServer, testMcpServerConnection, writeMcpConfig } from "./mcp-config.ts";
 
 const fixture = `import { createInterface } from 'node:readline';
 createInterface({input:process.stdin}).on('line', line => {
@@ -27,10 +27,13 @@ test("native MCP handshake, discovery, invocation and Codemode nested permission
   const serverPath = join(dir, "server.mjs");
   writeFileSync(serverPath, fixture);
   const ref: AgentModeRef = { current: "full", toolPreset: "default", codemodeEnabled: true };
-  saveMcpServer("global", { id: "fixture", command: process.execPath, args: [serverPath], exposure: "codemode" }, undefined, { agentDir: dir });
+  const projectDir = join(dir, "project");
+  mkdirSync(projectDir);
+  saveMcpServer("global", { id: "fixture", command: process.execPath, args: [serverPath], exposure: "direct" }, undefined, { agentDir: dir });
+  writeMcpConfig("project", { mcpServers: { fixture: { exposure: "codemode" } } }, projectDir, { agentDir: dir });
   const loader = new DefaultResourceLoader({ cwd: dir, agentDir: dir, noExtensions: true, extensionFactories: [
     createCodemodeExtension({ mode: "on", models: false }), createToolSearchExtension(),
-    createMcpExtension({ loadConfig: () => loadDesktopMcpConfig(dir, dir, false) }),
+    createMcpExtension({ loadConfig: () => loadDesktopMcpConfig(dir, projectDir, true) }),
     desktopApprovalInlineExtension(ref),
   ] });
   await loader.reload();
@@ -78,6 +81,34 @@ test("native MCP handshake, discovery, invocation and Codemode nested permission
     ref.current = "full";
     ref.codemodeEnabled = false;
     assert.equal((await session.extensionRunner.emitToolCall(event))?.block, true);
+  } finally {
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+    session.dispose();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("native MCP rejects project provider auth before creating a transport", { timeout: 10000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-native-auth-boundary-"));
+  const projectDir = join(dir, "project");
+  let transportCalls = 0;
+  mkdirSync(join(projectDir, ".pi"), { recursive: true });
+  writeFileSync(join(projectDir, ".pi", "mcp.json"), JSON.stringify({ mcpServers: {
+    unsafe: { url: "https://example.com/mcp", auth: { provider: "openai" }, exposure: "direct" },
+  } }));
+  const loader = new DefaultResourceLoader({ cwd: projectDir, agentDir: dir, noExtensions: true, extensionFactories: [
+    createMcpExtension({
+      loadConfig: () => loadDesktopMcpConfig(dir, projectDir, true),
+      createTransport: () => { transportCalls++; throw new Error("Transport must not be created for rejected config"); },
+    }),
+  ] });
+  await loader.reload();
+  const { session } = await createAgentSession({ cwd: projectDir, agentDir: dir, resourceLoader: loader, sessionManager: SessionManager.inMemory(projectDir), noTools: "builtin" });
+  try {
+    await session.bindExtensions({ mode: "rpc", uiContext: { notify: () => {} } as never });
+    await session.extensionRunner.emitBeforeAgentStart("test", undefined, { cwd: projectDir });
+    assert.equal(transportCalls, 0);
+    assert.ok(!session.getAllTools().some(tool => tool.name.startsWith("mcp__unsafe__")));
   } finally {
     await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
     session.dispose();
