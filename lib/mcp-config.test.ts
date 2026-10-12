@@ -85,6 +85,165 @@ test("malformed MCP entries do not prevent later valid servers from loading", ()
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("project MCP definitions cannot select a provider credential", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-project-auth-"));
+  const agentDir = join(dir, "agent");
+  try {
+    saveMcpServer("global", { id: "safe", command: "node" }, undefined, { agentDir });
+    mkdirSync(join(dir, ".pi"));
+    writeFileSync(join(dir, ".pi", "mcp.json"), JSON.stringify({ mcpServers: {
+      unsafe: { url: "https://example.com/mcp", auth: { provider: "openai" }, exposure: "direct" },
+    } }));
+    const loaded = loadDesktopMcpConfig(agentDir, dir, true);
+    assert.deepEqual(loaded.servers.map(server => server.name), ["safe"]);
+    assert.match(loaded.errors.join("\n"), /auth.*global/i);
+    assert.deepEqual(getMcpServers(dir, { agentDir }).map(server => server.id), ["safe"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("provider credentials require a valid provider and HTTPS outside loopback", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-auth-url-"));
+  try {
+    for (const entry of [
+      { url: "http://example.com/mcp", auth: { provider: "openai" } },
+      { url: "http://localhost.example.com/mcp", auth: { provider: "openai" } },
+      { url: "ftp://localhost/mcp", auth: { provider: "openai" } },
+      { url: "invalid", auth: { provider: "openai" } },
+      { url: "https://example.com/mcp", auth: {} },
+      { url: "https://example.com/mcp", auth: null },
+      { url: "https://example.com/mcp", auth: { provider: 123 } },
+    ]) {
+      writeFileSync(join(dir, "mcp.json"), JSON.stringify({ mcpServers: { unsafe: entry } }));
+      const loaded = loadDesktopMcpConfig(dir, dir, false);
+      assert.equal(loaded.servers.length, 0, JSON.stringify(entry));
+      assert.equal(loaded.errors.length, 1);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("global provider authentication permits HTTPS and exact loopback HTTP hosts", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-auth-allowed-"));
+  try {
+    for (const url of ["https://example.com/mcp", "http://localhost/mcp", "http://127.0.0.1/mcp", "http://[::1]/mcp"]) {
+      writeFileSync(join(dir, "mcp.json"), JSON.stringify({ mcpServers: { safe: { url, auth: { provider: "openai" } } } }));
+      const loaded = loadDesktopMcpConfig(dir, dir, false);
+      assert.deepEqual(loaded.errors, []);
+      const config = loaded.servers[0].config;
+      assert.ok("url" in config);
+      assert.equal(config.url, url);
+      assert.deepEqual(config.auth, { provider: "openai" });
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("saving cannot bypass provider-auth rules or retarget existing credentials to HTTP", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-save-auth-"));
+  const agentDir = join(dir, "agent");
+  try {
+    const server = { id: "safe", transport: "http" as const, url: "https://example.com/mcp", auth: { provider: "openai" } };
+    assert.throws(() => saveMcpServer("project", server, dir, { agentDir }), /auth.*global/);
+    assert.equal(readMcpConfig("project", dir, { agentDir }).mcpServers?.safe, undefined);
+    saveMcpServer("global", server, undefined, { agentDir });
+    assert.throws(() => saveMcpServer("global", { id: "safe", transport: "http", url: "http://example.com/mcp" }, undefined, { agentDir }), /auth.*https/);
+    assert.equal(readMcpConfig("global", undefined, { agentDir }).mcpServers?.safe.url, server.url);
+    saveMcpServer("global", { id: "safe", command: "node" }, undefined, { agentDir });
+    assert.equal(readMcpConfig("global", undefined, { agentDir }).mcpServers?.safe.auth, undefined);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("partial project overrides preserve global connection, credentials and ownership", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-partial-"));
+  const agentDir = join(dir, "agent");
+  try {
+    mkdirSync(agentDir);
+    mkdirSync(join(dir, ".pi"));
+    const globalPath = join(agentDir, "mcp.json");
+    const projectPath = join(dir, ".pi", "mcp.json");
+    const globalText = JSON.stringify({ mcpServers: { docs: {
+      url: "https://example.com/mcp", headers: { "X-Fixture": "test" },
+      auth: { provider: "openai" }, exposure: "direct", enabled: false,
+    } } });
+    const projectText = JSON.stringify({ mcpServers: { docs: {
+      enabled: true, exposure: "deferred", toolExposure: { remove: "hidden" },
+    } } });
+    writeFileSync(globalPath, globalText);
+    writeFileSync(projectPath, projectText);
+    const loaded = loadDesktopMcpConfig(agentDir, dir, true);
+    assert.deepEqual(loaded.errors, []);
+    assert.equal(loaded.projectConfig, projectPath);
+    const entry = loaded.servers[0];
+    assert.equal(entry.source, globalPath);
+    assert.equal(entry.scope, "global");
+    assert.equal(entry.override, projectPath);
+    assert.ok("url" in entry.config);
+    assert.equal(entry.config.url, "https://example.com/mcp");
+    assert.deepEqual(entry.config.headers, { "X-Fixture": "test" });
+    assert.deepEqual(entry.config.auth, { provider: "openai" });
+    assert.equal(entry.config.enabled, true);
+    assert.equal(entry.config.exposure, "deferred");
+    assert.deepEqual(entry.config.toolExposure, { remove: "hidden" });
+    const visible = getMcpServers(dir, { agentDir })[0];
+    assert.equal(visible.scope, "project");
+    assert.equal(visible.transport, "http");
+    assert.equal(visible.url, "https://example.com/mcp");
+    assert.equal(visible.disabled, false);
+    assert.equal(readFileSync(globalPath, "utf8"), globalText);
+    assert.equal(readFileSync(projectPath, "utf8"), projectText);
+    assert.equal(loadDesktopMcpConfig(agentDir, dir, false).servers[0].config.enabled, false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("legacy partial disable overrides keep the global command when toggled", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-partial-disabled-"));
+  const agentDir = join(dir, "agent");
+  try {
+    saveMcpServer("global", { id: "same", command: "node", args: ["--version"] }, undefined, { agentDir });
+    writeMcpConfig("project", { mcpServers: { same: { disabled: true } } }, dir, { agentDir });
+    const loaded = loadDesktopMcpConfig(agentDir, dir, true);
+    assert.deepEqual(loaded.errors, []);
+    assert.ok("command" in loaded.servers[0].config);
+    assert.equal(loaded.servers[0].config.command, "node");
+    assert.equal(loaded.servers[0].config.enabled, false);
+    assert.equal(getMcpServers(dir, { agentDir })[0].status, "disabled");
+    assert.equal(toggleMcpServer("project", "same", false, dir, { agentDir }), true);
+    assert.equal(loadDesktopMcpConfig(agentDir, dir, true).servers[0].config.enabled, true);
+    assert.equal(readMcpConfig("project", dir, { agentDir }).mcpServers?.same.command, undefined);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("partial overrides cannot change connection or credential fields", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-partial-invalid-"));
+  const agentDir = join(dir, "agent");
+  try {
+    saveMcpServer("global", { id: "safe", transport: "http", url: "https://example.com/mcp" }, undefined, { agentDir });
+    mkdirSync(join(dir, ".pi"));
+    for (const patch of [
+      { exposure: "direct", auth: { provider: "openai" } },
+      { enabled: true, headers: { Authorization: "fixture-only" } },
+      { exposure: "unsupported" },
+      { toolExposure: { remove: "unsupported" } },
+      { enabled: "false" },
+    ]) {
+      writeFileSync(join(dir, ".pi", "mcp.json"), JSON.stringify({ mcpServers: { safe: patch } }));
+      const loaded = loadDesktopMcpConfig(agentDir, dir, true);
+      assert.equal(loaded.servers.length, 1);
+      assert.equal(loaded.errors.length, 1, JSON.stringify(patch));
+      assert.equal(loaded.servers[0].override, undefined);
+      assert.equal(loaded.servers[0].scope, "global");
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("orphan project overrides report errors instead of creating invalid stdio servers", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-partial-orphan-"));
+  try {
+    writeMcpConfig("project", { mcpServers: { missing: { enabled: true, exposure: "deferred" } } }, dir, { agentDir: dir });
+    const loaded = loadDesktopMcpConfig(dir, dir, true);
+    assert.deepEqual(loaded.servers, []);
+    assert.match(loaded.errors.join("\n"), /global server/i);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("getMcpConfigPath resolves paths correctly", () => {
   const customAgentDir = "C:/tmp/custom-agent";
   const globalPath = getMcpConfigPath("global", undefined, { agentDir: customAgentDir });
