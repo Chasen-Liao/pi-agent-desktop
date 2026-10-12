@@ -92,9 +92,9 @@ Sources: [package.json](package.json#L1-L81), [tsconfig.json](tsconfig.json#L1-L
 
 | 包名 | 版本 | 职责 | 集成方式 |
 |------|------|------|----------|
-| `@earendil-works/pi-coding-agent` | ^0.99.1 | 会话生命周期、AgentSession、工具系统、权限策略、长期记忆 | `createPiRuntime` 必须再走 `createAgentSessionServices`，扩展注册的模型才会进选择器 |
-| `@earendil-works/pi-ai` | ^0.99.1 | 模型提供商抽象、OAuth/API Key 认证、模型注册表 | `pi-runtime.ts` 中的 `listOAuthProviders`、`loginProvider`、`setProviderApiKey` 直接调用 |
-| `@earendil-works/pi-mcp` | ^0.99.1 | MCP 服务器配置、资源/工具/提示词协议 | 双级配置（用户级 + 项目级），通过 `lib/mcp-config.ts` 管理 |
+| `@earendil-works/pi-coding-agent` | ^1.1.0 | 会话生命周期、AgentSession、工具系统、权限策略、长期记忆 | `createPiRuntime` 必须再走 `createAgentSessionServices`，扩展注册的模型才会进选择器 |
+| `@earendil-works/pi-ai` | ^1.1.0 | 模型提供商抽象、OAuth/API Key 认证、模型注册表 | `pi-runtime.ts` 中的 `listOAuthProviders`、`loginProvider`、`setProviderApiKey` 直接调用 |
+| `@earendil-works/pi-mcp` | ^1.1.0 | MCP 服务器配置、资源/工具/提示词协议 | 双级配置（用户级 + 项目级），通过 `lib/mcp-config.ts` 管理 |
 
 **架构关键点**：
 - Next.js 配置 `serverExternalPackages` 将三包标记为外部依赖，不打包进 server bundle、运行时 require
@@ -246,7 +246,7 @@ Sources: [package.json](package.json#L23-L28), [hooks/agent-session/stream-state
 | React | ^19.2.4 | 并发特性、useOptimistic、useFormStatus |
 | TypeScript | 5.x | `strict: true`、`moduleResolution: bundler` |
 | Tailwind CSS | ^4.2.2 | CSS-first、Oxide 引擎、零配置迁移 |
-| @earendil-works/* | ^0.99.1 | Pi Agent 核心 SDK，版本锁定避免破坏性变更 |
+| @earendil-works/* | ^1.1.0 | Pi Agent 核心 SDK，版本锁定避免破坏性变更 |
 
 Sources: [package.json](package.json#L1-L81), [tsconfig.json](tsconfig.json#L1-L45), [electron/tsconfig.json](electron/tsconfig.json#L1-L18)
 
@@ -288,9 +288,9 @@ graph TD
     end
 
     subgraph "开发依赖 - Pi Agent SDK"
-        PI_CODING[@earendil-works/pi-coding-agent ^0.99.1]
-        PI_AI[@earendil-works/pi-ai ^0.99.1]
-        PI_MCP[@earendil-works/pi-mcp ^0.99.1]
+        PI_CODING[@earendil-works/pi-coding-agent ^1.1.0]
+        PI_AI[@earendil-works/pi-ai ^1.1.0]
+        PI_MCP[@earendil-works/pi-mcp ^1.1.0]
     end
 
     subgraph "开发依赖 - UI 生态"

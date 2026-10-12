@@ -4,8 +4,8 @@
 > 若与 `AGENTS.md` / `CLAUDE.md` 中的简要描述冲突，以本文档为准。
 >
 - **项目**：`@chasen-liao/pi-agent-desktop` v0.8.7
-- **上游 SDK**：`@earendil-works/pi-coding-agent` ^0.84.3 / `@earendil-works/pi-ai` ^0.84.3
-- **更新日期**：2026-09-08
+- **上游 SDK**：`@earendil-works/pi-coding-agent` ^1.1.0 / `@earendil-works/pi-ai` ^1.1.0
+- **更新日期**：2026-10-11
 
 ---
 
@@ -888,7 +888,7 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 
 2026-09-12 加固（#20/#33，实验与证据见 [docs/investigations/white-screen.md](investigations/white-screen.md)）：① 崩溃达自动重载上限后 `main.ts` 加载 `startup.html` 错误页（"页面多次崩溃，已停止自动恢复"），不再永久白屏；`child-process-gone` 仅记日志（GPU 崩溃由 Electron 回退软件渲染，盲目 reload 有死循环风险）。② 新增 `app/global-error.tsx` 补齐 layout 层兜底（替换整个根布局，自包含文档/样式，用 context-free 的 `translate()` 取词）与 `components/GlobalRuntimeErrorReporter`（`unhandledrejection`/`error` 全局收口，节流提示）。③ `lib/atomic-write.ts` 原子化 settings/desktop-settings 写盘——Windows 上 rename 会被并发读者 EPERM 阻塞，必须带界重试、预算耗尽降级直写。④ `lib/ltm/sqlite-backend.ts` 对 SQLITE_BUSY 做有界重试（快失败重试满额、慢失败最多一次，实验依据：跨进程持锁时写路径 ~0.3s 快速失败、busy_timeout 只对部分语句生效）。
 
-残余：上游 pi-ai 0.84.3 的 O(n²) reasoning_details 冻结（上游 issue #8648）症状是"卡住"非白屏，待上游发修复版升级；#33「另一终端致白屏」的最终触发机制仍待用户 `main.log`（跨进程共享面中唯一实锤破坏链是 LTM 的 SQLITE_BUSY，settings/.jsonl 撕裂已被实验否定）。
+残余：上游 pi-ai 的 O(n²) reasoning_details 冻结（上游 issue #8648）已于 0.84.4 修复，本仓库已随 SDK 升级到 1.1.0 一并消除；#33「另一终端致白屏」的最终触发机制仍待用户 `main.log`（跨进程共享面中唯一实锤破坏链是 LTM 的 SQLITE_BUSY，settings/.jsonl 撕裂已被实验否定）。
 
 ### 14.17 模型列表必须走 createAgentSessionServices（2026-09-08，#34）
 
@@ -909,8 +909,9 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 | Markdown | react-markdown | ^10.1.0 |
 | Markdown | remark-gfm | ^4.0.1 |
 | 代码高亮 | react-syntax-highlighter（Prism） | ^16.1.1 |
-| AI SDK | @earendil-works/pi-coding-agent | ^0.84.3 |
-| AI SDK | @earendil-works/pi-ai | ^0.84.3 |
+| AI SDK | @earendil-works/pi-coding-agent | ^1.1.0 |
+| AI SDK | @earendil-works/pi-ai | ^1.1.0 |
+| AI SDK | @earendil-works/pi-mcp | ^1.1.0 |
 | 品牌图标 | @lobehub/icons | ^5.6.0 |
 | 桌面壳 | Electron | ^43.4.1 |
 | 打包 | electron-builder（Windows NSIS；macOS Universal DMG + ZIP；Linux DEB） | ^26.15.3 |

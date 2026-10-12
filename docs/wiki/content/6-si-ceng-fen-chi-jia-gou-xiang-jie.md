@@ -340,8 +340,8 @@ Sources: [lib/api-error.ts](lib/api-error.ts), [app/api/agent/new/route.ts](app/
 ### 上游依赖
 
 ```json
-"@earendil-works/pi-coding-agent": "^0.99.1",
-"@earendil-works/pi-ai": "^0.99.1"
+"@earendil-works/pi-coding-agent": "^1.1.0",
+"@earendil-works/pi-ai": "^1.1.0"
 ```
 
 ### 核心能力边界

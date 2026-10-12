@@ -250,9 +250,9 @@ Sources: [package.json](package.json#L1-L30), [docs/ARCHITECTURE.md](docs/ARCHIT
 | **样式** | Tailwind CSS | 4.2.2 | CSS-first 配置, OKLCH 色彩空间 |
 | **桌面壳** | Electron | 43.7.7 | 搭配 electron-builder 26.15.3 |
 | **打包** | electron-builder | 26.15.3 | NSIS (Win) / Universal DMG+ZIP (macOS) / DEB (Linux) |
-| **上游 SDK** | pi-coding-agent | 0.99.1 | 核心 Agent 运行时 |
-| **上游 SDK** | pi-ai | 0.99.1 | 模型抽象、Provider 管理 |
-| **上游 SDK** | pi-mcp | 0.99.1 | MCP 协议实现 |
+| **上游 SDK** | pi-coding-agent | 1.1.0 | 核心 Agent 运行时 |
+| **上游 SDK** | pi-ai | 1.1.0 | 模型抽象、Provider 管理 |
+| **上游 SDK** | pi-mcp | 1.1.0 | MCP 协议实现 |
 | **测试** | Node.js 原生 test runner | --test-force-exit | 无 Jest 依赖，平台子集测试 |
 | **代码规范** | ESLint 9 + eslint-config-next | 16.3.6 | flat config, TypeScript 感知 |
 
@@ -336,4 +336,4 @@ Sources: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#L200-L280), [lib/rpc-manage
 
 ---
 
-*文档版本：v0.9.0 对应 | 维护者：Pi Agent Desktop 团队 | 更新日期：2026-09-30*
+*文档版本：v0.10.0 对应 | 维护者：Pi Agent Desktop 团队 | 更新日期：2026-10-12*
