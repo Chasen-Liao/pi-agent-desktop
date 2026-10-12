@@ -97,7 +97,9 @@ test("project MCP definitions cannot select a provider credential", () => {
     const loaded = loadDesktopMcpConfig(agentDir, dir, true);
     assert.deepEqual(loaded.servers.map(server => server.name), ["safe"]);
     assert.match(loaded.errors.join("\n"), /auth.*global/i);
-    assert.deepEqual(getMcpServers(dir, { agentDir }).map(server => server.id), ["safe"]);
+    const visible = getMcpServers(dir, { agentDir });
+    assert.equal(visible.find(server => server.id === "unsafe")?.status, "error");
+    assert.match(visible.find(server => server.id === "unsafe")?.errorMessage ?? "", /auth.*global/i);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -211,6 +213,63 @@ test("legacy partial disable overrides keep the global command when toggled", ()
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("editing a partial HTTP override preserves global authentication and future inheritance", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-edit-http-"));
+  const agentDir = join(dir, "agent");
+  try {
+    saveMcpServer("global", { id: "docs", transport: "http", url: "https://example.com/mcp", headers: { "X-Fixture": "test" }, auth: { provider: "openai" }, oauth: { clientId: "fixture" }, exposure: "direct" }, undefined, { agentDir });
+    writeMcpConfig("project", { mcpServers: { docs: { exposure: "deferred" } } }, dir, { agentDir });
+    const visible = getMcpServers(dir, { agentDir })[0];
+    // The form sends connection fields from the merged row, but never auth/OAuth.
+    const saved = saveMcpServer("project", { id: visible.id, transport: visible.transport, url: visible.url, headers: visible.headers, disabled: visible.disabled, exposure: "hidden" }, dir, { agentDir });
+    assert.equal(saved.scope, "project");
+    assert.deepEqual(saved.auth, { provider: "openai" });
+    assert.deepEqual(readMcpConfig("project", dir, { agentDir }).mcpServers?.docs, { exposure: "hidden" });
+    const loaded = loadDesktopMcpConfig(agentDir, dir, true).servers[0];
+    assert.equal(loaded.scope, "global");
+    assert.equal(loaded.override, join(dir, ".pi", "mcp.json"));
+    assert.ok("url" in loaded.config);
+    assert.deepEqual(loaded.config.auth, { provider: "openai" });
+    assert.deepEqual(loaded.config.oauth, { clientId: "fixture" });
+    saveMcpServer("global", { id: "docs", transport: "http", url: "https://updated.example.com/mcp", headers: { "X-Fixture": "updated" }, disabled: true }, undefined, { agentDir });
+    const updated = getMcpServers(dir, { agentDir })[0];
+    assert.equal(updated.url, "https://updated.example.com/mcp");
+    assert.deepEqual(updated.headers, { "X-Fixture": "updated" });
+    assert.equal(updated.disabled, true);
+    assert.equal(updated.exposure, "hidden");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("editing a partial stdio override does not pin inherited command, args or environment", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-edit-stdio-"));
+  const agentDir = join(dir, "agent");
+  try {
+    saveMcpServer("global", { id: "local", command: "node", args: ["fixture.mjs"], env: { FIXTURE: "test" } }, undefined, { agentDir });
+    writeMcpConfig("project", { mcpServers: { local: { enabled: false } } }, dir, { agentDir });
+    const visible = getMcpServers(dir, { agentDir })[0];
+    saveMcpServer("project", { id: visible.id, command: visible.command, args: visible.args, env: visible.env, disabled: false, exposure: "hidden" }, dir, { agentDir });
+    assert.deepEqual(readMcpConfig("project", dir, { agentDir }).mcpServers?.local, { enabled: true, exposure: "hidden" });
+    assert.equal(loadDesktopMcpConfig(agentDir, dir, true).servers[0].override, join(dir, ".pi", "mcp.json"));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("changing a partial override endpoint creates a project definition without global credentials", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-edit-endpoint-"));
+  const agentDir = join(dir, "agent");
+  try {
+    saveMcpServer("global", { id: "docs", transport: "http", url: "https://example.com/mcp", auth: { provider: "openai" } }, undefined, { agentDir });
+    writeMcpConfig("project", { mcpServers: { docs: { exposure: "deferred" } } }, dir, { agentDir });
+    saveMcpServer("project", { id: "docs", transport: "http", url: "https://project.example.com/mcp", exposure: "direct" }, dir, { agentDir });
+    const loaded = loadDesktopMcpConfig(agentDir, dir, true).servers[0];
+    assert.equal(loaded.scope, "project");
+    assert.equal(loaded.override, undefined);
+    assert.ok("url" in loaded.config);
+    assert.equal(loaded.config.url, "https://project.example.com/mcp");
+    assert.equal(loaded.config.auth, undefined);
+    assert.equal(readMcpConfig("project", dir, { agentDir }).mcpServers?.docs.auth, undefined);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("partial overrides cannot change connection or credential fields", () => {
   const dir = mkdtempSync(join(tmpdir(), "pi-mcp-partial-invalid-"));
   const agentDir = join(dir, "agent");
@@ -241,6 +300,27 @@ test("orphan project overrides report errors instead of creating invalid stdio s
     const loaded = loadDesktopMcpConfig(dir, dir, true);
     assert.deepEqual(loaded.servers, []);
     assert.match(loaded.errors.join("\n"), /global server/i);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("rejected MCP configurations remain visible for correction and deletion", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-mcp-diagnostics-"));
+  const agentDir = join(dir, "agent");
+  try {
+    saveMcpServer("global", { id: "same", command: "node" }, undefined, { agentDir });
+    mkdirSync(join(dir, ".pi"));
+    writeFileSync(join(dir, ".pi", "mcp.json"), JSON.stringify({ mcpServers: {
+      same: { command: "node", exposure: "unsupported" },
+      legacy: { transport: "sse", url: "https://example.com/sse" },
+    } }));
+    const visible = getMcpServers(dir, { agentDir });
+    assert.equal(visible.length, 2);
+    assert.ok(visible.every(server => server.status === "error" && server.errorMessage));
+    assert.equal(visible.find(server => server.id === "same")?.scope, "project");
+    assert.equal(visible.find(server => server.id === "legacy")?.transport, "sse");
+    assert.equal(loadDesktopMcpConfig(agentDir, dir, true).servers[0].scope, "global");
+    assert.equal(removeMcpServer("project", "same", dir, { agentDir }), true);
+    assert.equal(getMcpServers(dir, { agentDir }).find(server => server.id === "same")?.status, "disconnected");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
+import { isDeepStrictEqual } from "node:util";
 import { McpClient, StdioTransport, StreamableHttpTransport } from "@earendil-works/pi-mcp";
 import { writeFileAtomic } from "./atomic-write.ts";
 import { getAgentDir, type LoadedMcpConfig, type McpServerConfig as NativeMcpServerConfig } from "@earendil-works/pi-coding-agent";
@@ -147,8 +148,9 @@ export function writeMcpConfig(
 }
 
 export function getMcpServers(cwd?: string, options?: McpOptions): McpServerStatus[] {
-  const loaded = loadDesktopMcpConfig(options?.agentDir ?? getAgentDir(), cwd ?? process.cwd(), cwd !== undefined);
-  return loaded.servers.map(entry => {
+  const rejected = new Map<string, McpServerStatus>();
+  const loaded = resolveDesktopMcpConfig(options?.agentDir ?? getAgentDir(), cwd ?? process.cwd(), cwd !== undefined, rejected);
+  const visible: McpServerStatus[] = loaded.servers.map(entry => {
     const config = entry.config as Omit<McpServerConfig, "id">;
     const disabled = config.enabled === false;
     return {
@@ -160,10 +162,17 @@ export function getMcpServers(cwd?: string, options?: McpOptions): McpServerStat
       disabled,
     };
   });
+  const merged = new Map(visible.map(server => [server.id, server]));
+  for (const [id, server] of rejected) merged.set(id, server);
+  return [...merged.values()];
 }
 
 /** Only adapt legacy desktop fields; Pi owns connection, auth and tool registration. */
 export function loadDesktopMcpConfig(agentDir: string, cwd: string, projectTrusted: boolean): LoadedMcpConfig {
+  return resolveDesktopMcpConfig(agentDir, cwd, projectTrusted);
+}
+
+function resolveDesktopMcpConfig(agentDir: string, cwd: string, projectTrusted: boolean, rejected?: Map<string, McpServerStatus>): LoadedMcpConfig {
   const errors: string[] = [];
   const scopes = projectTrusted ? ["global", "project"] as const : ["global"] as const;
   const merged = new Map<string, LoadedMcpConfig["servers"][number]>();
@@ -181,39 +190,50 @@ export function loadDesktopMcpConfig(agentDir: string, cwd: string, projectTrust
           errors.push(`${source}: server "${name}" must be an object`);
           continue;
         }
+        const reject = (message: string) => {
+          errors.push(message);
+          rejected?.set(name, {
+            ...entry as Omit<McpServerConfig, "id">,
+            id: name, scope, status: "error", errorMessage: message,
+            transport: entry.transport === "sse" ? "sse" : entry.url ? "http" : "stdio",
+            disabled: entry.enabled === false || Boolean(entry.disabled),
+          });
+        };
         if (entry.transport === "sse") {
           merged.delete(name);
-          errors.push(`${name}: legacy SSE is not supported; configure a Streamable HTTP endpoint`);
+          reject(`${name}: legacy SSE is not supported; configure a Streamable HTTP endpoint`);
           continue;
         }
         const native = adaptMcpEntry(entry);
         const authError = providerAuthError(native, scope);
         const invalidExposure = exposureError(native);
         if (authError || invalidExposure) {
-          errors.push(`${source}: server "${name}": ${authError ?? invalidExposure}`);
+          reject(`${source}: server "${name}": ${authError ?? invalidExposure}`);
           continue;
         }
         if (scope === "project" && native.command === undefined && native.url === undefined && native.type === undefined) {
           const base = merged.get(name);
           const extra = Object.keys(native).filter(key => !["enabled", "exposure", "toolExposure"].includes(key));
           if (!base || extra.length > 0) {
-            errors.push(`${source}: server "${name}": ${!base ? "needs a global server to override" : "an override can only set enabled, exposure and toolExposure"}`);
+            reject(`${source}: server "${name}": ${!base ? "needs a global server to override" : "an override can only set enabled, exposure and toolExposure"}`);
             continue;
           }
           merged.set(name, { ...base, config: { ...base.config, ...native }, override: source });
+          rejected?.delete(name);
           continue;
         }
         const type = native.type ?? (native.url ? "http" : "stdio");
         if ((type === "http" && (typeof native.url !== "string" || !URL.canParse(native.url) || !["http:", "https:"].includes(new URL(native.url).protocol))) ||
             (type === "stdio" && (typeof native.command !== "string" || !native.command.trim())) ||
             (type !== "http" && type !== "stdio")) {
-          errors.push(`${source}: server "${name}": needs a valid command (stdio) or URL (HTTP)`);
+          reject(`${source}: server "${name}": needs a valid command (stdio) or URL (HTTP)`);
           continue;
         }
         merged.set(name, {
           name, scope, source,
           config: { ...native, type, enabled: native.enabled ?? true } as NativeMcpServerConfig,
         });
+        rejected?.delete(name);
       }
     } catch {
       errors.push(`Could not read MCP configuration: ${source}`);
@@ -250,6 +270,33 @@ export function saveMcpServer(
   if (authError) throw new Error(authError);
   const config = readMcpConfig(scope, cwd, options);
   const currentServers = config.mcpServers ? { ...config.mcpServers } : {};
+
+  const current = currentServers[id];
+  const patch = isMcpEntry(current) ? adaptMcpEntry(current) : undefined;
+  if (scope === "project" && patch && Object.keys(patch).every(key => ["enabled", "exposure", "toolExposure"].includes(key))) {
+    const base = getMcpServers(undefined, options).find(server => server.id === id && server.status !== "error");
+    const connectionKeys = ["name", "command", "args", "env", "url", "headers", "cwd", "oauth"] as const;
+    const unchangedConnection = base && transport === base.transport && connectionKeys.every(key => {
+      const value = serverConfig[key];
+      if (value === undefined) return true;
+      const fallback = key === "args" ? [] : key === "env" || key === "headers" ? {} : undefined;
+      return isDeepStrictEqual(value, base[key] ?? fallback);
+    });
+    if (base && unchangedConnection) {
+      const enabled = serverConfig.disabled !== undefined ? !serverConfig.disabled : serverConfig.enabled;
+      if (enabled !== undefined && (patch.enabled !== undefined || enabled !== !base.disabled)) patch.enabled = enabled;
+      if (serverConfig.exposure !== undefined && (patch.exposure !== undefined || serverConfig.exposure !== base.exposure)) patch.exposure = serverConfig.exposure;
+      if (serverConfig.toolExposure !== undefined) patch.toolExposure = serverConfig.toolExposure;
+      const invalidExposure = exposureError(adaptMcpEntry(patch));
+      if (invalidExposure) throw new Error(invalidExposure);
+      // The form round-trips inherited connection fields. Keep only project settings,
+      // so credentials and later global connection updates remain inherited.
+      currentServers[id] = patch;
+      writeMcpConfig(scope, { ...config, mcpServers: currentServers }, cwd, options);
+      const disabled = patch.enabled === undefined ? base.disabled : patch.enabled === false;
+      return { ...base, ...patch, id, scope, disabled, status: disabled ? "disabled" : "disconnected" };
+    }
+  }
 
   const rest: Partial<McpServerConfig> = { ...serverConfig };
   delete rest.id;

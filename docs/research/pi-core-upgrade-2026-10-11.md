@@ -84,3 +84,12 @@
 - `npm test`：680 项，678 通过、0 失败、2 跳过。
 - 本次相关文件 `git diff --check`：通过。
 - 修复未新增 SDK 内部路径导入，未读写真实 provider 凭据，未在开发环境执行生产构建；正式三平台安装包与真实外部 OAuth 全链路仍未覆盖。
+
+### v0.10.0 发布前补充核查
+
+- 复核发现 UI 编辑项目部分覆盖时会把继承连接写成完整项目定义，丢失全局认证。现对未修改连接的表单保存仅写项目可覆盖字段，继续继承全局认证及后续连接更新；实际改变连接时生成不携带全局 provider 凭据的项目定义。
+- 被运行时拒绝的对象配置保留在设置列表，显示错误并允许修正或删除；不会进入 SDK 连接列表。
+- Next.js / eslint-config-next 更新为 16.3.8；Sharp 为 0.35.5，http-cache-semantics 为 4.3.0，source-map-js 为 1.2.2；通过根 overrides 将 KaTeX 统一到 0.18.2。Pi SDK 保持 1.1.0。
+- npm 审计由 23 条降至 13 条（0 critical、5 high、8 moderate）。残余来自两项上游无补丁告警：braces（ESLint → fast-glob → micromatch）与 sprintf-js（electron-builder → @electron/get → global-agent → roarr）。[braces 公告](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)、[sprintf-js 公告](https://github.com/advisories/GHSA-hp3w-g68c-fv3c)。npm 建议的 force 修复会降级 ESLint／打包器，未采用。
+- 从 Next.js、三项 Pi SDK 与 electron-updater 根包遍历实际安装的 dependencies / optionalDependencies，核查 151 个包，未发现残余告警包 braces / sprintf-js。此项是声明依赖闭包检查，不能替代完整安装包与打包结果验证。
+- 补修与安全依赖更新后：25 项 MCP 专项测试通过；全量测试 684 项、682 通过、0 失败、2 跳过；主项目与 Electron 类型检查通过；lint 0 error、10 个既有 warning；KaTeX SSR、Electron 更新依赖检查与相关 diff 空白检查通过。生产构建和正式安装包验证继续交由当前提交的 CI。
