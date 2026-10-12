@@ -336,4 +336,4 @@ Sources: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#L200-L280), [lib/rpc-manage
 
 ---
 
-*文档版本：v0.9.0 对应 | 维护者：Pi Agent Desktop 团队 | 更新日期：2026-09-30*
+*文档版本：v0.10.0 对应 | 维护者：Pi Agent Desktop 团队 | 更新日期：2026-10-12*
