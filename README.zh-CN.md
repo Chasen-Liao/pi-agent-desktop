@@ -27,6 +27,20 @@
 
 > **上游项目**：本项目衍生自 [pi-web](https://github.com/agegr/pi-web)，侧重于桌面端体验的优化与功能增强。
 
+<!-- BEGIN AICODEMIRROR PROMOTION: copy and invitation URL are maintained in this block. -->
+<table align="center" width="100%">
+  <tr>
+    <td align="center">
+      <p><strong>合作推广</strong></p>
+      <img src="docs/assets/aicodemirror-logo.png" alt="AICodeMirror" width="260" />
+      <p>了解 AICodeMirror，查看可用模型与服务</p>
+      <p><a href="https://www.aicodemirror.ai/register?invitecode=4YJ7K1" rel="noopener noreferrer"><strong>通过我的邀请链接了解 ↗</strong></a></p>
+      <p><sub>此链接包含作者邀请码，具体服务与活动以平台页面为准</sub></p>
+    </td>
+  </tr>
+</table>
+<!-- END AICODEMIRROR PROMOTION -->
+
 ## 目录
 
 - [特性](#特性)

@@ -27,6 +27,20 @@
 
 > **アップストリーム**：本プロジェクトは [pi-web](https://github.com/agegr/pi-web) から派生しており、デスクトップ体験の最適化と機能拡張に注力しています。
 
+<!-- BEGIN AICODEMIRROR PROMOTION: copy and invitation URL are maintained in this block. -->
+<table align="center" width="100%">
+  <tr>
+    <td align="center">
+      <p><strong>広告・プロモーション</strong></p>
+      <img src="docs/assets/aicodemirror-logo.png" alt="AICodeMirror" width="260" />
+      <p>AICodeMirror の利用可能なモデルとサービスをご覧ください。</p>
+      <p><a href="https://www.aicodemirror.ai/register?invitecode=4YJ7K1" rel="noopener noreferrer"><strong>私の招待リンクから詳しく見る ↗</strong></a></p>
+      <p><sub>このリンクには作者の招待コードが含まれます。サービスやキャンペーンの詳細はプラットフォームのページをご確認ください。</sub></p>
+    </td>
+  </tr>
+</table>
+<!-- END AICODEMIRROR PROMOTION -->
+
 ## 目次
 
 - [特徴](#特徴)
