@@ -27,6 +27,20 @@
 
 > **Upstream**: this project is derived from [pi-web](https://github.com/agegr/pi-web), with a focus on desktop experience polish and feature enhancements.
 
+<!-- BEGIN AICODEMIRROR PROMOTION: copy and invitation URL are maintained in this block. -->
+<table align="center" width="100%">
+  <tr>
+    <td align="center">
+      <p><strong>Sponsored partnership</strong></p>
+      <img src="docs/assets/aicodemirror-logo.png" alt="AICodeMirror" width="260" />
+      <p>Explore AICodeMirror and view its available models and services.</p>
+      <p><a href="https://www.aicodemirror.ai/register?invitecode=4YJ7K1" rel="noopener noreferrer"><strong>Learn more through my invitation link ↗</strong></a></p>
+      <p><sub>This link includes the author's invitation code. Service and promotion details are subject to the platform's pages.</sub></p>
+    </td>
+  </tr>
+</table>
+<!-- END AICODEMIRROR PROMOTION -->
+
 ## Table of Contents
 
 - [Features](#features)
