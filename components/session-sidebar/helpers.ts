@@ -5,7 +5,7 @@ export interface SessionTreeNode {
   children: SessionTreeNode[];
 }
 
-export function formatRelativeTime(dateStr: string, locale = "en"): string {
+export function formatRelativeTime(dateStr: string, locale = "en", compact = false): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
@@ -13,6 +13,13 @@ export function formatRelativeTime(dateStr: string, locale = "en"): string {
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
   const chinese = locale.toLowerCase().startsWith("zh");
+  if (compact) {
+    if (mins < 1) return chinese ? "刚刚" : "now";
+    if (mins < 60) return chinese ? `${mins}分` : `${mins}m`;
+    if (hours < 24) return chinese ? `${hours}时` : `${hours}h`;
+    if (days < 7) return chinese ? `${days}天` : `${days}d`;
+    return date.toLocaleDateString(locale, { month: "numeric", day: "numeric" });
+  }
   if (mins < 1) return chinese ? "刚刚" : "just now";
   if (mins < 60) return chinese ? `${mins} 分钟前` : `${mins}m ago`;
   if (hours < 24) return chinese ? `${hours} 小时前` : `${hours}h ago`;

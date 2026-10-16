@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import type { SessionInfo } from "@/lib/types";
 import { FileExplorer } from "./FileExplorer";
 import { SidebarHeader } from "./session-sidebar/SidebarHeader";
 import { SessionTreeItem } from "./session-sidebar/SessionTree";
-import { buildSessionTree, getRecentCwds } from "./session-sidebar/helpers";
+import { ProjectGroup } from "./session-sidebar/ProjectGroup";
+import { SidebarIcon } from "./session-sidebar/SidebarIcon";
+import { groupProjects, projectKey, projectName, searchProjects } from "./session-sidebar/projects";
+import { useSidebarPreferences } from "./session-sidebar/useSidebarPreferences";
 import { useI18n } from "./I18nProvider";
 import { apiJson } from "./apiJson";
 
@@ -27,44 +30,28 @@ interface Props {
   onAtMention?: (relativePath: string) => void;
 }
 
-export function SessionSidebar({
-  selectedSessionId,
-  onSelectSession,
-  onNewSession,
-  initialSessionId,
-  onInitialRestoreDone,
-  refreshKey,
-  onSessionDeleted,
-  onBranchSession,
-  onCloneSession,
-  onExportSession,
-  selectedCwd: selectedCwdProp,
-  onCwdChange,
-  onOpenFile,
-  explorerRefreshKey,
-  onAtMention,
-}: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onBranchSession, onCloneSession, onExportSession, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [preferences, setPreferences] = useSidebarPreferences();
   const selectedCwd = selectedCwdProp ?? null;
-  const [explorerOpen, setExplorerOpen] = useState(true);
+  const { explorerOpen } = preferences;
   const [explorerKey, setExplorerKey] = useState(0);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
-  
   const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const projectListRef = useRef<HTMLElement>(null);
+  const pendingProjectRef = useRef<string | null>(null);
+  const scrolledSessionRef = useRef<string | null>(null);
 
   const loadSessions = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setLoading(true);
-      const data = await apiJson<{ sessions: SessionInfo[] }>(
-        "/api/sessions",
-        undefined,
-        { fallback: t("common.failed") },
-      );
+      const data = await apiJson<{ sessions: SessionInfo[] }>("/api/sessions", undefined, { fallback: t("common.failed") });
       setAllSessions(data.sessions);
       setError(null);
       if (!showLoading) {
@@ -72,8 +59,8 @@ export function SessionSidebar({
         if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
         sessionRefreshTimerRef.current = setTimeout(() => setSessionRefreshDone(false), 2000);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("common.failed"));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : t("common.failed"));
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -83,219 +70,123 @@ export function SessionSidebar({
   useEffect(() => {
     const isFirst = !initialLoadDone.current;
     initialLoadDone.current = true;
-    loadSessions(isFirst);
+    void loadSessions(isFirst);
   }, [loadSessions, refreshKey]);
 
   useEffect(() => {
-    if (explorerRefreshKey !== undefined) setExplorerKey((k) => k + 1);
+    if (explorerRefreshKey !== undefined) setExplorerKey((key) => key + 1);
   }, [explorerRefreshKey]);
 
+  const projects = useMemo(() => groupProjects(allSessions, [...preferences.paths, ...(selectedCwd ? [selectedCwd] : [])]), [allSessions, preferences.paths, selectedCwd]);
+  const visibleProjects = useMemo(() => searchProjects(projects, searchQuery), [projects, searchQuery]);
+  const searching = !!searchQuery.trim();
+  const activeProjectKey = selectedCwd ? projectKey(selectedCwd) : null;
+  const setExpanded = useCallback((key: string, expanded: boolean) => {
+    setPreferences((previous) => ({ ...previous, expanded: { ...previous.expanded, [key]: expanded } }));
+  }, [setPreferences]);
+
+  const addProject = useCallback((cwd: string) => {
+    const key = projectKey(cwd);
+    pendingProjectRef.current = key;
+    setPreferences((previous) => ({
+      ...previous,
+      paths: previous.paths.some((path) => projectKey(path) === key) ? previous.paths : [...previous.paths, cwd],
+      expanded: { ...previous.expanded, [key]: true },
+    }));
+  }, [setPreferences]);
+
+  const newSession = useCallback((cwd: string) => {
+    setSearchQuery("");
+    setExpanded(projectKey(cwd), true);
+    onNewSession?.("", cwd);
+  }, [onNewSession, setExpanded]);
+
+  // Reveal a restored URL or fork once; refresh must respect manual collapse.
+  const revealedSessionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedSessionId || revealedSessionRef.current === selectedSessionId) return;
+    const session = allSessions.find((item) => item.id === selectedSessionId);
+    if (!session) return;
+    revealedSessionRef.current = selectedSessionId;
+    setExpanded(projectKey(session.cwd), true);
+  }, [selectedSessionId, allSessions, setExpanded]);
+
   const restoredRef = useRef(false);
-
-  // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
-    if (allSessions.length === 0) return;
-
-    if (selectedCwd === null) {
-      // If restoring a session, set cwd to match that session
-      if (initialSessionId && !restoredRef.current) {
-        restoredRef.current = true;
-        const target = allSessions.find((s) => s.id === initialSessionId);
-        if (target) {
-          onSelectSession(target, true);
-          return;
-        }
-        // Session not found — notify parent so it can show the placeholder
-        onInitialRestoreDone?.();
+    if (loading || error) return;
+    if (initialSessionId && !restoredRef.current) {
+      restoredRef.current = true;
+      if (selectedSessionId === initialSessionId) return;
+      const target = allSessions.find((session) => session.id === initialSessionId);
+      if (target) {
+        onSelectSession(target, true);
+        return;
       }
-      const cwds = getRecentCwds(allSessions);
-      if (cwds.length > 0) onCwdChange?.(cwds[0]);
+      onInitialRestoreDone?.();
     }
-  }, [allSessions, selectedCwd, initialSessionId, onCwdChange, onSelectSession, onInitialRestoreDone]);
+    if (selectedCwd === null && projects[0]?.cwd) onCwdChange?.(projects[0].cwd);
+  }, [loading, error, allSessions, projects, selectedCwd, initialSessionId, selectedSessionId, onCwdChange, onSelectSession, onInitialRestoreDone]);
 
-  // Cleanup timers on unmount
   useEffect(() => {
-    return () => {
-      if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
-      if (explorerRefreshTimerRef.current) clearTimeout(explorerRefreshTimerRef.current);
-    };
+    const list = projectListRef.current;
+    if (!list) return;
+    if (pendingProjectRef.current) {
+      const project = [...list.querySelectorAll<HTMLElement>(".sidebar-project")]
+        .find((element) => element.dataset.projectKey === pendingProjectRef.current);
+      if (project) {
+        project.querySelector(".sidebar-project-row")?.scrollIntoView({ block: "nearest" });
+        pendingProjectRef.current = null;
+      }
+    }
+    if (selectedSessionId && scrolledSessionRef.current !== selectedSessionId) {
+      const selected = list.querySelector<HTMLElement>(".sidebar-session-row[data-selected]");
+      if (selected?.getClientRects().length) {
+        selected.scrollIntoView({ block: "nearest" });
+        scrolledSessionRef.current = selectedSessionId;
+      }
+    }
+  }, [projects, preferences.expanded, selectedSessionId]);
+
+  useEffect(() => () => {
+    if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
+    if (explorerRefreshTimerRef.current) clearTimeout(explorerRefreshTimerRef.current);
   }, []);
 
-  const filteredSessions = selectedCwd
-    ? allSessions.filter((s) => s.cwd === selectedCwd)
-    : allSessions;
-
-  // Build parent-child tree within the filtered set
-  const sessionTree = buildSessionTree(filteredSessions);
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      {/* Header */}
-      <SidebarHeader
-        selectedCwd={selectedCwd}
-        onCwdChange={onCwdChange}
-        onNewSession={onNewSession}
-        allSessions={allSessions}
-        loadSessions={loadSessions}
-        sessionRefreshDone={sessionRefreshDone}
-        initialSessionId={initialSessionId}
-        restoredRef={restoredRef}
-      />
-
-      {/* Session list */}
-      <div
-        style={{
-          flex: explorerOpen && (selectedCwdProp || selectedCwd) ? "1 1 0" : "1 1 auto",
-          overflowY: "auto",
-          padding: "0",
-          minHeight: 80,
-        }}
-      >
-        {loading && (
-          <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-            {t("common.loading")}
-          </div>
-        )}
-        {error && (
-          <div style={{ padding: "12px 14px", color: "var(--danger)", fontSize: 12 }}>
-            {error}
-          </div>
-        )}
-        {!loading && !error && filteredSessions.length === 0 && (
-          <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-            {t("sidebar.noSessions")}
-          </div>
-        )}
-        {sessionTree.map((node) => (
-          <SessionTreeItem
-            key={node.session.id}
-            node={node}
-            selectedSessionId={selectedSessionId}
-            onSelectSession={onSelectSession}
-            onRenamed={loadSessions}
-            onSessionDeleted={(id) => {
-              onSessionDeleted?.(id);
-              loadSessions();
-            }}
-            onBranchSession={onBranchSession}
-            onCloneSession={onCloneSession}
-            onExportSession={onExportSession}
-            depth={0}
-          />
+    <div className="sidebar-workspace">
+      <SidebarHeader selectedCwd={selectedCwd ?? projects[0]?.cwd ?? null} onNewSession={newSession} onAddProject={addProject} loadSessions={loadSessions} sessionRefreshDone={sessionRefreshDone} searchQuery={searchQuery} onSearchQueryChange={setSearchQuery} />
+      <nav ref={projectListRef} className="sidebar-project-list" aria-label={t("sidebar.projects")} aria-busy={loading}>
+        {loading && <div className="sidebar-empty" role="status">{t("common.loading")}</div>}
+        {error && <div className="sidebar-empty text-danger" role="alert">{error}</div>}
+        {!loading && !error && visibleProjects.length === 0 && <div className="sidebar-empty" role="status">{t(searching ? "sidebar.noSearchResults" : "sidebar.noProjects")}</div>}
+        {visibleProjects.map((project) => (
+          <ProjectGroup key={project.key} project={project} expanded={searching || (preferences.expanded[project.key] ?? project.key === activeProjectKey)} active={project.key === activeProjectKey} duplicateName={projects.some((other) => other.key !== project.key && other.name === project.name)} onToggle={(expanded) => {
+            if (searching) setSearchQuery("");
+            setExpanded(project.key, expanded);
+          }} onNewSession={() => newSession(project.cwd)}>
+            {project.sessions.length === 0 && <button className="sidebar-empty-project" onClick={() => newSession(project.cwd)}>{t("sidebar.startFirstSession")}<SidebarIcon name="plus" size={13} /></button>}
+            {project.tree.map((node) => <SessionTreeItem key={node.session.id} node={node} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} onRenamed={loadSessions} onSessionDeleted={(id) => { onSessionDeleted?.(id); void loadSessions(); }} onBranchSession={onBranchSession} onCloneSession={onCloneSession} onExportSession={onExportSession} depth={0} searching={searching} />)}
+          </ProjectGroup>
         ))}
-      </div>
-
-      {/* File Explorer section */}
-      {(selectedCwdProp || selectedCwd) && (
-        <div
-          style={{
-            borderTop: "1px solid var(--divider)",
-            display: "flex",
-            flexDirection: "column",
-            flex: explorerOpen ? "1 1 0" : "0 0 auto",
-            minHeight: 0,
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-            <button
-              onClick={() => setExplorerOpen((v) => !v)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                flex: 1,
-                padding: "6px 10px",
-                background: "none",
-                border: "none",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-                textAlign: "left",
-              }}
-            >
-              <svg
-                width="9"
-                height="9"
-                viewBox="0 0 10 10"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{
-                  transform: explorerOpen ? "rotate(90deg)" : "none",
-                  transition: "transform 0.15s",
-                  flexShrink: 0,
-                }}
-              >
-                <polyline points="3 2 7 5 3 8" />
-              </svg>
-              {t("sidebar.explorer")}
-            </button>
-            <button
-              onClick={() => {
-                setExplorerKey((k) => k + 1);
-                setExplorerRefreshDone(true);
-                if (explorerRefreshTimerRef.current) clearTimeout(explorerRefreshTimerRef.current);
-                explorerRefreshTimerRef.current = setTimeout(() => setExplorerRefreshDone(false), 2000);
-              }}
-              title={t("sidebar.refreshExplorer")}
-              aria-label={t("sidebar.refreshExplorer")}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 26,
-                height: 26,
-                padding: 0,
-                marginRight: 6,
-                background: explorerRefreshDone ? "var(--success-bg)" : "none",
-                border: "none",
-                color: explorerRefreshDone ? "var(--success)" : "var(--text-dim)",
-                cursor: "pointer",
-                borderRadius: "var(--radius-control)",
-                flexShrink: 0,
-                transition: "color 0.3s, background 0.3s",
-              }}
-              onMouseEnter={(e) => {
-                if (explorerRefreshDone) return;
-                e.currentTarget.style.color = "var(--text-muted)";
-                e.currentTarget.style.background = "var(--bg-hover)";
-              }}
-              onMouseLeave={(e) => {
-                if (explorerRefreshDone) return;
-                e.currentTarget.style.color = "var(--text-dim)";
-                e.currentTarget.style.background = "none";
-              }}
-            >
-              {explorerRefreshDone ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              )}
-            </button>
-          </div>
-          {explorerOpen && (
-            <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
-              <FileExplorer
-                cwd={selectedCwdProp ?? selectedCwd!}
-                onOpenFile={onOpenFile ?? (() => {})}
-                refreshKey={explorerKey}
-                onAtMention={onAtMention}
-              />
-            </div>
-          )}
+      </nav>
+      {selectedCwd && <section className="sidebar-explorer" data-open={explorerOpen}>
+        <div className="sidebar-explorer-heading">
+          <button className="sidebar-explorer-toggle" onClick={() => setPreferences((previous) => ({ ...previous, explorerOpen: !previous.explorerOpen }))} aria-expanded={explorerOpen} aria-controls="sidebar-explorer-content" title={selectedCwd}>
+            <SidebarIcon name="chevron" size={11} style={{ transform: explorerOpen ? "rotate(90deg)" : undefined }} />
+            <span>{t("sidebar.projectFiles")}</span>
+            <span className="sidebar-explorer-cwd">{projectName(selectedCwd)}</span>
+          </button>
+          <button className="sidebar-icon-button sidebar-refresh-button" data-done={explorerRefreshDone || undefined} onClick={() => {
+            setExplorerKey((key) => key + 1);
+            setExplorerRefreshDone(true);
+            if (explorerRefreshTimerRef.current) clearTimeout(explorerRefreshTimerRef.current);
+            explorerRefreshTimerRef.current = setTimeout(() => setExplorerRefreshDone(false), 2000);
+          }} title={t("sidebar.refreshExplorer")} aria-label={t("sidebar.refreshExplorer")}><SidebarIcon name={explorerRefreshDone ? "check" : "refresh"} size={14} /></button>
         </div>
-      )}
+        <div id="sidebar-explorer-content" className="sidebar-explorer-content" hidden={!explorerOpen}>
+          {explorerOpen && <FileExplorer key={selectedCwd} cwd={selectedCwd} onOpenFile={onOpenFile ?? (() => {})} refreshKey={explorerKey} onAtMention={onAtMention} />}
+        </div>
+      </section>}
     </div>
   );
 }

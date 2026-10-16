@@ -8,7 +8,7 @@ export function usePanelLayout() {
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [resizingSide, setResizingSide] = useState<"left" | "right" | null>(null);
   const [panelWidths, setPanelWidths] = useState(() =>
-    getDefaultPanelWidths(typeof window === "undefined" ? 1200 : window.innerWidth)
+    getDefaultPanelWidths(1200)
   );
 
   const panelResizeRef = useRef<{
@@ -80,6 +80,8 @@ export function usePanelLayout() {
         right: clampPanelWidth("right", prev.right, window.innerWidth),
       }));
     };
+    // Match the server's first render, then measure the actual viewport.
+    setPanelWidths(getDefaultPanelWidths(window.innerWidth));
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
