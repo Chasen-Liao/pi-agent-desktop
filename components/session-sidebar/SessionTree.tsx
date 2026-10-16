@@ -7,6 +7,7 @@ import { formatRelativeTime, type SessionTreeNode } from "./helpers";
 import { sessionTitle } from "./projects";
 import { SidebarIcon } from "./SidebarIcon";
 import { useI18n } from "../I18nProvider";
+import { apiJson } from "../apiJson";
 import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 
 interface SessionTreeItemProps {
@@ -83,10 +84,9 @@ function SessionItem({
     const name = renameValue.trim();
     if (name === (session.name ?? "")) return;
     try {
-      const response = await fetch("/api/sessions/" + encodeURIComponent(session.id), {
+      await apiJson("/api/sessions/" + encodeURIComponent(session.id), {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
-      });
-      if (!response.ok) throw new Error(t("common.failed"));
+      }, { fallback: t("common.failed") });
       onRenamed?.();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : t("common.failed"));
@@ -97,8 +97,7 @@ function SessionItem({
     setConfirmDelete(false);
     setDeleting(true);
     try {
-      const response = await fetch("/api/sessions/" + encodeURIComponent(session.id), { method: "DELETE" });
-      if (!response.ok) throw new Error(t("common.failed"));
+      await apiJson("/api/sessions/" + encodeURIComponent(session.id), { method: "DELETE" }, { fallback: t("common.failed") });
       onSessionDeleted?.(session.id);
     } catch (error) {
       setDeleting(false);
