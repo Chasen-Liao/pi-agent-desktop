@@ -7,7 +7,8 @@ import { SidebarHeader } from "./session-sidebar/SidebarHeader";
 import { SessionTreeItem } from "./session-sidebar/SessionTree";
 import { ProjectGroup } from "./session-sidebar/ProjectGroup";
 import { SidebarIcon } from "./session-sidebar/SidebarIcon";
-import { groupProjects, projectKey, projectName, searchProjects } from "./session-sidebar/projects";
+import { groupProjects, projectKey, projectName, searchProjects, sortProjects } from "./session-sidebar/projects";
+import { SortableProjects } from "./session-sidebar/SortableProjects";
 import { useSidebarPreferences } from "./session-sidebar/useSidebarPreferences";
 import { useI18n } from "./I18nProvider";
 import { apiJson } from "./apiJson";
@@ -31,11 +32,12 @@ interface Props {
 }
 
 export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onBranchSession, onCloneSession, onExportSession, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [animateProjectSorting, setAnimateProjectSorting] = useState(true);
   const [preferences, setPreferences] = useSidebarPreferences();
   const selectedCwd = selectedCwdProp ?? null;
   const { explorerOpen } = preferences;
@@ -78,7 +80,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, [explorerRefreshKey]);
 
   const projects = useMemo(() => groupProjects(allSessions, [...preferences.paths, ...(selectedCwd ? [selectedCwd] : [])]), [allSessions, preferences.paths, selectedCwd]);
-  const visibleProjects = useMemo(() => searchProjects(projects, searchQuery), [projects, searchQuery]);
+  const sortedProjects = useMemo(() => sortProjects(projects, preferences.sortMode, preferences.projectOrder, locale), [projects, preferences.sortMode, preferences.projectOrder, locale]);
+  const visibleProjects = useMemo(() => searchProjects(sortedProjects, searchQuery), [sortedProjects, searchQuery]);
   const searching = !!searchQuery.trim();
   const activeProjectKey = selectedCwd ? projectKey(selectedCwd) : null;
   const setExpanded = useCallback((key: string, expanded: boolean) => {
@@ -154,20 +157,25 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   return (
     <div className="sidebar-workspace">
-      <SidebarHeader selectedCwd={selectedCwd ?? projects[0]?.cwd ?? null} onNewSession={newSession} onAddProject={addProject} loadSessions={loadSessions} sessionRefreshDone={sessionRefreshDone} searchQuery={searchQuery} onSearchQueryChange={setSearchQuery} />
+      <SidebarHeader selectedCwd={selectedCwd ?? projects[0]?.cwd ?? null} onNewSession={newSession} onAddProject={addProject} loadSessions={loadSessions} sessionRefreshDone={sessionRefreshDone} searchQuery={searchQuery} onSearchQueryChange={setSearchQuery} sortMode={preferences.sortMode} onSortModeChange={(sortMode, animate) => {
+        setAnimateProjectSorting(animate);
+        setPreferences((previous) => ({ ...previous, sortMode }));
+      }} />
       <nav ref={projectListRef} className="sidebar-project-list" aria-label={t("sidebar.projects")} aria-busy={loading}>
         {loading && <div className="sidebar-empty" role="status">{t("common.loading")}</div>}
         {error && <div className="sidebar-empty text-danger" role="alert">{error}</div>}
         {!loading && !error && visibleProjects.length === 0 && <div className="sidebar-empty" role="status">{t(searching ? "sidebar.noSearchResults" : "sidebar.noProjects")}</div>}
-        {visibleProjects.map((project) => (
-          <ProjectGroup key={project.key} project={project} expanded={searching || (preferences.expanded[project.key] ?? project.key === activeProjectKey)} active={project.key === activeProjectKey} duplicateName={projects.some((other) => other.key !== project.key && other.name === project.name)} onToggle={(expanded) => {
+        <SortableProjects projects={visibleProjects} disabled={searching || loading} animateChanges={animateProjectSorting && !searching} listRef={projectListRef} onReorder={(projectOrder) => {
+          setPreferences((previous) => ({ ...previous, sortMode: "manual", projectOrder }));
+        }} renderProject={(project, dragHandle, dragging) => (
+          <ProjectGroup project={project} dragHandle={dragHandle} dragging={dragging} expanded={searching || (preferences.expanded[project.key] ?? project.key === activeProjectKey)} active={project.key === activeProjectKey} duplicateName={projects.some((other) => other.key !== project.key && other.name === project.name)} onToggle={(expanded) => {
             if (searching) setSearchQuery("");
             setExpanded(project.key, expanded);
           }} onNewSession={() => newSession(project.cwd)}>
             {project.sessions.length === 0 && <button className="sidebar-empty-project" onClick={() => newSession(project.cwd)}>{t("sidebar.startFirstSession")}<SidebarIcon name="plus" size={13} /></button>}
             {project.tree.map((node) => <SessionTreeItem key={node.session.id} node={node} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} onRenamed={loadSessions} onSessionDeleted={(id) => { onSessionDeleted?.(id); void loadSessions(); }} onBranchSession={onBranchSession} onCloneSession={onCloneSession} onExportSession={onExportSession} depth={0} searching={searching} />)}
           </ProjectGroup>
-        ))}
+        )} />
       </nav>
       {selectedCwd && <section className="sidebar-explorer" data-open={explorerOpen}>
         <div className="sidebar-explorer-heading">

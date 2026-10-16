@@ -10,6 +10,8 @@ const paths = {
   close: <path d="m6 6 12 12M18 6 6 18" />,
   refresh: <><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6" /></>,
   check: <path d="m5 12 4 4L19 6" />,
+  sort: <path d="M4 6h16M7 12h10M10 18h4" />,
+  grip: <><circle cx="8" cy="5" r="1" /><circle cx="16" cy="5" r="1" /><circle cx="8" cy="12" r="1" /><circle cx="16" cy="12" r="1" /><circle cx="8" cy="19" r="1" /><circle cx="16" cy="19" r="1" /></>,
   more: <><circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" /></>,
   branch: <><circle cx="6" cy="18" r="3" /><circle cx="18" cy="6" r="3" /><path d="M6 3v12m12-6a9 9 0 0 1-9 9" /></>,
   copy: <><rect x="8" y="8" width="13" height="13" rx="2" /><path d="M16 4V3H3v13h1" /></>,

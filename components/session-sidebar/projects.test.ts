@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionInfo } from "../../lib/types";
-import { groupProjects, parseSidebarPreferences, projectKey, searchProjects } from "./projects.ts";
+import { defaultSidebarPreferences, groupProjects, moveProject, parseSidebarPreferences, projectKey, searchProjects, sortProjects } from "./projects.ts";
 
 function session(id: string, cwd: string, name = id, parentSessionId?: string): SessionInfo {
   return { id, cwd, name, parentSessionId, path: id + ".jsonl", created: "2026-10-01T00:00:00Z", modified: "2026-10-15T00:00:00Z", firstMessage: "", messageCount: 2 };
@@ -56,8 +56,45 @@ test("cross-project forks stay in their own working directory", () => {
 });
 
 test("preferences recover from invalid storage and keep only valid presentation fields", () => {
-  assert.deepEqual(parseSidebarPreferences("broken"), { paths: [], expanded: {}, explorerOpen: true });
+  assert.deepEqual(parseSidebarPreferences("broken"), defaultSidebarPreferences);
   assert.deepEqual(parseSidebarPreferences(JSON.stringify({ paths: ["D:/Pi", null, 3, ""], expanded: { "d:/pi": false, invalid: 4 }, explorerOpen: false, token: "ignored" })), {
-    paths: ["D:/Pi"], expanded: { "d:/pi": false }, explorerOpen: false,
+    paths: ["D:/Pi"], expanded: { "d:/pi": false }, explorerOpen: false, sortMode: "name", projectOrder: [],
   });
+});
+
+test("name ordering is natural, deterministic and leaves conversation trees untouched", () => {
+  const projects = groupProjects([session("a", "D:/Project10"), session("b", "D:/Project2"), session("c", "D:/Alpha")]);
+  const sorted = sortProjects(projects, "name");
+  assert.deepEqual(sorted.map((project) => project.name), ["Alpha", "Project2", "Project10"]);
+  assert.equal(sorted[0].tree, projects.find((project) => project.name === "Alpha")!.tree);
+  assert.notEqual(sorted, projects);
+});
+
+test("recent sorting uses the latest conversation in each project with empty projects last", () => {
+  const older = session("older", "D:/Alpha");
+  older.modified = "2026-10-14T00:00:00Z";
+  const newest = session("newest", "D:/Zulu");
+  newest.modified = "2026-10-16T00:00:00Z";
+  const projects = groupProjects([older, session("middle", "D:/Zulu"), newest], ["D:/Empty"]);
+  assert.deepEqual(sortProjects(projects, "recent").map((project) => project.name), ["Zulu", "Alpha", "Empty"]);
+});
+
+test("manual moves preserve every project and handle stale keys or newly added folders", () => {
+  const keys = ["d:/alpha", "d:/beta", "d:/gamma"];
+  assert.deepEqual(moveProject(keys, "d:/gamma", "d:/alpha"), ["d:/gamma", "d:/alpha", "d:/beta"]);
+  assert.deepEqual(keys, ["d:/alpha", "d:/beta", "d:/gamma"]);
+  assert.equal(moveProject(keys, "missing", "d:/alpha"), keys);
+  assert.equal(moveProject(keys, "d:/alpha", "d:/alpha"), keys);
+  const projects = groupProjects([], ["D:/Alpha", "D:/Beta", "D:/New2", "D:/New10"]);
+  assert.deepEqual(sortProjects(projects, "manual", ["deleted", "d:/beta", "d:/alpha"]).map((project) => project.name), ["Beta", "Alpha", "New2", "New10"]);
+  assert.deepEqual(sortProjects(projects, "name").map((project) => project.name), ["Alpha", "Beta", "New2", "New10"]);
+});
+
+test("old preferences migrate to name sorting and manual order survives storage validation", () => {
+  assert.equal(parseSidebarPreferences('{"explorerOpen":false}').sortMode, "name");
+  const saved = parseSidebarPreferences(JSON.stringify({ sortMode: "manual", projectOrder: ["a", "b", "a", 4, null] }));
+  assert.equal(saved.sortMode, "manual");
+  assert.deepEqual(saved.projectOrder, ["a", "b"]);
+  assert.deepEqual(parseSidebarPreferences(JSON.stringify(saved)), saved);
+  assert.equal(parseSidebarPreferences('{"sortMode":"unexpected"}').sortMode, "name");
 });

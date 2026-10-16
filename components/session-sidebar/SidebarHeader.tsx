@@ -4,6 +4,8 @@ import { useState, useCallback, useRef } from "react";
 import { PiAgentTitle } from "./PiAgentTitle";
 import { pickDirectoryFromHost } from "./helpers";
 import { SidebarIcon } from "./SidebarIcon";
+import { ProjectSortMenu } from "./ProjectSortMenu";
+import type { ProjectSortMode } from "./projects";
 import { useI18n } from "../I18nProvider";
 import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 
@@ -15,9 +17,11 @@ interface SidebarHeaderProps {
   sessionRefreshDone: boolean;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
+  sortMode: ProjectSortMode;
+  onSortModeChange: (mode: ProjectSortMode, animate: boolean) => void;
 }
 
-export function SidebarHeader({ selectedCwd, onNewSession, onAddProject, loadSessions, sessionRefreshDone, searchQuery, onSearchQueryChange }: SidebarHeaderProps) {
+export function SidebarHeader({ selectedCwd, onNewSession, onAddProject, loadSessions, sessionRefreshDone, searchQuery, onSearchQueryChange, sortMode, onSortModeChange }: SidebarHeaderProps) {
   const { t } = useI18n();
   const [menuOpen, setMenuOpen] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -84,6 +88,7 @@ export function SidebarHeader({ selectedCwd, onNewSession, onAddProject, loadSes
       <div className="sidebar-section-heading">
         <span>{t("sidebar.projects")}</span>
         <div className="sidebar-section-actions">
+          <ProjectSortMenu value={sortMode} onChange={onSortModeChange} />
           <button className="sidebar-icon-button sidebar-refresh-button" data-done={sessionRefreshDone || undefined} onClick={() => void loadSessions()} title={t("sidebar.refreshSessions")} aria-label={t("sidebar.refreshSessions")}>
             <SidebarIcon name={sessionRefreshDone ? "check" : "refresh"} size={14} />
           </button>

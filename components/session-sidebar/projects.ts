@@ -82,9 +82,39 @@ export interface SidebarPreferences {
   paths: string[];
   expanded: Record<string, boolean>;
   explorerOpen: boolean;
+  sortMode: ProjectSortMode;
+  projectOrder: string[];
 }
 
-export const defaultSidebarPreferences: SidebarPreferences = { paths: [], expanded: {}, explorerOpen: true };
+export type ProjectSortMode = "name" | "recent" | "manual";
+
+export const defaultSidebarPreferences: SidebarPreferences = {
+  paths: [], expanded: {}, explorerOpen: true, sortMode: "name", projectOrder: [],
+};
+
+export function sortProjects(projects: SidebarProject[], mode: ProjectSortMode, order: string[] = [], locale = "en"): SidebarProject[] {
+  const collator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
+  const byName = (a: SidebarProject, b: SidebarProject) =>
+    collator.compare(a.name, b.name) || a.key.localeCompare(b.key);
+  const positions = new Map(order.map((key, index) => [key, index]));
+  return [...projects].sort((a, b) => {
+    if (mode === "recent") return b.modified.localeCompare(a.modified) || byName(a, b);
+    if (mode === "manual") {
+      const delta = (positions.get(a.key) ?? Infinity) - (positions.get(b.key) ?? Infinity);
+      if (delta && !Number.isNaN(delta)) return delta;
+    }
+    return byName(a, b);
+  });
+}
+
+export function moveProject(keys: string[], source: string, target: string): string[] {
+  const from = keys.indexOf(source);
+  const to = keys.indexOf(target);
+  if (from < 0 || to < 0 || from === to) return keys;
+  const next = [...keys];
+  next.splice(to, 0, next.splice(from, 1)[0]);
+  return next;
+}
 
 export function parseSidebarPreferences(value: string | null): SidebarPreferences {
   try {
@@ -96,6 +126,9 @@ export function parseSidebarPreferences(value: string | null): SidebarPreference
       expanded: saved.expanded && typeof saved.expanded === "object" && !Array.isArray(saved.expanded)
         ? Object.fromEntries(Object.entries(saved.expanded).filter(([, open]) => typeof open === "boolean")) : {},
       explorerOpen: typeof saved.explorerOpen === "boolean" ? saved.explorerOpen : true,
+      sortMode: saved.sortMode === "recent" || saved.sortMode === "manual" ? saved.sortMode : "name",
+      projectOrder: Array.isArray(saved.projectOrder)
+        ? [...new Set(saved.projectOrder.filter((key): key is string => typeof key === "string"))] : [],
     };
   } catch {
     return defaultSidebarPreferences;

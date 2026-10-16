@@ -5,7 +5,7 @@ import { useI18n } from "../I18nProvider";
 import type { SidebarProject } from "./projects";
 import { SidebarIcon } from "./SidebarIcon";
 
-export function ProjectGroup({ project, expanded, active, duplicateName, onToggle, onNewSession, children }: {
+export function ProjectGroup({ project, expanded, active, duplicateName, onToggle, onNewSession, children, dragHandle, dragging = false }: {
   project: SidebarProject;
   expanded: boolean;
   active: boolean;
@@ -13,12 +13,15 @@ export function ProjectGroup({ project, expanded, active, duplicateName, onToggl
   onToggle: (expanded: boolean) => void;
   onNewSession: () => void;
   children: ReactNode;
+  dragHandle?: ReactNode;
+  dragging?: boolean;
 }) {
   const { t } = useI18n();
   const contentId = useId();
   return (
-    <section className="sidebar-project" data-project-key={project.key}>
+    <section className="sidebar-project" data-project-key={project.key} data-dragging={dragging || undefined}>
       <div className="sidebar-project-row" data-active={active || undefined}>
+        {dragHandle}
         <button
           className="sidebar-project-toggle"
           aria-expanded={expanded}
@@ -42,8 +45,8 @@ export function ProjectGroup({ project, expanded, active, duplicateName, onToggl
           <SidebarIcon name="plus" size={15} />
         </button>
       </div>
-      <div className="sidebar-project-content" id={contentId} hidden={!expanded}>
-        {children}
+      <div className="sidebar-project-content" id={contentId} data-expanded={expanded && !dragging} aria-hidden={!expanded || dragging} inert={!expanded || dragging}>
+        <div className="sidebar-project-content-inner">{children}</div>
       </div>
     </section>
   );
