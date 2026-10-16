@@ -1127,7 +1127,6 @@ span.linenumber {
 .sidebar-sort-option { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 8px; border-radius: 6px; outline: none; color: var(--text); font-size: 12px; cursor: default; }
 .sidebar-sort-option[data-highlighted] { background: var(--bg-hover); }
 .sidebar-sort-check { display: flex; align-items: center; width: 15px; flex-shrink: 0; color: var(--text-strong); }
-.sidebar-sort-hint { margin-top: 4px; padding: 8px 9px 5px; border-top: 1px solid var(--divider); color: var(--text-muted); font-size: 11px; line-height: 1.6; }
 .sidebar-session-row {
   display: flex; align-items: center; position: relative; min-height: 33px; margin: 1px 0; padding-right: 5px; border-radius: 7px;
   transition: background-color var(--duration-quick), opacity var(--duration-quick);

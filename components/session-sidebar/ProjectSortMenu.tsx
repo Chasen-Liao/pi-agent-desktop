@@ -38,7 +38,6 @@ export function ProjectSortMenu({ value, onChange }: {
               </Menu.RadioItem>)}
             </Menu.RadioGroup>
           </Menu.Group>
-          <div className="sidebar-sort-hint">{t("sidebar.sortHint")}</div>
         </Menu.Popup>
       </Menu.Positioner>
     </Menu.Portal>
