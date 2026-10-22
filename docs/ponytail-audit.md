@@ -181,5 +181,5 @@ PR #41 合入前按人工 COMMENT 评审落地，范围仅限文档与 helper �
 - **`useDismissOnOutsideClick`**：`onClose` 经 ref，从 effect deps 拿掉，避免父组件每次 render 拆监听；Escape `preventDefault` + `stopPropagation`，keydown 用 capture，让嵌套 picker 先于仍走 bubble 的父 dialog。局限：两个 hook 都挂 document capture 时仍是父先注册先触发，未做 dismiss stack。
 - **`apiJson`**：`fetch` 与 `response.json()` 各自 try/catch，失败抛 `options.fallback`；非 OK 用 `responseError(data) ?? fallback`。测试改为 502 非 JSON / Failed-to-fetch / 空 500 JSON 都走 fallback；403 `{error:"denied"}` 仍是 `denied`。
 - **`jsonError`**：`message` 从 `unknown` 收成 `string`（调用方已是字面量或 `errorMessage()`）。
-- **`Wave2Modals.test.ts`**：不再钉完整 Tailwind `panelClassName`；断言 `ModalSurface` + `panelClassName=` + `max-w-4xl` / `max-w-md` token。
+- **`Wave2Modals.test.ts`**（2026-10-22 重命名为 `components/ModalSurfaces.test.ts`，"Wave2" 命名已不再对应任何项目概念）：不再钉完整 Tailwind `panelClassName`；断言 `ModalSurface` + `panelClassName=` + `max-w-4xl` / `max-w-md` token。
 - **`SessionSidebar`**：`apiJson` 失败用 `e.message`（或 i18n fallback），避免 `String(e)` 带上 `Error: ` 前缀。

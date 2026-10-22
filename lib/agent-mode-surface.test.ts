@@ -1,5 +1,5 @@
 /**
- * Structural + functional surface checks for Wave 1 agent mode / UI bridge commands.
+ * Structural + functional surface checks for the agent mode / UI bridge commands.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
