@@ -21,8 +21,8 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/Chasen-Liao/pi-agent-desktop/releases)
 [![Landing](https://img.shields.io/badge/Landing-GitHub%20Pages-111111?logo=githubpages)](https://chasen-liao.github.io/pi-agent-desktop/)
 
-<video src="public/demo.mp4" poster="public/demo-poster.webp" width="900" autoplay muted loop playsinline aria-label="Pi Agent Desktop デモ動画">
-  <source src="public/demo.mp4" type="video/mp4" />
+<video src="docs/assets/generated/demo.mp4" poster="docs/assets/generated/demo-poster.webp" width="900" autoplay muted loop playsinline aria-label="Pi Agent Desktop デモ動画">
+  <source src="docs/assets/generated/demo.mp4" type="video/mp4" />
 </video>
 
 </div>
