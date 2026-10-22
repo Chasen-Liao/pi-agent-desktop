@@ -1,0 +1,53 @@
+% CASE · First Light — piano motif → build → reveal → sonic logo (35 s, 96 bpm, F → G major)
+% The "intimate opening becomes the full band" launch form, in the manner of a Hisaishi piano cue.
+% Spotting: open (0.3 s) · features (10.3 s) · reveal (21 s) · logo (31.3 s). With a film, these !mark!s
+% land on scene:open, scene:features, scene:reveal and scene:logo.
+% bars 1–4  solo piano states the motif C–F–G–A (5–1–2–3); pedal by harmony, mp, a breath at bar 4.
+% bars 5–8  the pulse (staccato strings) and a soft kick enter; strings swell; bar 8 lands on D major,
+%           the dominant of the new key, and the last beat is empty — the stop before the reveal.
+% bar 9     !hit! on the reveal: up a whole step to G (the lift every launch uses), full band: drums,
+%           bass, piano in a 3+3+2 push, strings singing the motif in octaves, horns underneath.
+% bar 13    the motif again, slower (!rit!), ending on the third — the sonic logo — held on a fermata.
+% Swap the key, the motif and the instruments and the form still works; the stop and the lift are the point.
+X:1
+T:First Light (launch cue: piano motif -> build -> reveal -> sonic logo)
+M:4/4
+L:1/8
+Q:1/4=96
+K:F
+V:RH inst=piano role=melody
+!mp! z2 cf g2 a2- | a2 gf d4 | z2 cd f2 ed | c4- c2 z2 |
+!crescendo(! z2 cf g2 a2- | a2 gf d'4 | c'4 a2 gf | a4- a2 z2 !crescendo)! |
+[K:G] !f! [Bdg]3 [Bdg]3 [Bdg]2 | [Bdg]3 [Bdg]3 [Bdg]2 | [Beg]3 [Beg]3 [Beg]2 | !rit(! [Adf]3 [Adf]3 [Adf]2 |
+!ff! dg a2 !fermata![Bdgb]4 !rit)! |
+V:LH inst=piano
+!mp! F,,C,F,G, A,C F2 | D,,A,,D,E, F,A, D2 | B,,,F,,B,,C, D,F, A,2 | C,,G,,C,F, E,G, C2 |
+D,,4 D,4 | B,,,4 B,,4 | A,,,4 A,,4 | D,,4 D,2 z2 |
+[K:G] !f! G,,3 G,,3 G,,2 | E,,3 E,,3 E,,2 | C,,3 C,,3 C,,2 | D,,3 D,,3 D,,2 |
+!fermata![G,,,G,,]8 |
+V:STR inst=strings
+Z4 |
+!p! !crescendo(! [D,F,A,]8 | [D,F,B,]8 | [C,F,A,]8 | [D,^F,A,]6 z2 !crescendo)! |
+[K:G] !f! z2 [Dd][Gg] [Aa]2 [Bb]2- | [Bb]2 [Aa][Gg] [ee']4 | [dd']4 [Bb]2 [Aa][Gg] | [Aa]4- [Aa]2 [Gg][Aa] |
+!ff! [Dd][Gg] [Aa]2 !fermata![Bb]4 |
+V:PUL inst=stacc gain=0.7
+Z4 |
+!mp! D,A,DA, D,A,DA, | D,F,B,F, D,F,B,F, | C,F,A,F, C,F,A,F, | D,^F,A,^F, D,^F,z2 |
+[K:G] !f! B,DGD B,DGD | B,DGD B,DGD | CEGE CEGE | A,DFD A,DFD |
+z8 |
+V:HRN inst=horn gain=0.8
+Z4 | Z4 |
+[K:G] !mf! [G,B,D]8 | [G,B,E]8 | [G,CE]8 | [F,A,D]8 |
+!f! !fermata![G,B,D]8 |
+V:BAS inst=bass gain=0.9
+Z4 |
+!mp! D,,8 | B,,,8 | A,,,8 | D,,6 z2 |
+[K:G] !f! G,,3 G,,3 G,,2 | E,,3 E,,3 E,,2 | C,,3 C,,3 C,,2 | D,,3 D,,3 D,,2 |
+!fermata!G,,,8 |
+V:DR inst=drums kit=pop
+!mark:open! Z4 |
+!mark:features! !p! C,,4 C,,4 | C,,4 C,,4 | !mp! [C,,^F,,]^F,, ^F,,^F,, [C,,^F,,]^F,, ^F,,^F,, |
+!rise(! !crescendo(! D,,D,, D,,D,, D,,/D,,/D,,/D,,/ D,,/D,,/D,,/D,,/ z2 !crescendo)! !rise)! |
+!mark:reveal! !hit! !f! [C,,^C,]^F,, [D,,^F,,]^F,, [C,,^F,,][C,,^F,,] [D,,^F,,]^F,, | [C,,^F,,]^F,, [D,,^F,,]^F,, [C,,^F,,][C,,^F,,] [D,,^F,,]^F,, |
+[C,,^F,,]^F,, [D,,^F,,]^F,, [C,,^F,,][C,,^F,,] [D,,^F,,]^F,, | [C,,^F,,]^F,, [D,,^F,,]^F,, [C,,^F,,] A,,/A,,/ D,,/D,,/ D,,/D,,/ |
+!mark:logo! !ff! !fermata![C,,^C,]8 |

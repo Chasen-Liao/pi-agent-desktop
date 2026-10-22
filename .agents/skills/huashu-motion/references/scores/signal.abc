@@ -1,0 +1,67 @@
+% CASE · Signal — the fast, tech-feeling cue (27 s, 128 bpm, E minor): every move of rhythm.md in notation.
+% Measured section loudness: hook −16.5 · verse −18.6 · build −16.1 · stop −21.2 · drop −13.9 dB RMS —
+% steps up, a stop, then the peak. (A first draft opened at the same level as the drop; the hook was
+% taken down one dynamic so the drop has somewhere to go.)
+% bars 1–2  hook hot: four-on-the-floor, hats, bass and the pluck figure from the first beat, a crash, mf.
+% bars 3–6  half-time verse: the snare only on beat 3 — the feel changes, the tempo does not; the
+%           bass in a 3+3+2; bar 6 ends with a !stutter! turnaround.
+% bars 7–8  build: the whole mix filtered open (!filter!), snare eighths then sixteenths, a tape stop
+%           (!stop!) on the last beat.
+% bar 9     the stop: half a bar of silence with only a riser pulling into the drop.
+% bars 10–13 drop (!hit! = impact + subdrop): kick on every beat, off-beat supersaw stabs, violins sing
+%           the hook in octaves, piano octaves on the downbeats, sixteenth plucks.
+% bar 14    button: one hit together, then nothing; the crash rings out.
+X:1
+T:Signal (tech launch cue: hook hot -> half-time verse -> stutter -> build -> stop -> drop -> button)
+M:4/4
+L:1/8
+Q:1/4=128
+K:Em
+V:PLK inst=synpluck gain=0.55
+!mark:hook! !mp! E/B/e/B/ G/B/e/B/ E/B/e/B/ G/B/e/B/ | C/G/e/G/ E/G/e/G/ C/G/e/G/ E/G/e/G/ |
+!mark:verse! !mp! E/B/e/B/ G/B/e/B/ E/B/e/B/ G/B/e/B/ | C/G/e/G/ E/G/e/G/ C/G/e/G/ E/G/e/G/ | D/G/d/G/ B,/G/d/G/ D/G/d/G/ B,/G/d/G/ |
+D/A/d/A/ F/A/d/A/ !stutter(! D/A/d/A/ F/A/d/A/ !stutter)! |
+!mark:build! !filter(! !crescendo(! E/B/e/B/ G/B/e/B/ E/B/e/B/ G/B/e/B/ | C/G/e/G/ E/G/e/G/ D/A/d/A/ !filter)! !stop(! F/A/d/A/ !stop)! !crescendo)! |
+[M:2/4] !mark:stop! z4 |
+[M:4/4] !ff! E/B/e/B/ G/B/e/B/ E/B/e/B/ G/B/e/B/ | C/G/e/G/ E/G/e/G/ C/G/e/G/ E/G/e/G/ | D/G/d/G/ B,/G/d/G/ D/G/d/G/ B,/G/d/G/ | D/A/d/A/ F/A/d/A/ D/A/d/A/ F/A/d/A/ |
+[EBe]z z2 z4 |
+V:SAW inst=supersaw gain=0.5
+z8 | z8 |
+!p! [E,G,B,]8 | [C,E,G,]8 | [D,G,B,]8 | [D,F,A,]8 |
+!mp! [E,G,B,]8 | [C,E,G,]4 [D,F,A,]4 |
+[M:2/4] z4 |
+[M:4/4] !f! z[EGB] z[EGB] z[EGB] z[EGB] | z[EGc] z[EGc] z[EGc] z[EGc] | z[DGB] z[DGB] z[DGB] z[DGB] | z[DFA] z[DFA] z[DFA] z[DFA] |
+[EGB]z z2 z4 |
+V:VLN inst=violins role=melody
+z8 | z8 | z8 | z8 | z8 | z8 | z8 | z8 |
+[M:2/4] z4 |
+[M:4/4] !f! [ee']3 [dd']3 [bb']2 | [c'c'']3 [bb']3 [gg']2 | [dd']3 [bb']3 [gg']2 | [aa']4 [ff']2 [dd']2 |
+[ee']z z2 z4 |
+V:PNO inst=piano
+!mf! [E,,E,]2 z6 | [C,,C,]2 z6 |
+z8 | z8 | z8 | z8 | z8 | z8 |
+[M:2/4] z4 |
+[M:4/4] !ff! [E,,E,]2 z6 | [C,,C,]2 z6 | [G,,G,]2 z6 | [D,,D,]2 z6 |
+[E,,E,B,E]z z2 z4 |
+V:BAS inst=synbass gain=0.8
+!mf! E,,E,,E,,E,, E,,E,,E,,E,, | C,,C,,C,,C,, C,,C,,C,,C,, |
+!mf! E,,3 E,,3 E,,2 | C,,3 C,,3 C,,2 | G,,3 G,,3 G,,2 | D,,3 D,,3 D,,2 |
+E,,E,,E,,E,, E,,E,,E,,E,, | C,,C,,C,,C,, D,,D,,D,,D,, |
+[M:2/4] z4 |
+[M:4/4] !ff! E,,E,E,,E, E,,E,E,,E, | C,,C,C,,C, C,,C,C,,C, | G,,G,G,,G, G,,G,G,,G, | D,,D,D,,D, D,,D,D,,D, |
+E,,z z2 z4 |
+V:DK inst=drums kit=808 gain=0.9
+!mf! C,,2 C,,2 C,,2 C,,2 | C,,2 C,,2 C,,2 C,,2 |
+C,,2 z2 z3 C,, | C,,2 z2 z3 C,, | C,,2 z2 z3 C,, | C,,2 z2 z2 z2 |
+C,,2 C,,2 C,,2 C,,2 | C,,2 C,,2 C,,2 z2 |
+[M:2/4] z4 |
+[M:4/4] !ff! C,,2 C,,2 C,,2 C,,2 | C,,2 C,,2 C,,2 C,,2 | C,,2 C,,2 C,,2 C,,2 | C,,2 C,,2 C,,2 C,,2 |
+C,,z z2 z4 |
+V:DR inst=drums kit=pop
+!mf! [^C,^F,,]^F,, [D,,^F,,]^F,, ^F,,^F,, [D,,^F,,]^F,, | ^F,,^F,, [D,,^F,,]^F,, ^F,,^F,, [D,,^F,,]^A,, |
+!mp! ^F,,^F,, ^F,,^F,, [D,,^F,,]^F,, ^F,,^F,, | ^F,,^F,, ^F,,^F,, [D,,^F,,]^F,, ^F,,^F,, | ^F,,^F,, ^F,,^F,, [D,,^F,,]^F,, ^F,,^F,, | ^F,,^F,, ^F,,^F,, [D,,^F,,]^F,, A,,A,, |
+!crescendo(! D,,D,, D,,D,, D,,D,, D,,D,, | D,,/D,,/D,,/D,,/ D,,/D,,/D,,/D,,/ D,,/D,,/D,,/D,,/ z2 !crescendo)! |
+[M:2/4] !rise(! z4 |
+[M:4/4] !rise)! !mark:drop! !hit! !ff! [^C,^F,,]^F,, [D,,^F,,]^F,, ^F,,^F,, [D,,^F,,]^F,, | ^F,,^F,, [D,,^F,,]^F,, ^F,,^F,, [D,,^F,,]^A,, |
+[^C,^F,,]^F,, [D,,^F,,]^F,, ^F,,^F,, [D,,^F,,]^F,, | ^F,,^F,, [D,,^F,,]^F,, [D,,^F,,] A,,/A,,/ D,,/D,,/D,,/D,,/ |
+!mark:logo! [^C,D,,]z z2 z4 |

@@ -43,6 +43,12 @@
       "skillPath": "skills/find-animation-opportunities/SKILL.md",
       "computedHash": "c6673fadf179233cc0a52c978ea9acc9b82a210665c749307a571a86ed4c092e"
     },
+    "huashu-motion": {
+      "source": "alchaincyf/huashu-motion",
+      "sourceType": "github",
+      "skillPath": "skills/huashu-motion/SKILL.md",
+      "computedHash": "5cfc4fed82690bd7428cbc20aec40587a26f9607dd51ad141d943ff71a8329ec"
+    },
     "improve-animations": {
       "source": "emilkowalski/skills",
       "sourceType": "github",

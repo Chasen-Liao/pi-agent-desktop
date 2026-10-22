@@ -1,0 +1,5 @@
+#!/bin/sh
+# Runs the huashu-motion CLI shipped next to this skill; falls back to the npm package.
+DIR="$(cd "$(dirname "$0")" && pwd -P)"
+if [ -f "$DIR/../../../cli/om.js" ]; then exec node "$DIR/../../../cli/om.js" "$@"; fi
+exec npx --yes huashu-motion "$@"
