@@ -732,12 +732,6 @@ export class AgentSessionWrapper {
 declare global {
   var __piSessions: Map<string, AgentSessionWrapper> | undefined;
   var __piStartLocks: Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>> | undefined;
-  var __piSessionOnlyTrust: Map<string, boolean> | undefined;
-}
-
-export function getSessionOnlyTrustMap(): Map<string, boolean> {
-  if (!globalThis.__piSessionOnlyTrust) globalThis.__piSessionOnlyTrust = new Map();
-  return globalThis.__piSessionOnlyTrust;
 }
 
 export type StartRpcSessionOptions = {

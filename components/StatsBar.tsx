@@ -9,6 +9,7 @@ import { isSubscriptionPlan } from "@/lib/upstream-usage/format";
 
 import type { SessionStats } from "@/hooks/agent-session/session-stats";
 import type { ContextUsage } from "@/lib/pi-types";
+import type { StatuslineResponse } from "@/lib/types";
 
 export type { SessionStats, ContextUsage };
 
@@ -17,6 +18,8 @@ export interface StatsBarProps {
   sessionStats?: SessionStats | null;
   contextUsage?: ContextUsage | null;
   currentProvider?: string | null;
+  /** Workspace status line snapshot (git + workspace state) from /statusline. */
+  statusline?: StatuslineResponse | null;
 }
 
 export const StatsBar = React.memo(function StatsBar({
@@ -24,6 +27,7 @@ export const StatsBar = React.memo(function StatsBar({
   sessionStats = null,
   contextUsage = null,
   currentProvider = null,
+  statusline = null,
 }: StatsBarProps) {
   const { t } = useI18n();
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -109,6 +113,10 @@ export const StatsBar = React.memo(function StatsBar({
   }
   tooltipParts.push(t("usage.title"));
   const tooltip = tooltipParts.join("  |  ");
+
+  const dirtyFiles = statusline
+    ? statusline.modified + statusline.staged + statusline.untracked + statusline.deleted
+    : 0;
 
   const isSubOrOAuth = Boolean(
     currentUsage &&
@@ -246,6 +254,22 @@ export const StatsBar = React.memo(function StatsBar({
               <span className="text-text font-medium">{currentUsage.providerName}</span>
               <span className="text-accent font-medium text-[9px]">{t("usage.sub")}</span>
             </span>
+        )}
+
+        {/* Workspace status line: branch + ahead/behind + dirty file count */}
+        {statusline && statusline.isRepo && (
+          <span className="flex items-center gap-1 font-normal">
+            <span className="text-text font-medium">{statusline.branch ?? "—"}</span>
+            {statusline.ahead ? (
+              <span className="text-success">↑{statusline.ahead}</span>
+            ) : null}
+            {statusline.behind ? (
+              <span className="text-warning">↓{statusline.behind}</span>
+            ) : null}
+            {dirtyFiles > 0 ? (
+              <span className="text-warning">●{dirtyFiles}</span>
+            ) : null}
+          </span>
         )}
 
         {/* Subtle Chevron indicator */}

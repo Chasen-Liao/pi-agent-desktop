@@ -552,12 +552,20 @@ export function SkillsConfig({
     setToggling((s) => new Set(s).add(skill.filePath));
     setSaveError(null);
     try {
-      const res = await fetch("/api/skills", {
-        method: "PATCH",
+      // Go through /api/extensions, which validates that the target really is
+      // a discovered skill inside an allowed skill directory. The former
+      // PATCH /api/skills accepted any path the client sent.
+      const res = await fetch("/api/extensions", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filePath: skill.filePath,
-          disableModelInvocation: next,
+          action: "toggle",
+          type: "skill",
+          nameOrPath: skill.filePath,
+          scope: skill.sourceInfo?.scope === "project" ? "project" : "global",
+          cwd,
+          // `enabled` is the target state; disable-model-invocation is its inverse.
+          enabled: !next,
         }),
       });
       const d = (await res.json()) as { success?: boolean; error?: string };
@@ -581,7 +589,7 @@ export function SkillsConfig({
         return n;
       });
     }
-  }, []);
+  }, [cwd]);
 
   const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
 

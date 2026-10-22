@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath, getHeaderAsync } from "@/lib/session-reader";
-import { startRpcSession, getRpcSession, getSessionOnlyTrustMap } from "@/lib/rpc-manager";
+import { startRpcSession, getRpcSession } from "@/lib/rpc-manager";
 import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
 import { validateAgentCommand } from "@/lib/agent-commands";
-import { evaluateProjectTrust } from "@/lib/project-trust-desktop";
+import { evaluateProjectTrust, getSessionOnlyTrustMap } from "@/lib/project-trust-desktop";
 
 // POST /api/agent/[id] - Send a command to an existing session
 export async function POST(

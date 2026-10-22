@@ -104,3 +104,46 @@ test("handleFork guards against an empty entryId", () => {
   );
   assert.match(block, /if \(!sid \|\| !entryId\) return;/);
 });
+
+// A slash command that is listed in the menu but has no case in the dispatch
+// switch falls through and is sent to the model as a plain user message.
+// /statusline was exactly that bug: it reached the LLM instead of the
+// status line. Pin every registered command to a handler.
+test("every builtin slash command has a dispatch handler", () => {
+  const slashSource = readFileSync(
+    new URL("../../lib/slash-commands.ts", import.meta.url),
+    "utf8"
+  );
+  const registered = [...slashSource.matchAll(/id: "([^"]+)", label: "\/[^"]+"/g)].map(
+    (m) => m[1]
+  );
+  const handled = [...source.matchAll(/case "([^"]+)":/g)].map((m) => m[1]);
+
+  assert.ok(registered.length >= 4, "expected the builtin slash commands to be listed");
+  for (const id of registered) {
+    assert.ok(
+      handled.includes(id),
+      `/${id} appears in the slash menu but has no case in the dispatch switch, ` +
+        `so it would be sent to the model as a plain message`
+    );
+  }
+});
+
+test("the /statusline command fetches the status line route and reports it upward", () => {
+  const block = source.slice(
+    source.indexOf('case "statusline"'),
+    source.indexOf("if (handled) return;")
+  );
+  assert.ok(block.length > 0, "expected a /statusline branch");
+  assert.match(block, /fetch\(`\/api\/statusline\?cwd=/);
+  assert.match(block, /onStatusline\?\.\(d\)/);
+  // Both exit paths must mark the command as handled: the empty-cwd path and
+  // the fetch path. If either is missing, the command falls through and is
+  // sent to the model as a plain user message.
+  const handledCount = (block.match(/handled = true;/g) ?? []).length;
+  assert.equal(
+    handledCount,
+    2,
+    "both the empty-cwd path and the fetch path must set handled = true"
+  );
+});

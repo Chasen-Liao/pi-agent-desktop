@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
-import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
+import { NextResponse } from "next/server.js";
+import { errorMessage, getRequestId, jsonError, logApiError } from "../../../lib/api-error.ts";
 import {
   applyTrustDecision,
   evaluateProjectTrust,
+  getSessionOnlyTrustMap,
   isTrustOptionId,
   type TrustOptionId,
-} from "@/lib/project-trust-desktop";
-import { getSessionOnlyTrustMap } from "@/lib/rpc-manager";
+} from "../../../lib/project-trust-desktop.ts";
 
 export const dynamic = "force-dynamic";
 

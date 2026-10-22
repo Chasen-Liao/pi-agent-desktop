@@ -1,6 +1,6 @@
 import path from "path";
-import { listAllSessions } from "./session-reader";
-import { validateAgentCwd } from "./path-policy";
+import { listAllSessions } from "./session-reader.ts";
+import { validateAgentCwd } from "./path-policy.ts";
 
 // Short-TTL cache for the allowed-roots set. Without this, every file list/read
 // request re-scans every pi session on disk just to check access. 5s is short

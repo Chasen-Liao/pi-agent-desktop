@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 import { existsSync } from "fs";
-import { getSessionOnlyTrustMap, startRpcSession } from "@/lib/rpc-manager";
-import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
-import { validateAgentCwd } from "@/lib/path-policy";
-import { validateAgentCommand } from "@/lib/agent-commands";
-import { evaluateProjectTrust } from "@/lib/project-trust-desktop";
-import { isAgentMode, isToolPreset } from "@/lib/approval-policy";
+import { startRpcSession } from "../../../../lib/rpc-manager.ts";
+import { errorMessage, getRequestId, jsonError, logApiError } from "../../../../lib/api-error.ts";
+import { validateAgentCwd } from "../../../../lib/path-policy.ts";
+import { validateAgentCommand } from "../../../../lib/agent-commands.ts";
+import { evaluateProjectTrust, getSessionOnlyTrustMap } from "../../../../lib/project-trust-desktop.ts";
+import { isAgentMode, isToolPreset } from "../../../../lib/approval-policy.ts";
 
 // POST /api/agent/new  body: { cwd: string; type: string; message: string; ... }
 // Spawns a brand-new pi session and immediately sends the first command.

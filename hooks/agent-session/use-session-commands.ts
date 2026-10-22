@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import type { AgentMessage, SessionInfo, CustomMessage, Skill, UserMessage } from "@/lib/types";
+import type { AgentMessage, SessionInfo, CustomMessage, Skill, UserMessage, StatuslineResponse } from "@/lib/types";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { PRESET_NONE, PRESET_DEFAULT, PRESET_FULL } from "@/lib/tool-presets";
 import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
@@ -21,6 +21,32 @@ import {
 } from "./prompt-dispatch-gate";
 
 export type { AttachedImage };
+
+/**
+ * Symbol-only summary of the workspace status line.
+ *
+ * Deliberately free of prose: it renders into the chat transcript and the
+ * hook layer has no i18n context, so only symbols, numbers and git's own
+ * text (branch name, commit subject) are used.
+ */
+function formatStatusline(d: StatuslineResponse): string {
+  if (!d.isRepo) {
+    return d.error ? `— ${d.error}` : "—";
+  }
+  const lines: string[] = [`\`${d.branch ?? "—"}\``];
+  const counts: string[] = [];
+  if (d.ahead) counts.push(`↑${d.ahead}`);
+  if (d.behind) counts.push(`↓${d.behind}`);
+  if (d.staged) counts.push(`+${d.staged}`);
+  if (d.modified) counts.push(`~${d.modified}`);
+  if (d.untracked) counts.push(`?${d.untracked}`);
+  if (d.deleted) counts.push(`−${d.deleted}`);
+  if (counts.length > 0) lines.push(counts.join(" "));
+  if (d.lastCommit) {
+    lines.push(`\`${d.lastCommit.hash.slice(0, 7)}\` ${d.lastCommit.subject}`);
+  }
+  return lines.join("\n");
+}
 
 export type UseSessionCommandsOptions = {
   session: SessionInfo | null;
@@ -46,6 +72,8 @@ export type UseSessionCommandsOptions = {
   setActiveLeafId: (v: string | null) => void;
   setCanExecutePlan: (v: boolean) => void;
   promptTrust: (payload: NeedsTrustPayload) => Promise<string | null>;
+  /** Receives the workspace status line snapshot (git + workspace state). */
+  onStatusline?: (status: StatuslineResponse) => void;
   loadSession: (sid: string, showLoading?: boolean, includeState?: boolean) => Promise<unknown>;
   loadContext: (sid: string, leafId: string) => Promise<unknown>;
   connectEvents: (sid: string) => void;
@@ -83,6 +111,7 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
     setActiveLeafId,
     setCanExecutePlan,
     promptTrust,
+    onStatusline,
     loadSession,
     loadContext,
     connectEvents,
@@ -180,6 +209,52 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
                 ]);
               })
               .catch((e) => console.error("Failed to fetch skills:", e));
+            handled = true;
+            break;
+          }
+          case "statusline": {
+            const cwd = newSessionCwd ?? session?.cwd ?? "";
+            if (!cwd) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "custom",
+                  customType: "statusline_error",
+                  content: "—",
+                  display: true,
+                  timestamp: Date.now(),
+                } as CustomMessage,
+              ]);
+              handled = true;
+              break;
+            }
+            fetch(`/api/statusline?cwd=${encodeURIComponent(cwd)}`)
+              .then((res) => res.json())
+              .then((d: StatuslineResponse) => {
+                onStatusline?.(d);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "custom",
+                    customType: "statusline_info",
+                    content: formatStatusline(d),
+                    display: true,
+                    timestamp: Date.now(),
+                  } as CustomMessage,
+                ]);
+              })
+              .catch((e) => {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "custom",
+                    customType: "statusline_error",
+                    content: String(e),
+                    display: true,
+                    timestamp: Date.now(),
+                  } as CustomMessage,
+                ]);
+              });
             handled = true;
             break;
           }

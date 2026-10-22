@@ -8,7 +8,7 @@ import {
   useReducer,
   useMemo,
 } from "react";
-import type { SessionInfo, SessionTreeNode, UserMessage } from "@/lib/types";
+import type { SessionInfo, SessionTreeNode, StatuslineResponse, UserMessage } from "@/lib/types";
 import type { FollowUpQueueSnapshot } from "@/lib/follow-up-queue";
 import {
   calculateSessionStats,
@@ -79,6 +79,8 @@ export interface UseAgentSessionOptions {
   onAgentEndEvent?: () => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string) => void;
+  /** Receives the workspace status line snapshot (git + workspace state). */
+  onStatusline?: (status: StatuslineResponse) => void;
   modelsRefreshKey?: number;
   onBranchDataChange?: (
     tree: SessionTreeNode[],
@@ -96,6 +98,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onAgentEndEvent,
     onSessionCreated,
     onSessionForked,
+    onStatusline,
     modelsRefreshKey,
     onBranchDataChange,
     onSystemPromptChange,
@@ -557,6 +560,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     connectEvents,
     onSessionCreated,
     onSessionForked,
+    onStatusline,
     onFollowUpQueueSnapshot: acceptFollowUpQueue,
     onPendingSteerQueued: handlePendingSteerQueued,
     onPendingSteerFailed: handlePendingSteerFailed,

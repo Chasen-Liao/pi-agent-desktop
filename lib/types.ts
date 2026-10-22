@@ -226,3 +226,22 @@ export interface Skill {
   };
 }
 
+
+/**
+ * Git + workspace state shown in the status line (GET /api/statusline).
+ * Shared between the route and the UI, so it lives here rather than in the
+ * server-only route module.
+ */
+export interface StatuslineResponse {
+  cwd: string;
+  isRepo: boolean;
+  branch?: string;
+  ahead?: number;
+  behind?: number;
+  modified: number;
+  staged: number;
+  untracked: number;
+  deleted: number;
+  lastCommit?: { hash: string; subject: string };
+  error?: string;
+}

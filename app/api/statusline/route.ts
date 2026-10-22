@@ -1,27 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { isPathAllowedAsync } from "@/lib/allowed-roots";
-import { jsonError } from "@/lib/api-error";
+import { isPathAllowedAsync } from "../../../lib/allowed-roots.ts";
+import { jsonError } from "../../../lib/api-error.ts";
+import type { StatuslineResponse } from "../../../lib/types.ts";
 
 export const dynamic = "force-dynamic";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 4000;
-
-interface StatuslineResponse {
-  cwd: string;
-  isRepo: boolean;
-  branch?: string;
-  ahead?: number;
-  behind?: number;
-  modified: number;
-  staged: number;
-  untracked: number;
-  deleted: number;
-  lastCommit?: { hash: string; subject: string };
-  error?: string;
-}
 
 // Count files by porcelain XY code. `git status --porcelain` lines look like:
 //   " M path"   working tree change (not staged)

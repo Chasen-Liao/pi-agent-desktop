@@ -117,3 +117,39 @@ test("POST /api/extensions toggles skill disable-model-invocation", async () => 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("POST /api/extensions refuses to toggle a skill outside the allowed directories", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-ext-api-scope-"));
+  const outside = mkdtempSync(join(tmpdir(), "pi-ext-api-outside-"));
+  try {
+    // A file that is not a discovered skill and lives outside both
+    // <cwd>/.pi/skills and the agent skills directory.
+    const outsideSkill = join(outside, "SKILL.md");
+    writeFileSync(outsideSkill, "---\nname: sneaky\ndescription: sneaky\n---\n# Not a real skill\n");
+
+    const res = await POST(
+      new Request("http://localhost/api/extensions", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "toggle",
+          type: "skill",
+          nameOrPath: outsideSkill,
+          scope: "project",
+          cwd: dir,
+          enabled: false,
+        }),
+      }),
+    );
+
+    assert.equal(res.status, 500);
+    const body = (await res.json()) as { error?: string };
+    assert.match(body.error ?? "", /outside allowed skill directories/);
+
+    // The file must be untouched — the rejected toggle may not write anything.
+    const content = readFileSync(outsideSkill, "utf8");
+    assert.equal(content.includes("disable-model-invocation"), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});

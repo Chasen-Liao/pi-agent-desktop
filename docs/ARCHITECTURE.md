@@ -370,7 +370,7 @@ stateDiagram-v2
 | 全局变量 | 用途 | 定义位置 | 回收策略 |
 | --- | --- | --- | --- |
 | `globalThis.__piSessions` | `Map<sessionId, AgentSessionWrapper>` 活跃会话注册表 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | wrapper.destroy() 时 delete；process.once("exit") 全清 |
-| `globalThis.__piSessionOnlyTrust` | `Map<sessionId, boolean>` 会话级信任状态 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | 会话信任完成或测试 reset 时清理 |
+| `globalThis.__piSessionOnlyTrust` | `Map<cwd, boolean>` 会话级信任状态 | [lib/project-trust-desktop.ts](../lib/project-trust-desktop.ts) | 会话信任完成或测试 reset 时清理 |
 | `globalThis.__piSessionPathCacheState` | `sessionId → .jsonl` 路径与 miss 缓存 | [lib/session-reader.ts](../lib/session-reader.ts) | invalidateSessionPathEntry(id) 单条删；TTL 自动过期 |
 | `globalThis.__piStartLocks` | `Map<sessionId, Promise>` 并发启动共享锁 | [lib/rpc-manager.ts](../lib/rpc-manager.ts) | startRpcSession finally 块自动清 |
 | `globalThis.__piWriteLocks` | `Map<filePath, Promise>` per-file 写入锁 | [lib/session-lock.ts](../lib/session-lock.ts) | withFileLock finally 块自动清 |
@@ -587,7 +587,7 @@ components/models-config/     模型配置弹窗的子组件
 | 路由 | 方法 | 用途 |
 | --- | --- | --- |
 | `app/api/extensions/route.ts` | GET / POST | 列出已加载扩展、Skill 及诊断信息；切换扩展/Skill 状态 |
-| `app/api/skills/route.ts` | GET | 列出 / 启用 / 禁用技能 |
+| `app/api/skills/route.ts` | GET | 列出已加载技能（启用/禁用走 `POST /api/extensions`，它会校验目标位于允许的 skill 目录内） |
 | `app/api/skills/search/route.ts` | POST | 搜索远程技能 |
 | `app/api/skills/install/route.ts` | POST | 安装技能 |
 
@@ -629,7 +629,7 @@ components/models-config/     模型配置弹窗的子组件
 
 | 路由 | 方法 | 用途 |
 | --- | --- | --- |
-| `app/api/statusline/route.ts` | GET | git 分支与状态元数据 |
+| `app/api/statusline/route.ts` | GET | git 分支与状态元数据（`/statusline` 命令的供数端点，结果同时进入状态栏） |
 | `app/api/health/route.ts` | GET | 桌面端启动健康探测（`server-wait.ts` 调用） |
 | `app/api/usage/upstream/route.ts` | GET | 查询支持 provider 的上游用量 / 额度；支持 `provider` 单查与 `refresh` 刷新 |
 

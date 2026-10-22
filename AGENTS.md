@@ -76,7 +76,7 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 | `__piWriteLocks` | per-file 写入锁 | `session-lock.ts` |
 | `__piAllowedRootsCache` | 文件访问白名单（5s TTL） | `allowed-roots.ts` |
 | `__piLtmService` | LTM `MemoryService` 单例 | `ltm/service.ts` |
-| `__piSessionOnlyTrust` | per-session 信任状态 | `rpc-manager.ts` |
+| `__piSessionOnlyTrust` | per-session 信任状态 | `project-trust-desktop.ts` |
 | `__piGitWorktreeLocks` | Worktree 创建/清理并发锁 | `git-worktree.ts` |
 | `__piLoginCallbacks` | OAuth 手动输入回调注册表 | `auth/login/[provider]/route.ts` |
 | `__piUpstreamUsageCache` | 上游配额查询缓存（120s TTL） | `lib/upstream-usage/service.ts` |
@@ -118,6 +118,13 @@ SDK 存 `{id, name, arguments}`，前端用 `{toolCallId, toolName, input}`。`n
 ### 8. `electron/csp.ts` 与 `lib/csp.ts` 必须保持两份且逐字一致
 
 `electron/tsconfig.json` 的 `rootDir` 是 `electron/`，electron 侧无法 `import` `../lib`，所以 CSP 指令表有两份副本。**改一侧必须同步另一侧**：`lib/csp.test.ts` 里的 parity 用例会断言两者输出逐字节相等（这也是唯一能发现漂移的守卫）。
+
+### 9. 写路由层测试的两个前提
+
+`npm test` 走 `node --test` 直接执行 TS 文件，因此路由要能被测试必须满足两点：
+
+1. **import 写成可解析的形式**：`next/server.js`（不是 `next/server`）＋ 相对路径带扩展名（`../../../lib/api-error.ts`，不是 `@/lib/api-error`）。`next/server` 在 ESM 下解析不到，`@/` 别名也不被 `node --test` 解析（`import type` 除外，类型导入会被擦除）。目前 30 条路由里有 23 条仍是不可测的写法，**要测哪条就先改哪条**，不必全量改。
+2. **隔离 agent dir**：`ProjectTrustStore` 会向上继承父目录的信任决策，而真实 store 在 `~/.pi/agent`。若曾经信任过某个父目录（例如 `%TEMP%`），它下面所有目录都会被判为"已信任"，依赖"未信任"状态的测试就会随机失败。测试里设置 `process.env.PI_CODING_AGENT_DIR` 指向临时目录即可完全隔离（pi 的 `getAgentDir()` 每次调用都读该变量）。
 
 ---
 

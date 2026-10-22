@@ -1,7 +1,7 @@
 import { resolveSessionPath, getHeaderAsync } from "@/lib/session-reader";
-import { getRpcSession, startRpcSession, getSessionOnlyTrustMap } from "@/lib/rpc-manager";
+import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
 import { errorMessage, getRequestId, jsonError, logApiError } from "@/lib/api-error";
-import { evaluateProjectTrust } from "@/lib/project-trust-desktop";
+import { evaluateProjectTrust, getSessionOnlyTrustMap } from "@/lib/project-trust-desktop";
 
 export const dynamic = "force-dynamic";
 

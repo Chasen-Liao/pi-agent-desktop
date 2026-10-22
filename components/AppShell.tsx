@@ -13,7 +13,7 @@ import { ExtensionsConfigModal } from "./ExtensionsConfigModal";
 import { SessionExportModal } from "./SessionExportModal";
 import { BranchCloneModal, type BranchCloneMode } from "./BranchCloneModal";
 import { useTheme } from "@/hooks/useTheme";
-import type { SessionInfo, SessionTreeNode } from "@/lib/types";
+import type { SessionInfo, SessionTreeNode, StatuslineResponse } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import { usePanelLayout } from "@/hooks/usePanelLayout";
 import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
@@ -114,6 +114,8 @@ export function AppShell() {
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   const [currentModel, setCurrentModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
+  // Workspace status line (git + workspace state), refreshed by /statusline.
+  const [statusline, setStatusline] = useState<StatuslineResponse | null>(null);
 
   const handleSessionStatsChange = useCallback((stats: SessionStats | null) => {
     setSessionStats(stats);
@@ -125,6 +127,10 @@ export function AppShell() {
 
   const handleContextUsageChange = useCallback((usage: ContextUsage | null) => {
     setContextUsage(usage);
+  }, []);
+
+  const handleStatusline = useCallback((status: StatuslineResponse) => {
+    setStatusline(status);
   }, []);
 
   // Single active panel — only one dropdown open at a time
@@ -574,6 +580,7 @@ export function AppShell() {
               sessionStats={sessionStats}
               contextUsage={contextUsage}
               currentProvider={currentModel?.provider}
+              statusline={statusline}
             />
             <div ref={shellMenuRef} className="relative h-full [-webkit-app-region:no-drag]">
               <button
@@ -724,6 +731,7 @@ export function AppShell() {
                 onSessionStatsChange={handleSessionStatsChange}
                 onContextUsageChange={handleContextUsageChange}
                 onModelChange={handleModelChange}
+                onStatusline={handleStatusline}
               />
             ) : showPlaceholder ? (
               activeCwd ? (

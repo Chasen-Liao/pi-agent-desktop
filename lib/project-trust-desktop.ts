@@ -19,6 +19,22 @@ export function getTrustParentPath(cwd: string): string | undefined {
   return parent === cwd ? undefined : parent;
 }
 
+declare global {
+  // HMR-safe: the module-level variable would be dropped on hot reload.
+  var __piSessionOnlyTrust: Map<string, boolean> | undefined;
+}
+
+/**
+ * Session-scoped trust decisions ("trust only for this session").
+ *
+ * Lives here rather than in rpc-manager so the trust routes do not have to
+ * pull in the whole RPC runtime just to reach this map.
+ */
+export function getSessionOnlyTrustMap(): Map<string, boolean> {
+  if (!globalThis.__piSessionOnlyTrust) globalThis.__piSessionOnlyTrust = new Map();
+  return globalThis.__piSessionOnlyTrust;
+}
+
 /** Options mirrored from pi's getProjectTrustOptions (includeSessionOnly: true). */
 export function buildTrustOptions(cwd: string): TrustOptionDto[] {
   const parentPath = getTrustParentPath(cwd);

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import type { SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
+import type { SessionInfo, SessionTreeNode, StatuslineResponse, ToolResultMessage } from "@/lib/types";
 import { splitActiveThinking } from "@/lib/active-thinking";
 import { MessageList } from "./MessageList";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -31,9 +31,10 @@ interface Props {
   onSessionStatsChange?: (stats: SessionStats | null) => void;
   onContextUsageChange?: (usage: ContextUsage | null) => void;
   onModelChange?: (model: { provider: string; modelId: string } | null) => void;
+  onStatusline?: (status: StatuslineResponse) => void;
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange, onModelChange }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange, onModelChange, onStatusline }: Props) {
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
   const playDoneSoundRef = useRef(playDoneSound);
@@ -73,7 +74,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange,
-    onAgentEndEvent: handleAgentEndEvent,
+    onAgentEndEvent: handleAgentEndEvent, onStatusline,
   });
 
   const [branchCloneModal, setBranchCloneModal] = useState<{
