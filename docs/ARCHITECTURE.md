@@ -442,7 +442,7 @@ Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并�
 
 > 完整清单基于 CodeGraph 索引。所有组件**手写，零 UI 库依赖**，通过 CSS 变量实现暗色/亮色主题。
 
-### 顶层组件（29 个）
+### 顶层组件（30 个）
 
 | 组件 | 职责 |
 | --- | --- |
@@ -465,6 +465,8 @@ Worktree 创建使用 `git worktree add --no-checkout` 后显式 checkout，并�
 | `TabBar.tsx` | 顶部标签栏：Chat 标签 + 多文件标签 |
 | `StatsBar.tsx` | token / cost / 上下文用量与额度摘要；点击打开用量面板 |
 | `UsagePopover.tsx` | 会话用量、上下文容量、上游额度窗口与重置倒计时 |
+| `CodemodeConfig.tsx` | Codemode 模式开关与配置（Pi 0.99.1 原生 codemode 控制） |
+| `GlobalRuntimeErrorReporter.tsx` | 全局 `unhandledrejection` / `error` 收口与节流提示（#20/#33 白屏加固） |
 | `AgentModeSelector.tsx` | Plan / Ask / Full 三档安全模式切换控件 |
 | `ExecutePlanBar.tsx` | Plan 模式生成计划后的“一键执行计划”操作条 |
 | `ExtensionUiDialog.tsx` | Extension UI Bridge 交互弹窗 (confirm/select/input/editor) |
@@ -499,7 +501,7 @@ components/models-config/     模型配置弹窗的子组件
 
 ## 11. Hooks 清单
 
-### 顶层 Hooks（7 个）
+### 顶层 Hooks（8 个）
 
 | Hook | 职责 |
 | --- | --- |
@@ -510,6 +512,7 @@ components/models-config/     模型配置弹窗的子组件
 | `useFileTabs.ts` | 文件标签页状态管理 |
 | `usePanelLayout.ts` | 侧边栏 / 右侧面板宽度持久化 |
 | `useDismissOnOutsideClick.ts` | 点外关闭与 Escape 关闭（onClose 走 ref，避免父组件重渲染拆监听） |
+| `useUpstreamUsage.ts` | 上游额度查询（Codex / DeepSeek / OpenRouter / Anthropic）+ 120s TTL 缓存与 15s 冷却 |
 
 ### `hooks/agent-session/` 子 Hooks / 模块（15 个）
 

@@ -6,6 +6,7 @@ const eslintConfig = [
     ignores: [
       ".claude/worktrees/**",
       ".next/**",
+      "artifacts/**",
       "electron/dist/**",
       "release/**",
       "out/**",

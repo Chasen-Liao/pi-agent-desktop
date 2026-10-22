@@ -87,9 +87,9 @@ npm run dist:mac
 |---|---|
 | `app/api/` | **39** 条 API 路由（含 **memory** 5 条；另有 agent / sessions / files / models / skills / auth / health / mcp / extensions / trust / desktop-settings 等） |
 | `lib/` | 服务端库：`rpc-manager` / `session-reader` / **`ltm/`** / **`i18n/`** / `approval-policy` / `extension-ui-bridge` / `mcp-config` / `session-export` / `session-branch-clone` 等 |
-| `components/` | 29 个顶层组件（含 `I18nProvider` / `AgentThinkingOrb` / `LiquidOrbCanvas` / `McpConfigModal` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
+| `components/` | 30 个顶层组件（含 `I18nProvider` / `AgentThinkingOrb` / `LiquidOrbCanvas` / `McpConfigModal` / `ExtensionUiDialog` / `AgentModeSelector` 等） |
 | `hooks/` | 8 个顶层 hook + `agent-session/` 子目录下 15 个拆分模块 |
-| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 14 个辅助模块 |
+| `electron/` | 主进程 `main.ts` + `preload.ts` / `tray.ts` + 13 个辅助模块 |
 | `bin/pi-web.js` | CLI 入口（`npm i -g` / `npx`） |
 
 ### 最常踩坑的设计决策
