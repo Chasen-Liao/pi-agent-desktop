@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server.js";
 import { errorMessage, getRequestId, jsonError, logApiError } from "../../../lib/api-error.ts";
-import { getExtensionsConfig, mutateExtensionOrSkill, type MutateExtensionOptions } from "../../../lib/extensions-config.ts";
+import { getExtensionsConfig, InvalidSkillTargetError, mutateExtensionOrSkill, type MutateExtensionOptions } from "../../../lib/extensions-config.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +39,11 @@ export async function POST(req: Request) {
     const res = await mutateExtensionOrSkill(body);
     return NextResponse.json(res, { headers: { "x-request-id": requestId } });
   } catch (error) {
+    // A skill that does not exist or sits outside the allowed directories is
+    // a bad request, not a server failure.
+    if (error instanceof InvalidSkillTargetError) {
+      return jsonError(req, 400, errorMessage(error));
+    }
     logApiError({ route: "/api/extensions", method: "POST", requestId, error });
     return jsonError(req, 500, errorMessage(error));
   }

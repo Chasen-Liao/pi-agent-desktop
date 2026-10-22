@@ -40,9 +40,11 @@ writeFileSync(filePath, updated, "utf8");         // ← 任意路径写
 
 - `components/SkillsConfig.tsx` 的 toggle 改调 `POST /api/extensions`（`action:"toggle"`, `type:"skill"`）
 - 删除 `app/api/skills/route.ts` 的 `PATCH`，只保留 `GET`（列出技能）
-- `app/api/extensions/route.test.ts` 新增越界用例：传入允许目录外的 skill 路径 → 被拒，且**目标文件未被修改**
+- `app/api/extensions/route.test.ts` 新增越界用例：传入允许目录外的 skill 路径 → **400**，且**目标文件未被修改**；另补一条 `<cwd>/.pi/skills/<name>/SKILL.md` 的正常路径用例（走 `isSubpath` 分支而非 `isDiscovered`）
 
 现在 skill 开关只有一条路径，且这条路径自带白名单。
+
+> 越界目标原本会落到通用 catch 变成 **500**（客户端非法输入却报服务端错误）。现新增 `InvalidSkillTargetError`，路由把它映射为 **400**，与"非法请求"的语义一致。
 
 ---
 
@@ -57,9 +59,9 @@ writeFileSync(filePath, updated, "utf8");         // ← 任意路径写
 ### 修复
 
 - **接线**：`use-session-commands.ts` 增加 `case "statusline"` → `GET /api/statusline?cwd=` → 结果经 `onStatusline` 回调上传给 `AppShell`，同时以 custom 消息形式进入对话区
-- **状态栏**：`StatsBar` 新增 `statusline` prop，显示分支名、ahead/behind 与脏文件计数（纯符号，不引入未本地化文案）
+- **状态栏**：`StatsBar` 新增 `statusline` prop，显示分支名、ahead/behind 与脏文件计数（纯符号，不引入未本地化文案）；命令本身是**开关**——再执行一次即隐藏
 - **端点**：`StatuslineResponse` 类型移到 `lib/types.ts` 供前后端共享
-- **防复发**：新增测试"每个内置斜杠命令都必须有 dispatch 分支"——注册了命令却没有 case 的命令会被直接测出来
+- **防复发**：命令分发改为受 `CLIENT_HANDLED_SLASH_COMMAND_IDS` 约束的映射表——**菜单里新增命令而没有 handler 会直接编译失败**；另有一条数据断言保证菜单里的命令都在该列表内
 
 ---
 
@@ -82,12 +84,15 @@ Project Trust 的 409 握手是一条**安全边界**，但整条链路没有任
 | `lib/project-trust-desktop.test.ts`（扩充） | `trust-parent`（父目录及其子树被信任）、无父目录时退化为自身、`deny`、`deny-session`、未知 optionId 抛错 |
 | `app/api/trust/route.test.ts`（新增） | 缺 cwd → 400、非法 optionId → 400、合法决策 → 200、GET 的 gate 结构 |
 | `app/api/agent/new/route.test.ts`（新增） | 未信任项目 → **409 + needsTrust 载荷**、缺 cwd → 400、目录不存在 → 400 |
+| `app/api/agent/[id]/route.test.ts`（新增） | 已有会话但未信任 → **409 + needsTrust 载荷**、未知会话 → 404、非法命令 → 400 |
 
 两处都做了**变异验证**：把 `attempt < 4` 改成 `< 5`、去掉 `/statusline` 分支的 `handled = true`，对应测试如期失败。
 
 ### 顺带解决的可测性问题
 
-写路由层测试时发现：30 条路由里 **23 条用 `next/server` + `@/` 别名**，`node --test` 解析不了，因此**根本写不了路由单测**；而用 `next/server.js` + 相对路径的 7 条恰好全都有测试。
+写路由层测试时发现：39 条路由里 **19 条用裸 `next/server`**、`node --test` 解析不了，因此**根本写不了路由单测**；另有 24 条用 `@/` 别名。只有同时用 `next/server.js` 与相对路径的路由才写得了——目前 12 条符合，其中 6 条已有测试。
+
+注意 `app/**/*.test.ts` 这类 glob 匹配不到 `[id]` 目录（方括号是 glob 字符类），因此 `package.json` 的三个 test 脚本都显式列出了 `app/api/agent/[[]id]/route.test.ts`。
 
 本次把要测的 4 条路由改成了可解析写法，并把这条约定写进 `AGENTS.md` Key Traps。
 

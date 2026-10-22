@@ -53,6 +53,9 @@ next-env.d.ts
 /.claude/worktrees/
 /.claude/skills/
 
+# machine-local Claude Code settings (MCP approvals, per-machine permissions)
+/.claude/settings.local.json
+
 # dev server stdout/stderr captures (should never be committed)
 /tmp/
 

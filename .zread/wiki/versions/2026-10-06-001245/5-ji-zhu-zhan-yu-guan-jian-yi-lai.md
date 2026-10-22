@@ -298,8 +298,6 @@ graph TD
         TAILWIND_POSTCSS[@tailwindcss/postcss ^4.2.2]
         POSTCSS[postcss 8]
         LOBE_ICONS[@lobehub/icons 5.6.0]
-        FONT_INTER[@fontsource/inter 5.2.8]
-        FONT_MONO[@fontsource/jetbrains-mono 5.2.8]
         REACT_MD[react-markdown 10.1.0]
         REMARK_GFM[remark-gfm 4.0.1]
         SYNTAX_HL[react-syntax-highlighter 16.1.1]

@@ -1,7 +1,0 @@
-{
-  "enabledMcpjsonServers": [
-    "codegraph"
-  ],
-  "spinnerTipsEnabled": false,
-  "enableAllProjectMcpServers": true
-}

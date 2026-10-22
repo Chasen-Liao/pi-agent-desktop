@@ -141,7 +141,7 @@ test("POST /api/extensions refuses to toggle a skill outside the allowed directo
       }),
     );
 
-    assert.equal(res.status, 500);
+    assert.equal(res.status, 400);
     const body = (await res.json()) as { error?: string };
     assert.match(body.error ?? "", /outside allowed skill directories/);
 
@@ -151,5 +151,39 @@ test("POST /api/extensions refuses to toggle a skill outside the allowed directo
   } finally {
     rmSync(dir, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("POST /api/extensions toggles a skill in the project's .pi/skills directory", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-ext-api-pis-"));
+  try {
+    // .pi/skills is the project-scoped skill directory. It is not necessarily
+    // "discovered" by the loader, so this exercises the isSubpath branch of the
+    // location check rather than the isDiscovered one.
+    const skillDir = join(dir, ".pi", "skills", "project-skill");
+    mkdirSync(skillDir, { recursive: true });
+    const skillPath = join(skillDir, "SKILL.md");
+    writeFileSync(skillPath, "---\nname: project-skill\ndescription: test\n---\n# Skill\n");
+
+    const res = await POST(
+      new Request("http://localhost/api/extensions", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "toggle",
+          type: "skill",
+          nameOrPath: skillPath,
+          scope: "project",
+          cwd: dir,
+          enabled: false,
+        }),
+      }),
+    );
+
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).success, true);
+    const content = readFileSync(skillPath, "utf8");
+    assert.ok(content.includes("disable-model-invocation: true"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

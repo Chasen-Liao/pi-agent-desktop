@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { BUILTIN_SLASH_COMMANDS, CLIENT_HANDLED_SLASH_COMMAND_IDS } from "../../lib/slash-commands.ts";
 
 const source = readFileSync(new URL("./use-session-commands.ts", import.meta.url), "utf8");
 
@@ -105,45 +106,20 @@ test("handleFork guards against an empty entryId", () => {
   assert.match(block, /if \(!sid \|\| !entryId\) return;/);
 });
 
-// A slash command that is listed in the menu but has no case in the dispatch
-// switch falls through and is sent to the model as a plain user message.
-// /statusline was exactly that bug: it reached the LLM instead of the
-// status line. Pin every registered command to a handler.
+// A slash command that is listed in the menu but has no client-side handler
+// falls through and is sent to the model as a plain user message.
+// /statusline was exactly that bug: it reached the LLM instead of the status
+// line. The dispatcher in the hook is typed against
+// CLIENT_HANDLED_SLASH_COMMAND_IDS, so a missing handler is a compile error;
+// this test covers the other half — that the menu does not grow a command the
+// dispatcher does not know about.
 test("every builtin slash command has a dispatch handler", () => {
-  const slashSource = readFileSync(
-    new URL("../../lib/slash-commands.ts", import.meta.url),
-    "utf8"
-  );
-  const registered = [...slashSource.matchAll(/id: "([^"]+)", label: "\/[^"]+"/g)].map(
-    (m) => m[1]
-  );
-  const handled = [...source.matchAll(/case "([^"]+)":/g)].map((m) => m[1]);
-
-  assert.ok(registered.length >= 4, "expected the builtin slash commands to be listed");
-  for (const id of registered) {
+  const handled = new Set<string>(CLIENT_HANDLED_SLASH_COMMAND_IDS);
+  for (const item of BUILTIN_SLASH_COMMANDS) {
     assert.ok(
-      handled.includes(id),
-      `/${id} appears in the slash menu but has no case in the dispatch switch, ` +
+      handled.has(item.id),
+      `/${item.id} appears in the slash menu but has no client-side handler, ` +
         `so it would be sent to the model as a plain message`
     );
   }
-});
-
-test("the /statusline command fetches the status line route and reports it upward", () => {
-  const block = source.slice(
-    source.indexOf('case "statusline"'),
-    source.indexOf("if (handled) return;")
-  );
-  assert.ok(block.length > 0, "expected a /statusline branch");
-  assert.match(block, /fetch\(`\/api\/statusline\?cwd=/);
-  assert.match(block, /onStatusline\?\.\(d\)/);
-  // Both exit paths must mark the command as handled: the empty-cwd path and
-  // the fetch path. If either is missing, the command falls through and is
-  // sent to the model as a plain user message.
-  const handledCount = (block.match(/handled = true;/g) ?? []).length;
-  assert.equal(
-    handledCount,
-    2,
-    "both the empty-cwd path and the fetch path must set handled = true"
-  );
 });

@@ -152,6 +152,18 @@ export async function getExtensionsConfig(
     diagnostics,
   };
 }
+/**
+ * The client asked for a skill that does not exist or that sits outside the
+ * allowed skill directories. This is a bad request, not a server failure, so
+ * the route maps it to 400 instead of 500.
+ */
+export class InvalidSkillTargetError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidSkillTargetError";
+  }
+}
+
 export interface MutateExtensionOptions {
   action: "toggle" | "add" | "remove";
   type: "extension" | "skill";
@@ -213,7 +225,7 @@ export async function mutateExtensionOrSkill(
       const resolvedTarget = resolve(filePath);
 
       if (!existsSync(resolvedTarget)) {
-        throw new Error(`Skill file not found: ${nameOrPath}`);
+        throw new InvalidSkillTargetError(`Skill file not found: ${nameOrPath}`);
       }
 
       const effectiveCwd = cwd ?? process.cwd();
@@ -239,7 +251,7 @@ export async function mutateExtensionOrSkill(
         isSubpath(agentSkillsDir, resolvedTarget);
 
       if (!isValidLocation) {
-        throw new Error(`Skill target outside allowed skill directories: ${nameOrPath}`);
+        throw new InvalidSkillTargetError(`Skill target outside allowed skill directories: ${nameOrPath}`);
       }
 
       const content = readFileSync(resolvedTarget, "utf8");

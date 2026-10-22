@@ -23,8 +23,19 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandItem[] = [
   { id: "compact", label: "/compact", insertText: "/compact ", description: "压缩当前上下文", kind: "command" },
   { id: "tools", label: "/tools", insertText: "/tools ", description: "选择工具预设", kind: "command" },
   { id: "skills", label: "/skills", insertText: "/skills ", description: "查看或调用可用 skills", kind: "command" },
-  { id: "statusline", label: "/statusline", insertText: "/statusline", description: "切换底部状态栏（窗口 + 会话 + git）", kind: "command" },
+  { id: "statusline", label: "/statusline", insertText: "/statusline", description: "显示 / 隐藏状态栏的工作区信息（git 分支与改动）", kind: "command" },
 ];
+
+/**
+ * Slash commands the client answers itself.
+ *
+ * A command that is listed in the menu but missing here would fall through to
+ * the model as a plain message, so the dispatcher is typed against this list:
+ * adding a command to the menu without wiring a handler fails to compile.
+ */
+export const CLIENT_HANDLED_SLASH_COMMAND_IDS = ["compact", "tools", "skills", "statusline"] as const;
+
+export type ClientHandledSlashCommandId = (typeof CLIENT_HANDLED_SLASH_COMMAND_IDS)[number];
 
 export function getSlashTriggerQuery(value: string, caretIndex: number): string | null {
   if (caretIndex < 1) return null;

@@ -116,6 +116,8 @@ export function AppShell() {
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
   // Workspace status line (git + workspace state), refreshed by /statusline.
   const [statusline, setStatusline] = useState<StatuslineResponse | null>(null);
+  // /statusline toggles the workspace section of the status bar.
+  const [statuslineVisible, setStatuslineVisible] = useState(false);
 
   const handleSessionStatsChange = useCallback((stats: SessionStats | null) => {
     setSessionStats(stats);
@@ -131,6 +133,7 @@ export function AppShell() {
 
   const handleStatusline = useCallback((status: StatuslineResponse) => {
     setStatusline(status);
+    setStatuslineVisible((visible) => !visible);
   }, []);
 
   // Single active panel — only one dropdown open at a time
@@ -580,7 +583,7 @@ export function AppShell() {
               sessionStats={sessionStats}
               contextUsage={contextUsage}
               currentProvider={currentModel?.provider}
-              statusline={statusline}
+              statusline={statuslineVisible ? statusline : null}
             />
             <div ref={shellMenuRef} className="relative h-full [-webkit-app-region:no-drag]">
               <button

@@ -14,6 +14,8 @@ import { ensureTrustThenFetch } from "@/lib/trust-fetch";
 import type { NeedsTrustPayload } from "@/lib/trust-types";
 import type { AttachedImage } from "@/components/chat-input/types";
 import { resolveSessionCommandTarget } from "./session-command-target";
+import { fetchStatusline, formatStatusline } from "./statusline";
+import type { ClientHandledSlashCommandId } from "@/lib/slash-commands";
 import {
   finishPromptDispatch,
   tryStartPromptDispatch,
@@ -21,32 +23,6 @@ import {
 } from "./prompt-dispatch-gate";
 
 export type { AttachedImage };
-
-/**
- * Symbol-only summary of the workspace status line.
- *
- * Deliberately free of prose: it renders into the chat transcript and the
- * hook layer has no i18n context, so only symbols, numbers and git's own
- * text (branch name, commit subject) are used.
- */
-function formatStatusline(d: StatuslineResponse): string {
-  if (!d.isRepo) {
-    return d.error ? `— ${d.error}` : "—";
-  }
-  const lines: string[] = [`\`${d.branch ?? "—"}\``];
-  const counts: string[] = [];
-  if (d.ahead) counts.push(`↑${d.ahead}`);
-  if (d.behind) counts.push(`↓${d.behind}`);
-  if (d.staged) counts.push(`+${d.staged}`);
-  if (d.modified) counts.push(`~${d.modified}`);
-  if (d.untracked) counts.push(`?${d.untracked}`);
-  if (d.deleted) counts.push(`−${d.deleted}`);
-  if (counts.length > 0) lines.push(counts.join(" "));
-  if (d.lastCommit) {
-    lines.push(`\`${d.lastCommit.hash.slice(0, 7)}\` ${d.lastCommit.subject}`);
-  }
-  return lines.join("\n");
-}
 
 export type UseSessionCommandsOptions = {
   session: SessionInfo | null;
@@ -153,13 +129,14 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
       if (!images?.length && msgTrimmed.startsWith("/")) {
         const parts = msgTrimmed.slice(1).split(/\s+/);
         const cmd = parts[0].toLowerCase();
-        let handled = false;
-        switch (cmd) {
-          case "compact":
+        // The dispatcher is typed against CLIENT_HANDLED_SLASH_COMMAND_IDS, so a
+        // command that appears in the menu but has no handler fails to compile
+        // instead of silently reaching the model as a plain message.
+        const handlers: Record<ClientHandledSlashCommandId, () => void> = {
+          compact: () => {
             handleCompact();
-            handled = true;
-            break;
-          case "tools":
+          },
+          tools: () => {
             setMessages((prev) => [
               ...prev,
               {
@@ -170,9 +147,8 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
                 timestamp: Date.now(),
               } as CustomMessage,
             ]);
-            handled = true;
-            break;
-          case "skills": {
+          },
+          skills: () => {
             const cwd = newSessionCwd ?? session?.cwd ?? "";
             fetch(`/api/skills?cwd=${encodeURIComponent(cwd)}`)
               .then((res) => res.json())
@@ -209,10 +185,8 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
                 ]);
               })
               .catch((e) => console.error("Failed to fetch skills:", e));
-            handled = true;
-            break;
-          }
-          case "statusline": {
+          },
+          statusline: () => {
             const cwd = newSessionCwd ?? session?.cwd ?? "";
             if (!cwd) {
               setMessages((prev) => [
@@ -225,12 +199,10 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
                   timestamp: Date.now(),
                 } as CustomMessage,
               ]);
-              handled = true;
-              break;
+              return;
             }
-            fetch(`/api/statusline?cwd=${encodeURIComponent(cwd)}`)
-              .then((res) => res.json())
-              .then((d: StatuslineResponse) => {
+            fetchStatusline(cwd)
+              .then((d) => {
                 onStatusline?.(d);
                 setMessages((prev) => [
                   ...prev,
@@ -255,11 +227,14 @@ export function useSessionCommands(opts: UseSessionCommandsOptions) {
                   } as CustomMessage,
                 ]);
               });
-            handled = true;
-            break;
-          }
+          },
+        };
+
+        const handler = handlers[cmd as ClientHandledSlashCommandId];
+        if (handler) {
+          handler();
+          return;
         }
-        if (handled) return;
       }
 
       const commandTarget = resolveSessionCommandTarget({

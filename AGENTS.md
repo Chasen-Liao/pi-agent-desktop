@@ -123,7 +123,7 @@ SDK 存 `{id, name, arguments}`，前端用 `{toolCallId, toolName, input}`。`n
 
 `npm test` 走 `node --test` 直接执行 TS 文件，因此路由要能被测试必须满足两点：
 
-1. **import 写成可解析的形式**：`next/server.js`（不是 `next/server`）＋ 相对路径带扩展名（`../../../lib/api-error.ts`，不是 `@/lib/api-error`）。`next/server` 在 ESM 下解析不到，`@/` 别名也不被 `node --test` 解析（`import type` 除外，类型导入会被擦除）。目前 30 条路由里有 23 条仍是不可测的写法，**要测哪条就先改哪条**，不必全量改。
+1. **import 写成可解析的形式**：`next/server.js`（不是 `next/server`）＋ 相对路径带扩展名（`../../../lib/api-error.ts`，不是 `@/lib/api-error`）。`next/server` 在 ESM 下解析不到，`@/` 别名也不被 `node --test` 解析（`import type` 除外，类型导入会被擦除）。39 条路由里 **19 条用裸 `next/server`**、**24 条用 `@/` 别名**；只有同时用 `next/server.js` 与相对路径的路由才写得了路由单测——目前 11 条符合，其中 5 条已有测试。**要测哪条就先改哪条**，不必全量改。
 2. **隔离 agent dir**：`ProjectTrustStore` 会向上继承父目录的信任决策，而真实 store 在 `~/.pi/agent`。若曾经信任过某个父目录（例如 `%TEMP%`），它下面所有目录都会被判为"已信任"，依赖"未信任"状态的测试就会随机失败。测试里设置 `process.env.PI_CODING_AGENT_DIR` 指向临时目录即可完全隔离（pi 的 `getAgentDir()` 每次调用都读该变量）。
 
 ---

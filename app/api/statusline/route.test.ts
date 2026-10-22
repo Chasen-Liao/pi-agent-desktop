@@ -14,6 +14,24 @@ import { GET } from "./route.ts";
  * the UI consumes.
  */
 
+/**
+ * Grant a directory to the allowed-roots set for the duration of a test.
+ *
+ * getAllowedRoots() returns the cached set itself, so the added root has to be
+ * removed again afterwards — otherwise it leaks into the next test.
+ */
+async function withAllowedRoot(dir: string, fn: () => Promise<void>): Promise<void> {
+  const { getAllowedRoots } = await import("../../../lib/allowed-roots.ts");
+  const roots = await getAllowedRoots();
+  const added = !roots.has(dir);
+  if (added) roots.add(dir);
+  try {
+    await fn();
+  } finally {
+    if (added) roots.delete(dir);
+  }
+}
+
 function makeGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "pi-statusline-"));
   const git = (...args: string[]) =>
@@ -57,15 +75,7 @@ test("GET /api/statusline reports the git state of an allowed directory", async 
     const agentDir = mkdtempSync(join(tmpdir(), "pi-statusline-agent-"));
     process.env.PI_CODING_AGENT_DIR = agentDir;
     try {
-      const { getAllowedRoots } = await import("../../../lib/allowed-roots.ts");
-      const roots = await getAllowedRoots();
-      roots.add(dir);
-
-      const res = await GET(
-        new Request(`http://localhost/api/statusline?cwd=${encodeURIComponent(dir)}`)
-      );
-      assert.equal(res.status, 200);
-      const body = (await res.json()) as {
+      let body!: {
         cwd?: string;
         isRepo?: boolean;
         branch?: string;
@@ -74,6 +84,14 @@ test("GET /api/statusline reports the git state of an allowed directory", async 
         untracked?: number;
         lastCommit?: { hash?: string; subject?: string };
       };
+
+      await withAllowedRoot(dir, async () => {
+        const res = await GET(
+          new Request(`http://localhost/api/statusline?cwd=${encodeURIComponent(dir)}`)
+        );
+        assert.equal(res.status, 200);
+        body = (await res.json()) as typeof body;
+      });
 
       assert.equal(body.cwd, dir);
       assert.equal(body.isRepo, true);
@@ -101,15 +119,14 @@ test("GET /api/statusline counts uncommitted changes", async () => {
     const agentDir = mkdtempSync(join(tmpdir(), "pi-statusline-agent-"));
     process.env.PI_CODING_AGENT_DIR = agentDir;
     try {
-      const { getAllowedRoots } = await import("../../../lib/allowed-roots.ts");
-      const roots = await getAllowedRoots();
-      roots.add(dir);
-
-      const res = await GET(
-        new Request(`http://localhost/api/statusline?cwd=${encodeURIComponent(dir)}`)
-      );
-      assert.equal(res.status, 200);
-      const body = (await res.json()) as { untracked?: number; modified?: number };
+      let body!: { untracked?: number; modified?: number };
+      await withAllowedRoot(dir, async () => {
+        const res = await GET(
+          new Request(`http://localhost/api/statusline?cwd=${encodeURIComponent(dir)}`)
+        );
+        assert.equal(res.status, 200);
+        body = (await res.json()) as typeof body;
+      });
       assert.equal(body.untracked, 1);
       assert.equal(body.modified, 0);
     } finally {

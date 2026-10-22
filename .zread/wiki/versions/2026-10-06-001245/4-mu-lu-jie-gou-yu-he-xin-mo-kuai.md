@@ -36,7 +36,7 @@ Sources: [package.json](package.json#L1-L81), [.gitignore](.gitignore#L1-L46)
 | `app/api/memory/` | 长期记忆（LTM）的增删改查、统计、观测钩子 | 多个路由文件 |
 | `app/api/models-config/` | 模型提供商配置、OAuth/API Key、思考等级映射 | 多个路由文件 |
 | `app/api/extensions/` | 扩展/Skill 的 toggle/add/remove 配置（**不是** Extension UI Bridge） | `route.ts` |
-| `app/api/skills/` | 技能策略配置、启用/禁用、搜索安装 | 多个路由文件 |
+| `app/api/skills/` | 技能列表、搜索、安装 | 多个路由文件（启用/禁用走 `app/api/extensions`，它会校验目标位于允许的 skill 目录内） |
 | `app/api/usage/upstream/` | 上游额度查询 | `route.ts` |
 | `app/api/statusline/` | Git 状态栏 | `route.ts` |
 | `app/layout.tsx` | 根布局：字体、主题、I18nProvider、全局错误上报 | `layout.tsx` |
