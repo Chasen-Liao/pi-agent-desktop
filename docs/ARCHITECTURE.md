@@ -3,9 +3,9 @@
 > 本文档是项目的**权威架构参考**，由 CodeGraph 静态分析 + 源码核对生成。
 > 若与 `AGENTS.md` / `CLAUDE.md` 中的简要描述冲突，以本文档为准。
 >
-- **项目**：`@chasen-liao/pi-agent-desktop` v0.8.7
+- **项目**：`@chasen-liao/pi-agent-desktop` v0.11.0
 - **上游 SDK**：`@earendil-works/pi-coding-agent` ^1.1.0 / `@earendil-works/pi-ai` ^1.1.0
-- **更新日期**：2026-10-11
+- **更新日期**：2026-10-22
 
 ---
 
@@ -143,7 +143,7 @@ flowchart TD
 
 ```text
 pi-agent-desktop/
-├── package.json                  @chasen-liao/pi-agent-desktop v0.8.7
+├── package.json                  @chasen-liao/pi-agent-desktop v0.11.0
 ├── next.config.ts                output:"standalone" + server external packages
 ├── tailwind.config.ts            Tailwind 4 配置
 ├── tsconfig.json                 strict + bundler resolution
