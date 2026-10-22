@@ -75,7 +75,7 @@ graph TB
 | **Markdown 渲染** | react-markdown + remark-gfm | 10.1.0 / 4.0.1 | GFM 表格、任务列表、自动链接 |
 | **代码高亮** | react-syntax-highlighter (Prism) | 16.1.1 | Ayu 主题适配、行内/块级高亮 |
 | **图标系统** | @lobehub/icons | 5.6.0 | 统一图标库、Tree-shaking 友好 |
-| **字体** | next/font/google (Inter + Noto Sans Mono) | — | 构建时自托管、零网络依赖；`@fontsource/inter`/`@fontsource/jetbrains-mono` 虽在 devDependencies 声明但代码零引用 |
+| **字体** | next/font/google (Inter + Noto Sans Mono) | — | 构建时自托管、零网络依赖；`@fontsource/inter`/`@fontsource/jetbrains-mono` 曾以 devDependencies 声明但代码零引用，已于 2026-10-22 移除 |
 | **自动更新** | electron-updater | 6.8.9 | GitHub Releases、差分更新、安装门控 |
 | **测试运行器** | Node.js 原生 `node --test --test-force-exit` | 24.x | 无 ts-node/esm loader、平台子集、冒烟测试 |
 | **代码规范** | ESLint 9 + Next.js 配置 | 9.x | Core Web Vitals、TypeScript、React Hooks 规则 |
