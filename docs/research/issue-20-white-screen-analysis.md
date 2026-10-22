@@ -2,7 +2,7 @@
 
 > 调研日期：2026-08-28
 > 落地更新：本报告 §4 建议的方向 1/2（全局错误边界、`render-process-gone` 自动重载）已于同日实现（`app/error.tsx`、`electron/crash-recovery.ts`，见 [ARCHITECTURE.md §14.16](../ARCHITECTURE.md#1416-白屏双兑底全局错误边界与渲染进程崩溃自动重载2026-08-28issue-20)）；方向 3/4（`MessageView` content 防御、pi-ai 升级）未做。正文保留调研时点视角。
-> 范围：GitHub issue #20 原文核实、issue 创建时可能的版本（v0.8.3，当前 v0.8.4 / HEAD `fe21e23`）、前端渲染链路（`app/`、`components/`、`hooks/`）、SSE 服务端链路（`app/api/agent/[id]/events`、`lib/rpc-manager.ts`）、Electron 主进程（`electron/main.ts`）、`node_modules` 中 Pi SDK（`@earendil-works/pi-coding-agent` / `@earendil-works/pi-ai` 0.84.3）源码、上游 `earendil-works/pi`（原 `badlogic/pi-mono` 重定向）issue 检索、React / Next.js / Electron 官方文档
+> 范围：GitHub issue #20 原文核实、issue 创建时可能的版本（v0.8.3；调研时为 v0.8.4 / HEAD `fe21e23`，**现为 v0.11.0**）、前端渲染链路（`app/`、`components/`、`hooks/`）、SSE 服务端链路（`app/api/agent/[id]/events`、`lib/rpc-manager.ts`）、Electron 主进程（`electron/main.ts`）、`node_modules` 中 Pi SDK（`@earendil-works/pi-coding-agent` / `@earendil-works/pi-ai` 0.84.3）源码、上游 `earendil-works/pi`（原 `badlogic/pi-mono` 重定向）issue 检索、React / Next.js / Electron 官方文档
 > 结论性质：静态分析 + 上游关联；未在报告者机器上复现，未取得其任何日志、截图或版本号。所有根因排序均为假设，证据等级逐条标注。
 
 ## 结论先行

@@ -1,8 +1,8 @@
 # Long-Term Memory (LTM) Design
 
+> **Status**: ✅ 已落地（历史设计文档，勿当现役任务清单）—— `lib/ltm/*` 与 `app/api/memory/*`（5 条）均已在 main；当前行为以 [docs/ARCHITECTURE.md](../../ARCHITECTURE.md) 为准  
 **Date:** 2026-08-03  
 **Branch:** `feature/long-term-memory`  
-**Status:** Approved for implementation planning  
 **Related:** [docs/memory-architecture.html](../../memory-architecture.html) (session memory baseline)
 
 ## 1. Summary

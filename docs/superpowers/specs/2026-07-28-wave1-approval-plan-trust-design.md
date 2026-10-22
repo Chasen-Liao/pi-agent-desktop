@@ -1,6 +1,6 @@
 # Wave 1: Approval / Plan / Trust / Extension UI Bridge — Design Spec
 
-> **Status**: Approved for implementation planning  
+> **Status**: ✅ 已落地（历史设计文档，勿当现役任务清单）—— `lib/approval-policy.ts`、`lib/extension-ui-bridge.ts`、`app/api/trust/route.ts` 均已在 main；当前行为以 [docs/ARCHITECTURE.md](../../ARCHITECTURE.md) 为准  
 > **Date**: 2026-07-28  
 > **Scope**: Wave 1 only (Codex-alignment foundation)
 

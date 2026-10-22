@@ -1,16 +1,19 @@
 # 过度设计审计（ponytail-audit）
 
+> ⚠️ **归档说明（2026-10-22）**：本文档是 **2026-09-04** 基线的**历史审计快照**，其结论与数字已与当前代码脱节（例如文中"38 条 API 路由"实为 39；`lib/ltm/index.ts` 已于 `c8d2748` 删除；待办多条已实施）。**不要**再把它当作"当前风险清单"。
+> **当前状态**请以 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [AGENTS.md](../AGENTS.md) 为准；本文仅保留为决策历史。
+
 > 日期：2026-09-04 · 范围：全仓库（app/api、lib、components、hooks、electron）· 只列问题，不改代码
 > 审计维度：过度设计与复杂度。正确性 / 安全 / 性能不在本报告范围内。
 > 方法：全量 import 图扫描（280 文件 / 40.5k 行）、导出符号引用计数、模式匹配（单实现接口、纯委托包装、手写轮子、死 barrel、死 flag）。
 
 ## 总体结论
 
-**这个仓库已经很瘦**：运行时依赖只有 `electron-updater` 一个；零未引用文件（仅 1 个死 barrel）；全仓库只有 1 处 TODO 标记；38 条 API 路由与 ARCHITECTURE.md 文档一致；没有单实现接口、没有工厂模式滥用、没有 speculative 抽象层。真正的可削减项集中在 **1 个死文件 + 1 组微型模块 + 若干导出噪音**，总量不大。
+**这个仓库已经很瘦**：运行时依赖只有 `electron-updater` 一个；零未引用文件（仅 1 个死 barrel）；全仓库只有 1 处 TODO 标记；38 条 API 路由与 ARCHITECTURE.md 文档一致（**该数字为当时基线，现为 39 条**）；没有单实现接口、没有工厂模式滥用、没有 speculative 抽象层。真正的可削减项集中在 **1 个死文件 + 1 组微型模块 + 若干导出噪音**，总量不大。
 
 ## 发现（按可削减量排序）
 
-### `delete:` lib/ltm/index.ts — 死 barrel，48 行
+### `delete:` lib/ltm/index.ts — 死 barrel，48 行（✅ 已于 `c8d2748` 删除）
 
 纯 re-export 文件，全仓库（含动态 import）**零引用**——所有消费方都直接从 `./config.ts`、`./http.ts`、`./service.ts` 等具体文件导入。删除即可。
 
@@ -18,7 +21,7 @@
 - 替代：删除文件。若未来需要统一入口再建（YAGNI）。
 - [lib/ltm/index.ts]
 
-### `yagni:` AgentMemoryRestBackend — 第二个 LTM 后端，仅手改配置可达，约 60 行 + 配置管线
+### `yagni:` AgentMemoryRestBackend — 第二个 LTM 后端，仅手改配置可达，约 60 行 + 配置管线（✅ 已于 `344b69b` 删除）
 
 `MemoryBackend` 接口有 3 个实现，其中 `agentmemory`（REST）后端只能通过手改 `desktop-settings.json` 的 `ltm.backend` 字段启用——UI 只从 `/api/desktop-settings` 读取 `defaultAgentMode` / `defaultToolPreset`（hooks/useAgentSession.ts:555,608），没有任何界面能切后端。为一个桌面应用维护两个存储后端，属于投机性扩展。
 
@@ -63,12 +66,12 @@ electron/main.ts 里一层只做转发的 getter。内联掉。
 - **依赖面整体**：运行时依赖仅 `electron-updater`，无 HTTP client、无 state 库、无图标库（`@lobehub/icons` 仅 devDep 用于前端构建）。无 `native:` 级替换机会。
 - **1:1 测试密度**（git-worktree 1322L 源 / 1200L 测试等）是本项目"验证优先"纪律的体现，测试不计入过度设计。
 - **单行命名谓词**（`isAgentMode`、`isNearDuplicate`、`clamp` ×4 等）：一行函数 + 可读命名，是清晰度而非复杂度，不合并。
-- **electron/ 17 个小模块**：每个对应一个独立故障模式（端口、崩溃恢复、标题栏、更新门控），1:1 测试覆盖，是打包陷阱的防线，保留。
-- **38 条 API 路由**：与 ARCHITECTURE.md 数量一致，最小路由 4~7 行，无死路由迹象。
+- **electron/ 17 个小模块**（当时基线；现为 16 个 `.ts` 模块）：每个对应一个独立故障模式（端口、崩溃恢复、标题栏、更新门控），1:1 测试覆盖，是打包陷阱的防线，保留。
+- **38 条 API 路由**（当时基线；现为 39 条）：与 ARCHITECTURE.md 数量一致，最小路由 4~7 行，无死路由迹象。
 
 ## 第二轮深挖（4 条并行只读子代理审查，父会话已复验关键论断）
 
-方法：fresh-context reviewer ×4（hooks / components / lib+API / electron+LTM+打包），共 36 条新发现；以下高置信条目的死代码论断已由父会话用 grep/import 图逐一复验（`<ToolPanel` 渲染点 0、`setExportModalOpen(true)` 仅 AppShell、`<McpConfigModal` 渲染点 0、`createAgentModeCustomEntry`/`safeObserve` 零调用、ChatWindow 实际传参与解构清单）。原始报告：audit/deep/*.md。
+方法：fresh-context reviewer ×4（hooks / components / lib+API / electron+LTM+打包），共 36 条新发现；以下高置信条目的死代码论断已由父会话用 grep/import 图逐一复验（`<ToolPanel` 渲染点 0、`setExportModalOpen(true)` 仅 AppShell、`<McpConfigModal` 渲染点 0、`createAgentModeCustomEntry`/`safeObserve` 零调用、ChatWindow 实际传参与解构清单）。原始报告：audit/deep/*.md（⚠️ 该目录从未入库，现已不存在）。
 
 ### 已复验·高置信（可直接执行）
 

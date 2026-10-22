@@ -1,6 +1,6 @@
 # Wave 2: MCP / Session Branching & Export / Extensions Management — Design Spec
 
-> **Status**: Approved for implementation planning  
+> **Status**: ✅ 已落地（历史设计文档，勿当现役任务清单）—— `app/api/mcp/*`（3 条）、`app/api/sessions/[id]/branch|clone`、`app/api/sessions/[id]/export`、`app/api/extensions` 均已在 main；当前行为以 [docs/ARCHITECTURE.md](../../ARCHITECTURE.md) 为准  
 > **Date**: 2026-07-28  
 > **Scope**: Wave 2 (MCP, Session Branching & Export, Extensions Management)
 

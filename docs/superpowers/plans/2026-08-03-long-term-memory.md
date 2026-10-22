@@ -1,5 +1,6 @@
 # Long-Term Memory (LTM) Implementation Plan
 
+> **状态：已落地（历史方案，勿当现役任务）** —— 下列 checkbox 保留为实施时的原始快照，未逐条勾选；`lib/ltm/*` 与 `app/api/memory/*`（5 条）均已在 main。当前行为以 [docs/ARCHITECTURE.md](../../ARCHITECTURE.md) 为准。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship project-scoped long-term memory (SQLite + FTS) with tools and API, automatic observe on agent_end and pre-compact, without changing session JSONL.
