@@ -242,8 +242,7 @@ const UserMessageView = React.memo(function UserMessageView({
       </div>
 
       {/* Bottom row: action buttons + timestamp — visible on hover OR focus-within (keyboard) */}
-      {(time || canFork || canNavigate || true) && (
-        <div className="flex items-center justify-end gap-1.5 mt-[3px]">
+      <div className="flex items-center justify-end gap-1.5 mt-[3px]">
           <div
             className={`flex gap-[3px] transition-opacity duration-120 opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto group-focus-within/msg:opacity-100 group-focus-within/msg:pointer-events-auto ${
               hovered ? "opacity-100 pointer-events-auto" : ""
@@ -333,8 +332,7 @@ const UserMessageView = React.memo(function UserMessageView({
             </div>
           )}
           {time && <span className="text-[10px] text-text-dim">{time}</span>}
-        </div>
-      )}
+      </div>
     </div>
   );
 });

@@ -201,7 +201,11 @@ function main() {
   const { body, touched, remapped } = build(readFileSync(SOURCE, "utf8"), targetHue);
 
   if (check) {
-    const current = existsSync(OUT) ? readFileSync(OUT, "utf8") : "";
+    // Compare with CRLF normalized away: git checks this file out with CRLF on
+    // Windows (core.autocrlf=true) while the generator emits LF, so a raw byte
+    // comparison would always report "out of sync" on a Windows checkout.
+    const normalizeEol = (text) => text.replace(/\r\n/g, "\n");
+    const current = existsSync(OUT) ? normalizeEol(readFileSync(OUT, "utf8")) : "";
     if (current === body) {
       console.log("docs/assets/liquid-orb.wgsl.js is in sync");
       return;

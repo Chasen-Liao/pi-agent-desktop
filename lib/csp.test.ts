@@ -6,6 +6,7 @@ import {
   buildWebCspHeader,
   requiredBaseDirectivePrefixes,
 } from "./csp.ts";
+import { buildElectronCspHeader as buildElectronCspHeaderMain } from "../electron/csp.ts";
 
 test("web CSP allows loopback port wildcard connect-src", () => {
   const header = buildWebCspHeader();
@@ -38,5 +39,18 @@ test("required base directive prefixes appear in both variants", () => {
   for (const prefix of requiredBaseDirectivePrefixes()) {
     assert.ok(web.includes(prefix), `web missing ${prefix}`);
     assert.ok(electron.includes(prefix), `electron missing ${prefix}`);
+  }
+});
+
+test("electron/csp.ts and lib/csp.ts emit byte-identical Electron CSP headers", () => {
+  // Two independent copies of the directive table exist because the electron
+  // tsc build has rootDir=electron/ and cannot import from ../lib. Without a
+  // parity check they can drift silently, so pin them together here.
+  for (const port of [1, 30141, 65535]) {
+    assert.equal(
+      buildElectronCspHeaderMain(port),
+      buildElectronCspHeader(port),
+      `CSP headers diverge between electron/csp.ts and lib/csp.ts on port ${port}`
+    );
   }
 });

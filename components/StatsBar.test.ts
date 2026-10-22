@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { isSubscriptionPlan } from "../lib/upstream-usage/format.ts";
 
 const statsBarSource = readFileSync(new URL("./StatsBar.tsx", import.meta.url), "utf8");
 const usagePopoverSource = readFileSync(new URL("./UsagePopover.tsx", import.meta.url), "utf8");
@@ -32,14 +33,18 @@ test("StatsBar formats Context Window with 1 decimal place, no space before slas
 test("StatsBar shows subscription badge (sub) for active subscription or OAuth quota precisely", () => {
   assert.match(statsBarSource, /isSubOrOAuth/);
   assert.match(statsBarSource, /t\("usage\.sub"\)/);
-  // Ensure subscription matching targets actual subscriptions and does not false-positive on Pay-as-you-go
-  const subPlanRegex = /sub|plus|pro|team|enterprise/i;
-  assert.ok(subPlanRegex.test("plus"));
-  assert.ok(subPlanRegex.test("pro"));
-  assert.ok(subPlanRegex.test("team"));
-  assert.ok(subPlanRegex.test("enterprise"));
-  assert.ok(!subPlanRegex.test("Pay-as-you-go"));
-  assert.ok(!subPlanRegex.test("Free Tier"));
+  // Assert the shipped rule itself, not a copy of it: re-declaring the regex
+  // inside the test made every assertion tautological.
+  assert.match(statsBarSource, /isSubscriptionPlan\(currentUsage\.planType\)/);
+  assert.equal(isSubscriptionPlan("plus"), true);
+  assert.equal(isSubscriptionPlan("pro"), true);
+  assert.equal(isSubscriptionPlan("team"), true);
+  assert.equal(isSubscriptionPlan("enterprise"), true);
+  assert.equal(isSubscriptionPlan("Subscription"), true);
+  assert.equal(isSubscriptionPlan("Pay-as-you-go"), false);
+  assert.equal(isSubscriptionPlan("Free Tier"), false);
+  assert.equal(isSubscriptionPlan(null), false);
+  assert.equal(isSubscriptionPlan(undefined), false);
 });
 
 test("StatsBar eliminates primitive string matching and uses structured window IDs", () => {

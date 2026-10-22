@@ -30,3 +30,14 @@ export function formatDuration(seconds: number, locale: "zh" | "en" = "zh"): str
   const sec = Math.floor(seconds);
   return locale === "zh" ? `${sec}秒` : `${sec}s`;
 }
+
+/**
+ * Plan types that qualify for the subscription badge.
+ * Kept here (not inline in the component) so the rule has one definition and
+ * can be asserted directly instead of re-declared inside a test.
+ */
+const SUBSCRIPTION_PLAN_PATTERN = /sub|plus|pro|team|enterprise/i;
+
+export function isSubscriptionPlan(planType: string | null | undefined): boolean {
+  return Boolean(planType && SUBSCRIPTION_PLAN_PATTERN.test(planType));
+}

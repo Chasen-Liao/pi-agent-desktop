@@ -27,30 +27,6 @@ export function formatRelativeTime(dateStr: string, locale = "en", compact = fal
   return date.toLocaleDateString(locale);
 }
 
-/** Return the 5 most recently active cwds across all sessions */
-export function getRecentCwds(sessions: SessionInfo[]): string[] {
-  const latestByCwd = new Map<string, string>(); // cwd -> most recent modified
-  for (const s of sessions) {
-    if (!s.cwd) continue;
-    const prev = latestByCwd.get(s.cwd);
-    if (!prev || s.modified > prev) {
-      latestByCwd.set(s.cwd, s.modified);
-    }
-  }
-  return [...latestByCwd.entries()]
-    .sort((a, b) => b[1].localeCompare(a[1]))
-    .slice(0, 5)
-    .map(([cwd]) => cwd);
-}
-
-export function shortenCwd(cwd: string, homeDir?: string): string {
-  const path = (homeDir && cwd.startsWith(homeDir)) ? "~" + cwd.slice(homeDir.length) : cwd;
-  const sep = path.includes("/") ? "/" : "\\";
-  const parts = path.split(sep).filter(Boolean);
-  if (parts.length <= 2) return path;
-  return "…/" + parts.slice(-2).join(sep);
-}
-
 type ElectronAPI = {
   selectDirectory?: () => Promise<string | null>;
 };

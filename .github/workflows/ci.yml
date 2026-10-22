@@ -41,6 +41,9 @@ jobs:
         timeout-minutes: 5
         run: npm test
 
+      - name: Check landing orb asset is in sync
+        run: npm run check:landing-orb
+
   build:
     name: build (next.js)
     runs-on: ubuntu-latest

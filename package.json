@@ -27,6 +27,7 @@
     "start": "next start -p 30141",
     "lint": "eslint .",
     "check:electron-deps": "node lib/electron-updater-runtime-deps.mjs --check",
+    "check:landing-orb": "node scripts/sync-landing-orb.mjs --check",
     "sync:wiki-pages": "node scripts/sync-github-pages-wiki.mjs",
     "test": "node --test --test-force-exit \"lib/**/*.test.ts\" \"lib/**/*.test.mjs\" \"electron/**/*.test.ts\" \"app/**/*.test.ts\" \"app/api/sessions/[[]id]/routes.test.ts\" \"hooks/**/*.test.ts\" \"components/**/*.test.ts\" \"scripts/**/*.test.mjs\" \"package.test.ts\" \"middleware.test.ts\"",
     "test:windows": "node --test --test-force-exit \"electron/**/*.test.ts\" \"lib/file-paths.test.ts\" \"lib/path-policy.test.ts\" \"lib/session-lock.test.ts\" \"lib/session-path-cache.test.ts\" \"lib/file-browser.test.ts\" \"lib/git-worktree.test.ts\" \"app/api/sessions/[[]id]/routes.test.ts\" \"lib/electron-*.test.mjs\" \"lib/installer-script.test.mjs\" \"lib/electron-builder-config.test.mjs\" \"package.test.ts\"",

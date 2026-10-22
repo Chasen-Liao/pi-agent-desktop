@@ -5,6 +5,7 @@ import { useI18n } from "./I18nProvider";
 import { useUpstreamUsage } from "@/hooks/useUpstreamUsage";
 import { useDismissOnOutsideClick } from "@/hooks/useDismissOnOutsideClick";
 import { UsagePopover } from "./UsagePopover";
+import { isSubscriptionPlan } from "@/lib/upstream-usage/format";
 
 import type { SessionStats } from "@/hooks/agent-session/session-stats";
 import type { ContextUsage } from "@/lib/pi-types";
@@ -113,7 +114,7 @@ export const StatsBar = React.memo(function StatsBar({
     currentUsage &&
       (currentUsage.provider === "openai-codex" ||
         currentUsage.provider === "anthropic" ||
-        (currentUsage.planType && /sub|plus|pro|team|enterprise/i.test(currentUsage.planType)))
+        isSubscriptionPlan(currentUsage.planType))
   );
 
   return (

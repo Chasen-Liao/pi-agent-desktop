@@ -1,8 +1,8 @@
 /**
  * Electron-side CSP builder. Mirrors lib/csp.ts (electron tsc rootDir is electron/
  * only, so we cannot import from ../lib without expanding the electron build).
- * Keep in sync with lib/csp.ts — both are covered by lib/csp.test.ts contract
- * and electron structural tests on main.ts usage.
+ * Keep in sync with lib/csp.ts — lib/csp.test.ts asserts both copies emit
+ * byte-identical headers, and electron structural tests cover main.ts usage.
  */
 
 export type ElectronCspPort = number;

@@ -116,7 +116,3 @@ export function useI18n(): I18nContextValue {
   if (!context) throw new Error("useI18n must be used within I18nProvider");
   return context;
 }
-
-export const i18nServerFallback = {
-  locale: DEFAULT_LOCALE,
-};

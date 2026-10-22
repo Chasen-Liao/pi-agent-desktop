@@ -540,7 +540,7 @@ components/models-config/     模型配置弹窗的子组件
 
 ## 12. API 路由清单
 
-> 共 **38** 条 `route.ts`（2026-08-03 文件系统盘点：含 LTM 5 条）。
+> 共 **39** 条 `route.ts`（2026-08-03 文件系统盘点：含 LTM 5 条）。
 
 ### Agent 会话交互（3 条）
 
@@ -905,7 +905,7 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 
 | 类别 | 技术 | 版本 |
 | --- | --- | --- |
-| 框架 | Next.js（App Router） | 16.3.2 |
+| 框架 | Next.js（App Router） | 16.3.8 |
 | UI 库 | React | ^19.2.4 |
 | 样式 | Tailwind CSS + CSS 变量 | ^4.2.2 |
 | 类型 | TypeScript（strict） | ^5 |
@@ -916,7 +916,7 @@ Issue #20「对话进行当中突然白屏」的调研（[docs/research/issue-20
 | AI SDK | @earendil-works/pi-ai | ^1.1.0 |
 | AI SDK | @earendil-works/pi-mcp | ^1.1.0 |
 | 品牌图标 | @lobehub/icons | ^5.6.0 |
-| 桌面壳 | Electron | ^43.4.1 |
+| 桌面壳 | Electron | ^43.7.7 |
 | 打包 | electron-builder（Windows NSIS；macOS Universal DMG + ZIP；Linux DEB） | ^26.15.3 |
 | 自动更新 | electron-updater | ^6.8.9 |
 | Lint | ESLint（flat config） | ^9 |
