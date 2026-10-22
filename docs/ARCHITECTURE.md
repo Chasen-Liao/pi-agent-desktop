@@ -663,10 +663,12 @@ components/models-config/     模型配置弹窗的子组件
 | `navigation.ts` | 主页面导航的单次超时、有限重试与错误封装 |
 | `port-selection.ts` | 端口选择 |
 | `server-wait.ts` | 等待 Next.js 子进程就绪 |
-| `csp.ts` | 内容安全策略 |
+| `csp.ts` | 内容安全策略（与 `lib/csp.ts` 保持两份且逐字一致，见下） |
 | `update-install-gate.ts` | 自动更新安装门闩 |
 | `log-format.ts` | 日志格式化 |
 | `env-filter.ts` | 过滤敏感环境变量传给子进程 |
+
+> **CSP 双份说明**：`electron/csp.ts` 与 `lib/csp.ts` 是同一张指令表的两份副本，因为 `electron/tsconfig.json` 的 `rootDir` 为 `electron/`，electron 侧无法 import `../lib`。`lib/csp.test.ts` 的 parity 用例断言两者输出逐字节相等——**改一侧必须同步另一侧**。
 
 ### 生产环境打包布局（Windows NSIS / macOS DMG 与 ZIP / Linux DEB 内）
 

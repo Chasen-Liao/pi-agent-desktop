@@ -111,6 +111,14 @@ SDK 存 `{id, name, arguments}`，前端用 `{toolCallId, toolName, input}`。`n
 - Frontend 依赖放 `devDependencies`；`outputFileTracingExcludes` 排除 `release/`/`.git/`/`dist/`/`*.test.*`
 - `build:standalone` 须补齐 Next turbo runtime；macOS Universal 须双架构 Sharp
 
+### 7. 测试文件的运行时 import 必须用相对路径
+
+`npm test` 走 `node --test` 直接执行 TS 文件，**不解析 `tsconfig` 的 `paths`**，所以运行时 import 不能用 `@/` 别名（`import { x } from "@/lib/y"` 会报模块找不到）。只有 `import type` 可以用别名——类型导入会被擦除，不产生运行时解析。跨目录一律写相对路径并带扩展名：`from "../../lib/types.ts"`。
+
+### 8. `electron/csp.ts` 与 `lib/csp.ts` 必须保持两份且逐字一致
+
+`electron/tsconfig.json` 的 `rootDir` 是 `electron/`，electron 侧无法 `import` `../lib`，所以 CSP 指令表有两份副本。**改一侧必须同步另一侧**：`lib/csp.test.ts` 里的 parity 用例会断言两者输出逐字节相等（这也是唯一能发现漂移的守卫）。
+
 ---
 
 ## Misc
