@@ -7,6 +7,8 @@ const mcpSource = readFileSync(join(process.cwd(), "components/McpConfigModal.ts
 const exportSource = readFileSync(join(process.cwd(), "components/SessionExportModal.tsx"), "utf8");
 const extSource = readFileSync(join(process.cwd(), "components/ExtensionsConfigModal.tsx"), "utf8");
 const branchCloneSource = readFileSync(join(process.cwd(), "components/BranchCloneModal.tsx"), "utf8");
+const settingsSource = readFileSync(join(process.cwd(), "components/SettingsModal.tsx"), "utf8");
+const appShellSource = readFileSync(join(process.cwd(), "components/AppShell.tsx"), "utf8");
 const modalSurfaceSource = readFileSync(join(process.cwd(), "components/ModalSurface.tsx"), "utf8");
 
 test("McpConfigContent tests connection via POST /api/mcp/test", () => {
@@ -42,6 +44,20 @@ test("BranchCloneModal exports BranchCloneModal supporting branch and clone oper
   assert.match(branchCloneSource, /<ModalSurface/);
   assert.match(branchCloneSource, /panelClassName=/);
   assert.match(branchCloneSource, /max-w-md/);
+});
+
+test("SettingsModal exports SettingsModal with General, Agent, and About & Updates tabs", () => {
+  assert.match(settingsSource, /export function SettingsModal/);
+  assert.match(settingsSource, /<ModalSurface/);
+  assert.match(settingsSource, /t\("settings\.tab\.general"\)/);
+  assert.match(settingsSource, /t\("settings\.tab\.agent"\)/);
+  assert.match(settingsSource, /t\("settings\.tab\.about"\)/);
+  assert.match(settingsSource, /checkForUpdates/);
+  assert.match(settingsSource, /downloadUpdate/);
+  assert.match(settingsSource, /quitAndInstall/);
+  assert.match(appShellSource, /<SettingsModal/);
+  assert.match(appShellSource, /t\("shell\.settings"\)/);
+  assert.match(appShellSource, /t\("shell\.checkForUpdates"\)/);
 });
 
 test("ModalSurface provides the shared dialog semantics", () => {

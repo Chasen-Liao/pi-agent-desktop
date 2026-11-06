@@ -85,5 +85,14 @@ test("main process CSP uses shared electron CSP builder", () => {
   assert.match(source, /import \{ buildElectronCspHeader \} from "\.\/csp"/);
   assert.match(source, /buildElectronCspHeader\(port\)/);
 });
+
+test("main process registers manual update check, download, and app-info IPC handlers", () => {
+  assert.match(source, /ipcMain\.handle\("get-app-info"/);
+  assert.match(source, /ipcMain\.handle\("get-update-status"/);
+  assert.match(source, /ipcMain\.handle\("check-for-updates"/);
+  assert.match(source, /ipcMain\.handle\("download-update"/);
+  assert.match(source, /mainWindow\.webContents\.send\("update-status"/);
+});
 // The CSP header contents themselves are behaviorally covered in lib/csp.test.ts,
 // which also asserts electron/csp.ts and lib/csp.ts emit identical headers.
+
