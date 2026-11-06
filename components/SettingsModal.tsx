@@ -62,12 +62,12 @@ export function SettingsModal({
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
   // App info & update state
-  const [appVersion, setAppVersion] = useState<string>("0.12.0");
+  const [appVersion, setAppVersion] = useState<string>("0.13.0");
   const [appPlatform, setAppPlatform] = useState<string>("");
   const [repoUrl, setRepoUrl] = useState<string>(DEFAULT_REPO_URL);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatusPayload>({
     status: "idle",
-    currentVersion: "0.12.0",
+    currentVersion: "0.13.0",
     availableVersion: null,
     downloadedVersion: null,
     percent: null,
