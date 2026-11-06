@@ -51,7 +51,7 @@ export function SettingsModal({
   autoCheckOnOpen = false,
   onAutoCheckHandled,
 }: SettingsModalProps) {
-  const { t, localePreference, setLocalePreference } = useI18n();
+  const { t, preference: localePreference, setPreference: setLocalePreference } = useI18n();
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
 
   // Agent settings state
@@ -117,15 +117,21 @@ export function SettingsModal({
     }
     try {
       const webInfo = await apiJson<{ version?: string; homepage?: string; platform?: string }>(
-        "/api/app-info"
+        "/api/app-info",
+        undefined,
+        { fallback: "Failed to load app info" }
       );
       if (webInfo.version) setAppVersion(webInfo.version);
-      if (webInfo.platform && !appPlatform) setAppPlatform(webInfo.platform);
-      if (webInfo.homepage) setRepoUrl(webInfo.homepage);
+      if (webInfo.platform) {
+        setAppPlatform((prev) => prev || webInfo.platform!);
+      }
+      if (webInfo.homepage && /^https?:\/\//i.test(webInfo.homepage)) {
+        setRepoUrl(webInfo.homepage.replace(/\/+$/, ""));
+      }
     } catch {
       // Keep default version
     }
-  }, [appPlatform]);
+  }, []);
 
   const handleCheckForUpdates = useCallback(async () => {
     const win = window as ElectronUpdaterWindow;
@@ -138,12 +144,21 @@ export function SettingsModal({
       }));
       return;
     }
-    setUpdateStatus((prev) => ({
-      ...prev,
-      status: "checking",
-      error: null,
-      checkedAt: Date.now(),
-    }));
+    setUpdateStatus((prev) => {
+      if (
+        prev.status === "downloaded" ||
+        prev.status === "downloading" ||
+        prev.status === "checking"
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        status: "checking",
+        error: null,
+        checkedAt: Date.now(),
+      };
+    });
     try {
       const next = await win.electronAPI.checkForUpdates();
       if (next) {
@@ -195,9 +210,13 @@ export function SettingsModal({
   useEffect(() => {
     if (!isOpen) return;
     setActiveTab(initialTab);
+  }, [isOpen, initialTab]);
+
+  useEffect(() => {
+    if (!isOpen) return;
     void loadDesktopSettings();
     void loadAppAndUpdateInfo();
-  }, [isOpen, initialTab, loadDesktopSettings, loadAppAndUpdateInfo]);
+  }, [isOpen, loadDesktopSettings, loadAppAndUpdateInfo]);
 
   useEffect(() => {
     if (isOpen && autoCheckOnOpen) {
@@ -293,20 +312,28 @@ export function SettingsModal({
           type="button"
           onClick={onClose}
           aria-label={t("common.close")}
-          className="text-text-muted hover:text-text text-[16px] leading-none px-2 py-1 rounded-control transition-[color,background-color,transform] duration-150 hover:bg-bg-hover active:scale-[0.97] cursor-pointer"
+          className="text-text-muted hover:text-text text-[16px] leading-none px-2 py-1 rounded-control transition-[color,background-color,transform] duration-150 hover:bg-bg-hover active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 cursor-pointer"
         >
           ✕
         </button>
       </div>
 
       {/* Tabs Bar */}
-      <div className="flex items-center border-b border-divider bg-bg-elevated px-4 gap-1 shrink-0">
+      <div
+        role="tablist"
+        aria-label={t("settings.title")}
+        className="flex items-center border-b border-divider bg-bg-elevated px-4 gap-1 shrink-0"
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            id={`settings-tab-${tab.id}`}
             type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-controls={`settings-panel-${tab.id}`}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-2 text-[12px] font-medium border-b-2 transition-[background-color,border-color,color,transform] duration-150 active:scale-[0.97] cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-[12px] font-medium border-b-2 transition-[background-color,border-color,color,transform] duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 cursor-pointer flex items-center gap-1.5 ${
               activeTab === tab.id
                 ? "border-accent text-accent bg-bg"
                 : "border-transparent text-text-muted hover:text-text hover:bg-bg-hover"
@@ -324,7 +351,12 @@ export function SettingsModal({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div
+        id={`settings-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`settings-tab-${activeTab}`}
+        className="flex-1 overflow-y-auto min-h-0"
+      >
         {activeTab === "general" && (
           <div className="p-4 flex flex-col gap-4 text-[13px]">
             {/* Appearance & Language */}
@@ -351,7 +383,7 @@ export function SettingsModal({
                         });
                       }
                     }}
-                    className={`px-3 py-1 rounded-[5px] text-[12px] font-medium transition-[background-color,color,transform] duration-150 active:scale-[0.97] cursor-pointer ${
+                    className={`px-3 py-1 rounded-[5px] text-[12px] font-medium transition-[background-color,color,transform] duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 cursor-pointer ${
                       !isDark
                         ? "bg-accent text-accent-contrast"
                         : "text-text-muted hover:text-text"
@@ -370,7 +402,7 @@ export function SettingsModal({
                         });
                       }
                     }}
-                    className={`px-3 py-1 rounded-[5px] text-[12px] font-medium transition-[background-color,color,transform] duration-150 active:scale-[0.97] cursor-pointer ${
+                    className={`px-3 py-1 rounded-[5px] text-[12px] font-medium transition-[background-color,color,transform] duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 cursor-pointer ${
                       isDark
                         ? "bg-accent text-accent-contrast"
                         : "text-text-muted hover:text-text"
@@ -397,7 +429,7 @@ export function SettingsModal({
                     setLocalePreference(e.target.value as "system" | "en" | "zh-CN")
                   }
                   aria-label={t("language.label")}
-                  className="min-w-36 rounded-control border border-border bg-bg-elevated px-2.5 py-1.5 text-[12px] text-text outline-none focus:border-focus-ring transition-colors duration-150"
+                  className="min-w-36 rounded-control border border-border bg-bg-elevated px-2.5 py-1.5 text-[12px] text-text outline-none focus:border-focus-ring transition-colors duration-150 motion-reduce:transition-none"
                 >
                   <option value="system">{t("language.system")}</option>
                   <option value="en">{t("language.english")}</option>
@@ -422,7 +454,7 @@ export function SettingsModal({
                     onClose();
                     onOpenModels();
                   }}
-                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] text-left cursor-pointer"
+                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 text-left cursor-pointer"
                 >
                   <span className="font-medium text-text text-[12px]">
                     {t("shell.models")}
@@ -439,7 +471,7 @@ export function SettingsModal({
                     onClose();
                     onOpenSkills();
                   }}
-                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] text-left cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 text-left cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
                 >
                   <span className="font-medium text-text text-[12px]">
                     {t("shell.skills")}
@@ -455,7 +487,7 @@ export function SettingsModal({
                     onClose();
                     onOpenExtensions();
                   }}
-                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] text-left cursor-pointer"
+                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 text-left cursor-pointer"
                 >
                   <span className="font-medium text-text text-[12px]">
                     {t("shell.extensionsMcp")}
@@ -508,7 +540,7 @@ export function SettingsModal({
                         type="button"
                         disabled={settingsLoading || settingsSaving}
                         onClick={() => void updateAgentSetting({ defaultAgentMode: mode })}
-                        className={`px-3 py-1 rounded-[5px] text-[12px] font-medium transition-[background-color,color,transform] duration-150 active:scale-[0.97] cursor-pointer disabled:opacity-50 ${
+                        className={`px-3 py-1 rounded-[5px] text-[12px] font-medium transition-[background-color,color,transform] duration-150 enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 cursor-pointer disabled:opacity-50 ${
                           defaultAgentMode === mode
                             ? "bg-accent text-accent-contrast"
                             : "text-text-muted hover:text-text"
@@ -550,7 +582,7 @@ export function SettingsModal({
                         onClick={() =>
                           void updateAgentSetting({ defaultToolPreset: preset.id })
                         }
-                        className={`px-3 py-1 rounded-[5px] text-[12px] font-medium transition-[background-color,color,transform] duration-150 active:scale-[0.97] cursor-pointer disabled:opacity-50 ${
+                        className={`px-3 py-1 rounded-[5px] text-[12px] font-medium transition-[background-color,color,transform] duration-150 enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 cursor-pointer disabled:opacity-50 ${
                           defaultToolPreset === preset.id
                             ? "bg-accent text-accent-contrast"
                             : "text-text-muted hover:text-text"
@@ -609,7 +641,7 @@ export function SettingsModal({
                   </h4>
                   <p
                     key={updateStatus.status}
-                    className={`mt-1 text-[12px] transition-[opacity,filter] duration-150 ${
+                    className={`mt-1 text-[12px] transition-[opacity,filter] duration-150 motion-reduce:transition-none ${
                       updateStatus.status === "error"
                         ? "text-danger"
                         : updateStatus.status === "available" ||
@@ -627,7 +659,7 @@ export function SettingsModal({
                     <button
                       type="button"
                       onClick={() => void handleDownloadUpdate()}
-                      className="px-3 py-1.5 rounded-control bg-accent text-accent-contrast font-medium text-[12px] transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.97] cursor-pointer"
+                      className="px-3 py-1.5 rounded-control bg-accent text-accent-contrast font-medium text-[12px] transition-[opacity,transform] duration-150 hover:opacity-90 enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 cursor-pointer"
                     >
                       {t("settings.about.downloadAction")}
                     </button>
@@ -637,7 +669,7 @@ export function SettingsModal({
                     <button
                       type="button"
                       onClick={() => void handleQuitAndInstall()}
-                      className="px-3 py-1.5 rounded-control bg-accent text-accent-contrast font-medium text-[12px] transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.97] cursor-pointer"
+                      className="px-3 py-1.5 rounded-control bg-accent text-accent-contrast font-medium text-[12px] transition-[opacity,transform] duration-150 hover:opacity-90 enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 cursor-pointer"
                     >
                       {t("settings.about.restartAction")}
                     </button>
@@ -647,10 +679,11 @@ export function SettingsModal({
                     type="button"
                     disabled={
                       updateStatus.status === "checking" ||
-                      updateStatus.status === "downloading"
+                      updateStatus.status === "downloading" ||
+                      updateStatus.status === "downloaded"
                     }
                     onClick={() => void handleCheckForUpdates()}
-                    className="px-3 py-1.5 rounded-control border border-border bg-bg-elevated text-text font-medium text-[12px] transition-[background-color,border-color,transform] duration-150 hover:bg-bg-hover active:scale-[0.97] disabled:opacity-50 disabled:cursor-wait cursor-pointer"
+                    className="px-3 py-1.5 rounded-control border border-border bg-bg-elevated text-text font-medium text-[12px] transition-[background-color,border-color,transform] duration-150 hover:bg-bg-hover enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {updateStatus.status === "checking"
                       ? t("settings.about.checking")
@@ -662,7 +695,7 @@ export function SettingsModal({
               {updateStatus.status === "downloading" && (
                 <div className="w-full h-1.5 rounded-full bg-bg-elevated overflow-hidden">
                   <div
-                    className="h-full bg-accent origin-left transition-transform duration-150 ease-out"
+                    className="h-full bg-accent origin-left transition-transform duration-150 ease-out motion-reduce:transition-none"
                     style={{
                       transform: `scaleX(${Math.max(
                         0,
@@ -682,7 +715,7 @@ export function SettingsModal({
                   href={repoUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] text-[12px] text-text no-underline"
+                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 text-[12px] text-text no-underline"
                 >
                   <span>{t("settings.about.githubRepo")}</span>
                   <span className="text-text-muted">↗</span>
@@ -691,7 +724,7 @@ export function SettingsModal({
                   href={`${repoUrl}/releases`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] text-[12px] text-text no-underline"
+                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 text-[12px] text-text no-underline"
                 >
                   <span>{t("settings.about.releaseNotes")}</span>
                   <span className="text-text-muted">↗</span>
@@ -700,7 +733,7 @@ export function SettingsModal({
                   href={`${repoUrl}/issues`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] text-[12px] text-text no-underline"
+                  className="flex items-center justify-between p-3 rounded-control border border-border bg-bg-elevated hover:bg-bg-hover transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 text-[12px] text-text no-underline"
                 >
                   <span>{t("settings.about.reportIssue")}</span>
                   <span className="text-text-muted">↗</span>

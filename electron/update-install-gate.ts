@@ -83,6 +83,13 @@ export function transitionUpdateStatus(
   const now = "now" in event && typeof event.now === "number" ? event.now : Date.now();
   switch (event.type) {
     case "checking":
+      if (prev.status === "downloaded") {
+        return {
+          ...prev,
+          error: null,
+          checkedAt: now,
+        };
+      }
       return {
         ...prev,
         status: "checking",

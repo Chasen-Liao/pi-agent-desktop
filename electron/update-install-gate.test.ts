@@ -71,3 +71,15 @@ test("transitionUpdateStatus handles not-available, error, and unsupported state
   assert.equal(status.error, null);
 });
 
+test("transitionUpdateStatus does not downgrade downloaded status on subsequent checking event", () => {
+  let status = createUpdateStatusPayload("0.12.0");
+  status = transitionUpdateStatus(status, { type: "downloaded", version: "0.13.0", now: 1000 });
+  assert.equal(status.status, "downloaded");
+  assert.equal(status.downloadedVersion, "0.13.0");
+
+  status = transitionUpdateStatus(status, { type: "checking", now: 2000 });
+  assert.equal(status.status, "downloaded");
+  assert.equal(status.downloadedVersion, "0.13.0");
+  assert.equal(status.checkedAt, 2000);
+});
+

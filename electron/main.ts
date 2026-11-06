@@ -63,6 +63,9 @@ let restartAttempts: number[] = [];
 let updateInstallState: UpdateInstallState = createUpdateInstallState();
 let updateStatus: UpdateStatusPayload = createUpdateStatusPayload(app.getVersion());
 let autoUpdaterInitialized = false;
+let checkInFlight = false;
+let downloadInFlight = false;
+let interactiveUpdateCheck = false;
 
 export function setQuitting(val: boolean) {
   isQuitting = val;
@@ -99,6 +102,11 @@ async function ensureAutoUpdaterInitialized() {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("update-available", { version: info.version });
     }
+    // Interactive checks from SettingsModal / tray already present the in-app
+    // update card; only show the native dialog for background startup checks.
+    if (interactiveUpdateCheck) {
+      return;
+    }
     // 弹 dialog 问用户是否下载（因为 autoDownload=false）
     // Fallback dialog: works with or without a parent window（与 update-downloaded 一致）
     const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
@@ -117,13 +125,27 @@ async function ensureAutoUpdaterInitialized() {
     dialogPromise
       .then(({ response }) => {
         logInfo("Update download dialog response", { response });
-        if (response === 0) {
-          autoUpdater.downloadUpdate().catch((err: unknown) => {
-            logError(
-              "Auto-update download failed",
-              err instanceof Error ? err : new Error(String(err))
-            );
-          });
+        if (response === 0 && !downloadInFlight && !updateInstallState.updateDownloaded) {
+          downloadInFlight = true;
+          broadcastUpdateStatus(
+            transitionUpdateStatus(updateStatus, {
+              type: "downloading",
+              percent: 0,
+              transferred: 0,
+              total: 0,
+            })
+          );
+          autoUpdater
+            .downloadUpdate()
+            .catch((err: unknown) => {
+              logError(
+                "Auto-update download failed",
+                err instanceof Error ? err : new Error(String(err))
+              );
+            })
+            .finally(() => {
+              downloadInFlight = false;
+            });
         }
       })
       .catch((err: unknown) => {
@@ -159,6 +181,7 @@ async function ensureAutoUpdaterInitialized() {
 
   autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
     logInfo("autoUpdater update-downloaded", info);
+    downloadInFlight = false;
     updateInstallState = markUpdateDownloaded(updateInstallState, info.version);
     broadcastUpdateStatus(
       transitionUpdateStatus(updateStatus, { type: "downloaded", version: info.version })
@@ -196,6 +219,7 @@ async function ensureAutoUpdaterInitialized() {
 
   autoUpdater.on("error", (err) => {
     logError("autoUpdater error", err);
+    downloadInFlight = false;
     broadcastUpdateStatus(
       transitionUpdateStatus(updateStatus, {
         type: "error",
@@ -207,11 +231,31 @@ async function ensureAutoUpdaterInitialized() {
   return autoUpdater;
 }
 
-async function runCheckForUpdates(): Promise<UpdateStatusPayload> {
+async function runCheckForUpdates(options?: {
+  interactive?: boolean;
+}): Promise<UpdateStatusPayload> {
   if (!app.isPackaged) {
     logInfo("checkForUpdates skipped: app is not packaged");
     broadcastUpdateStatus(transitionUpdateStatus(updateStatus, { type: "unsupported" }));
     return updateStatus;
+  }
+  if (
+    updateInstallState.updateDownloaded ||
+    updateStatus.status === "downloaded" ||
+    updateStatus.status === "downloading" ||
+    downloadInFlight ||
+    checkInFlight
+  ) {
+    logInfo("checkForUpdates skipped: update already in progress or downloaded", {
+      status: updateStatus.status,
+      checkInFlight,
+      downloadInFlight,
+    });
+    return updateStatus;
+  }
+  checkInFlight = true;
+  if (options?.interactive) {
+    interactiveUpdateCheck = true;
   }
   try {
     const autoUpdater = await ensureAutoUpdaterInitialized();
@@ -225,6 +269,9 @@ async function runCheckForUpdates(): Promise<UpdateStatusPayload> {
         message: err instanceof Error ? err.message : String(err),
       })
     );
+  } finally {
+    checkInFlight = false;
+    interactiveUpdateCheck = false;
   }
   return updateStatus;
 }
@@ -706,7 +753,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle("check-for-updates", async () => {
     logInfo("checkForUpdates requested from renderer");
-    return runCheckForUpdates();
+    return runCheckForUpdates({ interactive: true });
   });
 
   ipcMain.handle("download-update", async () => {
@@ -714,6 +761,18 @@ function registerIpcHandlers() {
     if (!app.isPackaged) {
       return { ok: false, error: "Updates are only available in packaged builds" };
     }
+    if (updateInstallState.updateDownloaded || downloadInFlight) {
+      return { ok: true };
+    }
+    downloadInFlight = true;
+    broadcastUpdateStatus(
+      transitionUpdateStatus(updateStatus, {
+        type: "downloading",
+        percent: updateStatus.percent ?? 0,
+        transferred: updateStatus.transferred ?? 0,
+        total: updateStatus.total ?? 0,
+      })
+    );
     try {
       const autoUpdater = await ensureAutoUpdaterInitialized();
       await autoUpdater.downloadUpdate();
@@ -723,6 +782,8 @@ function registerIpcHandlers() {
       const message = err instanceof Error ? err.message : String(err);
       broadcastUpdateStatus(transitionUpdateStatus(updateStatus, { type: "error", message }));
       return { ok: false, error: message };
+    } finally {
+      downloadInFlight = false;
     }
   });
 
@@ -800,7 +861,7 @@ app.whenReady().then(async () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("open-settings", { tab: "about" });
         }
-        void runCheckForUpdates();
+        void runCheckForUpdates({ interactive: true });
       },
     });
     startupUiReady = true;
