@@ -8,7 +8,12 @@ const FALLBACK_ICON_PNG = Buffer.from(
   "base64"
 );
 
-export function createTray(mainWindow: BrowserWindow): Tray {
+export interface TrayOptions {
+  onOpenSettings?: (tab?: "general" | "agent" | "about") => void;
+  onCheckForUpdates?: () => void;
+}
+
+export function createTray(mainWindow: BrowserWindow, options?: TrayOptions): Tray {
   const iconPath = getAppIconPath(app.getAppPath());
 
   let icon: Electron.NativeImage;
@@ -25,12 +30,33 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   const tray = new Tray(icon);
   tray.setToolTip("Pi Agent Desktop");
 
+  const showAndFocus = () => {
+    if (!mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  };
+
   const contextMenu = Menu.buildFromTemplate([
     {
       label: "显示窗口",
       click: () => {
-        mainWindow.show();
-        mainWindow.focus();
+        showAndFocus();
+      },
+    },
+    {
+      label: "设置",
+      click: () => {
+        showAndFocus();
+        options?.onOpenSettings?.("general");
+      },
+    },
+    {
+      label: "检查更新",
+      click: () => {
+        showAndFocus();
+        options?.onCheckForUpdates?.();
       },
     },
     { type: "separator" },
@@ -45,9 +71,9 @@ export function createTray(mainWindow: BrowserWindow): Tray {
 
   tray.setContextMenu(contextMenu);
   tray.on("double-click", () => {
-    mainWindow.show();
-    mainWindow.focus();
+    showAndFocus();
   });
 
   return tray;
 }
+

@@ -15,9 +15,12 @@ import { loadPageWithRetry } from "./navigation";
 import { formatElectronLogLine, deriveScope, type ElectronLogLevel } from "./log-format";
 import {
   createUpdateInstallState,
+  createUpdateStatusPayload,
   decideQuitAndInstall,
   markUpdateDownloaded,
+  transitionUpdateStatus,
   type UpdateInstallState,
+  type UpdateStatusPayload,
 } from "./update-install-gate";
 import { buildElectronCspHeader } from "./csp";
 import { getAppIconPath } from "./app-icon";
@@ -58,9 +61,172 @@ let activePort: number | null = null;
 let startupUiReady = false;
 let restartAttempts: number[] = [];
 let updateInstallState: UpdateInstallState = createUpdateInstallState();
+let updateStatus: UpdateStatusPayload = createUpdateStatusPayload(app.getVersion());
+let autoUpdaterInitialized = false;
 
 export function setQuitting(val: boolean) {
   isQuitting = val;
+}
+
+function broadcastUpdateStatus(nextStatus: UpdateStatusPayload) {
+  updateStatus = nextStatus;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update-status", updateStatus);
+  }
+}
+
+async function ensureAutoUpdaterInitialized() {
+  const { autoUpdater } = await import("electron-updater");
+  if (autoUpdaterInitialized) {
+    return autoUpdater;
+  }
+  autoUpdaterInitialized = true;
+  // 不自动下载：让用户决定是否下载（避免流量敏感环境静默下载大文件，
+  // 也避免渲染进程 XSS 触发 quitAndInstall 路径）。
+  autoUpdater.autoDownload = false;
+
+  autoUpdater.on("checking-for-update", () => {
+    logInfo("autoUpdater checking-for-update");
+    broadcastUpdateStatus(transitionUpdateStatus(updateStatus, { type: "checking" }));
+  });
+
+  autoUpdater.on("update-available", (info: UpdateInfo) => {
+    logInfo("autoUpdater update-available", info);
+    broadcastUpdateStatus(
+      transitionUpdateStatus(updateStatus, { type: "available", version: info.version })
+    );
+    // Notify renderer (if window is alive) for in-app banner
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("update-available", { version: info.version });
+    }
+    // 弹 dialog 问用户是否下载（因为 autoDownload=false）
+    // Fallback dialog: works with or without a parent window（与 update-downloaded 一致）
+    const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const options = {
+      type: "info" as const,
+      title: "Update Available",
+      message: `A new version (${info.version}) is available.`,
+      detail: "Download and install now? The app will restart after download completes.",
+      buttons: ["Download", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+    };
+    const dialogPromise = parent
+      ? dialog.showMessageBox(parent, options)
+      : dialog.showMessageBox(options);
+    dialogPromise
+      .then(({ response }) => {
+        logInfo("Update download dialog response", { response });
+        if (response === 0) {
+          autoUpdater.downloadUpdate().catch((err: unknown) => {
+            logError(
+              "Auto-update download failed",
+              err instanceof Error ? err : new Error(String(err))
+            );
+          });
+        }
+      })
+      .catch((err: unknown) => {
+        logError(
+          "Update dialog failed",
+          err instanceof Error ? err : new Error(String(err))
+        );
+      });
+  });
+
+  autoUpdater.on("update-not-available", (info: UpdateInfo) => {
+    logInfo("autoUpdater update-not-available", info);
+    broadcastUpdateStatus(
+      transitionUpdateStatus(updateStatus, { type: "not-available", version: info.version })
+    );
+  });
+
+  autoUpdater.on("download-progress", (info) => {
+    logInfo("autoUpdater download-progress", {
+      percent: info.percent,
+      transferred: info.transferred,
+      total: info.total,
+    });
+    broadcastUpdateStatus(
+      transitionUpdateStatus(updateStatus, {
+        type: "downloading",
+        percent: info.percent,
+        transferred: info.transferred,
+        total: info.total,
+      })
+    );
+  });
+
+  autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
+    logInfo("autoUpdater update-downloaded", info);
+    updateInstallState = markUpdateDownloaded(updateInstallState, info.version);
+    broadcastUpdateStatus(
+      transitionUpdateStatus(updateStatus, { type: "downloaded", version: info.version })
+    );
+    mainWindow?.webContents.send("update-downloaded", { version: info.version });
+    // mainWindow 可能已被销毁（用户关闭到托盘后退出）；fallback 到无父窗口版本
+    // 让用户仍能看到提示，而非抛 "Cannot read properties of null"。
+    const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const options = {
+      type: "info" as const,
+      title: "Update Downloaded",
+      message: `Version ${info.version} has been downloaded. Restart to install the update.`,
+      buttons: ["Restart Now", "Later"],
+      defaultId: 0,
+    };
+    const showPromise = parent
+      ? dialog.showMessageBox(parent, options)
+      : dialog.showMessageBox(options);
+    showPromise
+      .then(({ response }) => {
+        logInfo("Update restart dialog response", { response });
+        if (response === 0) {
+          setQuitting(true);
+          logInfo("Calling autoUpdater.quitAndInstall");
+          autoUpdater.quitAndInstall();
+        }
+      })
+      .catch((err: unknown) => {
+        logError(
+          "Update restart dialog failed",
+          err instanceof Error ? err : new Error(String(err))
+        );
+      });
+  });
+
+  autoUpdater.on("error", (err) => {
+    logError("autoUpdater error", err);
+    broadcastUpdateStatus(
+      transitionUpdateStatus(updateStatus, {
+        type: "error",
+        message: err instanceof Error ? err.message : String(err),
+      })
+    );
+  });
+
+  return autoUpdater;
+}
+
+async function runCheckForUpdates(): Promise<UpdateStatusPayload> {
+  if (!app.isPackaged) {
+    logInfo("checkForUpdates skipped: app is not packaged");
+    broadcastUpdateStatus(transitionUpdateStatus(updateStatus, { type: "unsupported" }));
+    return updateStatus;
+  }
+  try {
+    const autoUpdater = await ensureAutoUpdaterInitialized();
+    logInfo("Checking for updates");
+    await autoUpdater.checkForUpdates();
+  } catch (err) {
+    logError("Auto-update check failed:", err);
+    broadcastUpdateStatus(
+      transitionUpdateStatus(updateStatus, {
+        type: "error",
+        message: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
+  return updateStatus;
 }
 
 // ---------------------------------------------------------------------------
@@ -526,6 +692,40 @@ function registerIpcHandlers() {
     return result.canceled ? null : (result.filePaths[0] ?? null);
   });
 
+  ipcMain.handle("get-app-info", () => {
+    return {
+      version: app.getVersion(),
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+    };
+  });
+
+  ipcMain.handle("get-update-status", () => {
+    return updateStatus;
+  });
+
+  ipcMain.handle("check-for-updates", async () => {
+    logInfo("checkForUpdates requested from renderer");
+    return runCheckForUpdates();
+  });
+
+  ipcMain.handle("download-update", async () => {
+    logInfo("downloadUpdate requested from renderer");
+    if (!app.isPackaged) {
+      return { ok: false, error: "Updates are only available in packaged builds" };
+    }
+    try {
+      const autoUpdater = await ensureAutoUpdaterInitialized();
+      await autoUpdater.downloadUpdate();
+      return { ok: true };
+    } catch (err) {
+      logError("Manual update download failed:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      broadcastUpdateStatus(transitionUpdateStatus(updateStatus, { type: "error", message }));
+      return { ok: false, error: message };
+    }
+  });
+
   ipcMain.handle("quit-and-install", async () => {
     logInfo("quitAndInstall requested from renderer");
     const decision = decideQuitAndInstall(updateInstallState);
@@ -590,7 +790,19 @@ app.whenReady().then(async () => {
 
     createWindow();
     logStartupTiming("window created");
-    createTray(mainWindow!);
+    createTray(mainWindow!, {
+      onOpenSettings: (tab = "general") => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("open-settings", { tab });
+        }
+      },
+      onCheckForUpdates: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("open-settings", { tab: "about" });
+        }
+        void runCheckForUpdates();
+      },
+    });
     startupUiReady = true;
 
     nextProcess = startNextServer(port);
@@ -604,114 +816,8 @@ app.whenReady().then(async () => {
 
     // Auto-update check (production only, delayed 30s)
     if (app.isPackaged) {
-      setTimeout(async () => {
-        try {
-          const { autoUpdater } = await import("electron-updater");
-          // 不自动下载：让用户决定是否下载（避免流量敏感环境静默下载大文件，
-          // 也避免渲染进程 XSS 触发 quitAndInstall 路径）。
-          autoUpdater.autoDownload = false;
-          logInfo("Checking for updates");
-
-          // Forward update events to renderer
-          autoUpdater.on("checking-for-update", () => {
-            logInfo("autoUpdater checking-for-update");
-          });
-
-          autoUpdater.on("update-available", (info: UpdateInfo) => {
-            logInfo("autoUpdater update-available", info);
-            // Notify renderer (if window is alive) for in-app banner
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send("update-available", { version: info.version });
-            }
-            // 弹 dialog 问用户是否下载（因为 autoDownload=false）
-            // Fallback dialog: works with or without a parent window（与 update-downloaded 一致）
-            const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
-            const options = {
-              type: "info" as const,
-              title: "Update Available",
-              message: `A new version (${info.version}) is available.`,
-              detail: "Download and install now? The app will restart after download completes.",
-              buttons: ["Download", "Later"],
-              defaultId: 0,
-              cancelId: 1,
-            };
-            const dialogPromise = parent
-              ? dialog.showMessageBox(parent, options)
-              : dialog.showMessageBox(options);
-            dialogPromise
-              .then(({ response }) => {
-                logInfo("Update download dialog response", { response });
-                if (response === 0) {
-                  autoUpdater.downloadUpdate().catch((err: unknown) => {
-                    logError(
-                      "Auto-update download failed",
-                      err instanceof Error ? err : new Error(String(err))
-                    );
-                  });
-                }
-              })
-              .catch((err: unknown) => {
-                logError(
-                  "Update dialog failed",
-                  err instanceof Error ? err : new Error(String(err))
-                );
-              });
-          });
-
-          autoUpdater.on("update-not-available", (info: UpdateInfo) => {
-            logInfo("autoUpdater update-not-available", info);
-          });
-
-          autoUpdater.on("download-progress", (info) => {
-            logInfo("autoUpdater download-progress", {
-              percent: info.percent,
-              transferred: info.transferred,
-              total: info.total,
-            });
-          });
-
-          autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
-            logInfo("autoUpdater update-downloaded", info);
-            updateInstallState = markUpdateDownloaded(updateInstallState, info.version);
-            mainWindow?.webContents.send("update-downloaded", { version: info.version });
-            // mainWindow 可能已被销毁（用户关闭到托盘后退出）；fallback 到无父窗口版本
-            // 让用户仍能看到提示，而非抛 "Cannot read properties of null"。
-            const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
-            const options = {
-              type: "info" as const,
-              title: "Update Downloaded",
-              message: `Version ${info.version} has been downloaded. Restart to install the update.`,
-              buttons: ["Restart Now", "Later"],
-              defaultId: 0,
-            };
-            const showPromise = parent
-              ? dialog.showMessageBox(parent, options)
-              : dialog.showMessageBox(options);
-            showPromise
-              .then(({ response }) => {
-                logInfo("Update restart dialog response", { response });
-                if (response === 0) {
-                  setQuitting(true);
-                  logInfo("Calling autoUpdater.quitAndInstall");
-                  autoUpdater.quitAndInstall();
-                }
-              })
-              .catch((err: unknown) => {
-                logError(
-                  "Update restart dialog failed",
-                  err instanceof Error ? err : new Error(String(err))
-                );
-              });
-          });
-
-          autoUpdater.on("error", (err) => {
-            logError("autoUpdater error", err);
-          });
-
-          autoUpdater.checkForUpdates();
-        } catch (err) {
-          logError("Auto-update check failed:", err);
-        }
+      setTimeout(() => {
+        void runCheckForUpdates();
       }, 30_000);
     }
   } catch (err) {

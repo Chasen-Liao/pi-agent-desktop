@@ -12,6 +12,7 @@ import { BranchNavigator } from "./BranchNavigator";
 import { ExtensionsConfigModal } from "./ExtensionsConfigModal";
 import { SessionExportModal } from "./SessionExportModal";
 import { BranchCloneModal, type BranchCloneMode } from "./BranchCloneModal";
+import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { useTheme } from "@/hooks/useTheme";
 import type { SessionInfo, SessionTreeNode, StatuslineResponse } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
@@ -52,6 +53,10 @@ export function AppShell() {
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [extensionsModalOpen, setExtensionsModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>("general");
+  const [settingsAutoCheck, setSettingsAutoCheck] = useState(false);
+  const [hasUpdateBadge, setHasUpdateBadge] = useState(false);
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
   const shellMenuRef = useRef<HTMLDivElement>(null);
   const shellMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -311,9 +316,52 @@ export function AppShell() {
   );
 
 
-  // Keyboard shortcuts: Windows-oriented app commands.
+  useEffect(() => {
+    const win = window as Window & {
+      electronAPI?: {
+        onOpenSettings?: (cb: (payload: { tab?: SettingsTab }) => void) => () => void;
+        onUpdateStatus?: (cb: (status: { status: string }) => void) => () => void;
+        onUpdateAvailable?: (cb: () => void) => () => void;
+        onUpdateDownloaded?: (cb: () => void) => () => void;
+      };
+    };
+    const cleanups: (() => void)[] = [];
+    if (win.electronAPI?.onOpenSettings) {
+      cleanups.push(
+        win.electronAPI.onOpenSettings((payload) => {
+          setSettingsInitialTab(payload?.tab ?? "general");
+          setSettingsModalOpen(true);
+        })
+      );
+    }
+    if (win.electronAPI?.onUpdateStatus) {
+      cleanups.push(
+        win.electronAPI.onUpdateStatus((status) => {
+          setHasUpdateBadge(status.status === "available" || status.status === "downloaded");
+        })
+      );
+    }
+    if (win.electronAPI?.onUpdateAvailable) {
+      cleanups.push(win.electronAPI.onUpdateAvailable(() => setHasUpdateBadge(true)));
+    }
+    if (win.electronAPI?.onUpdateDownloaded) {
+      cleanups.push(win.electronAPI.onUpdateDownloaded(() => setHasUpdateBadge(true)));
+    }
+    return () => {
+      for (const cleanup of cleanups) cleanup();
+    };
+  }, []);
+
+  // Keyboard shortcuts: Windows-oriented app commands + universal Cmd/Ctrl+, for Settings.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key === ",") {
+        e.preventDefault();
+        setSettingsInitialTab("general");
+        setSettingsModalOpen((open) => !open);
+        return;
+      }
+
       if (!e.ctrlKey || e.metaKey || isEditableTarget(e.target)) return;
       const key = e.key.toLowerCase();
 
@@ -423,6 +471,7 @@ export function AppShell() {
               label: t("shell.models"),
               onClick: () => setModelsConfigOpen(true),
               disabled: false,
+              badge: false,
               icon: (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="4" y="4" width="16" height="16" rx="2" />
@@ -442,6 +491,7 @@ export function AppShell() {
               label: t("shell.skills"),
               onClick: () => setSkillsConfigOpen(true),
               disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd,
+              badge: false,
               icon: (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -450,22 +500,43 @@ export function AppShell() {
                 </svg>
               ),
             },
-          ] as { label: string; onClick: () => void; disabled: boolean; icon: React.ReactNode }[]
-        ).map(({ label, onClick, disabled, icon }) => (
+            {
+              label: t("shell.settings"),
+              onClick: () => {
+                setSettingsInitialTab("general");
+                setSettingsModalOpen(true);
+              },
+              disabled: false,
+              badge: hasUpdateBadge,
+              icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              ),
+            },
+          ] as { label: string; onClick: () => void; disabled: boolean; badge?: boolean; icon: React.ReactNode }[]
+        ).map(({ label, onClick, disabled, badge, icon }) => (
           <button
             key={label}
             onClick={onClick}
             disabled={disabled}
             title={label}
             aria-label={label}
-            className={`flex-1 flex items-center justify-center gap-1.5 h-control-height p-0 bg-transparent border-none rounded-control text-[12px] transition-[background-color,color,opacity,transform] duration-150 ${
+            className={`relative flex-1 flex items-center justify-center gap-1.5 h-control-height p-0 bg-transparent border-none rounded-control text-[12px] transition-[background-color,color,opacity,transform] duration-150 ${
               disabled
                 ? "cursor-default opacity-35 text-text-muted"
-                : "cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text active:scale-95"
+                : "cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text active:scale-[0.97]"
             }`}
           >
             {icon}
             {label}
+            {badge && (
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-accent shrink-0"
+                aria-hidden="true"
+              />
+            )}
           </button>
         ))}
       </div>
@@ -653,6 +724,40 @@ export function AppShell() {
                     <span className="w-4 text-center">⇩</span> {t("shell.exportSession")}
                   </button>
                   <div className="my-1 border-t border-divider" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShellMenuOpen(false);
+                      setSettingsInitialTab("general");
+                      setSettingsModalOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
+                  >
+                    <span className="w-4 text-center">⚙</span>
+                    <span className="flex-1">{t("shell.settings")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShellMenuOpen(false);
+                      setSettingsInitialTab("about");
+                      setSettingsAutoCheck(true);
+                      setSettingsModalOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-control border-none bg-transparent px-2.5 py-2 text-left text-[12px] text-text hover:bg-bg-hover"
+                  >
+                    <span className="w-4 text-center">↻</span>
+                    <span className="flex-1">{t("shell.checkForUpdates")}</span>
+                    {hasUpdateBadge && (
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-accent shrink-0"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </button>
+                  <div className="my-1 border-t border-divider" />
                   <label className="flex w-full items-center gap-2 rounded-control px-2.5 py-1.5 text-[12px] text-text">
                     <span className="w-4 text-center" aria-hidden="true">文</span>
                     <span className="flex-1">{t("language.label")}</span>
@@ -828,6 +933,19 @@ export function AppShell() {
         isOpen={extensionsModalOpen}
         onClose={() => setExtensionsModalOpen(false)}
         cwd={activeCwd ?? selectedSession?.cwd ?? newSessionCwd ?? undefined}
+      />
+      <SettingsModal
+        isOpen={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        initialTab={settingsInitialTab}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+        onOpenModels={() => setModelsConfigOpen(true)}
+        onOpenSkills={() => setSkillsConfigOpen(true)}
+        onOpenExtensions={() => setExtensionsModalOpen(true)}
+        canOpenSkills={Boolean(activeCwd || selectedSession?.cwd || newSessionCwd)}
+        autoCheckOnOpen={settingsAutoCheck}
+        onAutoCheckHandled={() => setSettingsAutoCheck(false)}
       />
       <SessionExportModal
         isOpen={exportModalOpen}
