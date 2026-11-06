@@ -93,6 +93,16 @@ test("main process registers manual update check, download, and app-info IPC han
   assert.match(source, /ipcMain\.handle\("download-update"/);
   assert.match(source, /mainWindow\.webContents\.send\("update-status"/);
 });
+
+test("main process installs right-click context menu and configurable window close behavior", () => {
+  assert.match(source, /installContextMenu\(mainWindow\)/);
+  assert.match(source, /window\.webContents\.on\("context-menu"/);
+  assert.match(source, /buildContextMenuTemplate\(params/);
+  assert.match(source, /decideWindowCloseAction\(/);
+  assert.match(source, /ipcMain\.on\("set-close-action"/);
+  assert.match(source, /setTimeout\(\(\) => app\.quit\(\)\)/);
+});
 // The CSP header contents themselves are behaviorally covered in lib/csp.test.ts,
 // which also asserts electron/csp.ts and lib/csp.ts emit identical headers.
+
 

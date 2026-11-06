@@ -55,5 +55,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   quitAndInstall: () => ipcRenderer.invoke("quit-and-install"),
   setTheme: (isDark: boolean) => ipcRenderer.send("set-theme", isDark),
+  setCloseAction: (action: "tray" | "quit") => ipcRenderer.send("set-close-action", action),
 });
+
 

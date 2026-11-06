@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, utilityProcess } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, shell, utilityProcess } from "electron";
 import type { UpdateInfo } from "electron-updater";
 import path from "path";
 import { appendFileSync, mkdirSync } from "fs";
@@ -25,6 +25,13 @@ import {
 import { buildElectronCspHeader } from "./csp";
 import { getAppIconPath } from "./app-icon";
 import { applyTitleBarOverlayTheme } from "./title-bar-overlay";
+import {
+  buildContextMenuTemplate,
+  decideWindowCloseAction,
+  isCloseAction,
+  readCloseActionFromDisk,
+  type CloseAction,
+} from "./window-options";
 import {
   ServerProcess,
   wrapChildServerProcess,
@@ -54,6 +61,7 @@ app.on("second-instance", () => {
 let mainWindow: BrowserWindow | null = null;
 let nextProcess: ServerProcess | null = null;
 let isQuitting = false;
+let closeAction: CloseAction | null = null;
 let logFilePath: string | null = null;
 const DEFAULT_PORT = 30141;
 let serverState: ServerState = "starting";
@@ -536,6 +544,7 @@ function createWindow() {
 
   installNavigationGuards(mainWindow);
   installCrashRecovery(mainWindow);
+  installContextMenu(mainWindow);
 
   // Inject a Content-Security-Policy header into every response loaded in the
   // main window's session. Next.js does not emit CSP on its own, so without
@@ -563,9 +572,17 @@ function createWindow() {
   });
 
   mainWindow.on("close", (e) => {
-    if (!isQuitting) {
+    const effectiveCloseAction = closeAction ?? readCloseActionFromDisk();
+    const decision = decideWindowCloseAction({
+      isQuitting,
+      closeAction: effectiveCloseAction,
+    });
+    if (decision === "hide-to-tray") {
       e.preventDefault();
       mainWindow?.hide();
+    } else if (decision === "quit-app") {
+      isQuitting = true;
+      setTimeout(() => app.quit());
     }
   });
 
@@ -705,6 +722,18 @@ function installCrashRecovery(window: BrowserWindow) {
   });
 }
 
+function installContextMenu(window: BrowserWindow) {
+  window.webContents.on("context-menu", (_event, params) => {
+    if (window.isDestroyed()) return;
+    const template = buildContextMenuTemplate(params, {
+      locale: app.getLocale(),
+      onCopyLink: (url) => clipboard.writeText(url),
+    });
+    const menu = Menu.buildFromTemplate(template);
+    menu.popup({ window });
+  });
+}
+
 function installNavigationGuards(window: BrowserWindow) {
   window.webContents.on("will-navigate", (event, url) => {
     if (!isAllowedAppUrl(url)) {
@@ -802,6 +831,12 @@ function registerIpcHandlers() {
 
   ipcMain.on("set-theme", (_event, isDark: boolean) => {
     applyTitleBarOverlayTheme(mainWindow, isDark);
+  });
+
+  ipcMain.on("set-close-action", (_event, action: unknown) => {
+    if (isCloseAction(action)) {
+      closeAction = action;
+    }
   });
 }
 

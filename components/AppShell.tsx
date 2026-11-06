@@ -57,6 +57,7 @@ export function AppShell() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>("general");
   const [settingsAutoCheck, setSettingsAutoCheck] = useState(false);
   const [hasUpdateBadge, setHasUpdateBadge] = useState(false);
+  const [followStreaming, setFollowStreaming] = useState(true);
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
   const shellMenuRef = useRef<HTMLDivElement>(null);
   const shellMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -140,6 +141,15 @@ export function AppShell() {
     setStatusline(status);
     setStatuslineVisible((visible) => !visible);
   }, []);
+
+  const handleDesktopSettingsChange = useCallback(
+    (settings: { followStreaming?: boolean }) => {
+      if (typeof settings.followStreaming === "boolean") {
+        setFollowStreaming(settings.followStreaming);
+      }
+    },
+    []
+  );
 
   // Single active panel — only one dropdown open at a time
   const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "system" | null>(null);
@@ -347,6 +357,29 @@ export function AppShell() {
     if (win.electronAPI?.onUpdateDownloaded) {
       cleanups.push(win.electronAPI.onUpdateDownloaded(() => setHasUpdateBadge(true)));
     }
+    fetch("/api/desktop-settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          data: {
+            closeAction?: "tray" | "quit";
+            followStreaming?: boolean;
+          } | null
+        ) => {
+          if (!data) return;
+          if (typeof data.followStreaming === "boolean") {
+            setFollowStreaming(data.followStreaming);
+          }
+          if (data.closeAction === "tray" || data.closeAction === "quit") {
+            (
+              window as Window & {
+                electronAPI?: { setCloseAction?: (action: "tray" | "quit") => void };
+              }
+            ).electronAPI?.setCloseAction?.(data.closeAction);
+          }
+        }
+      )
+      .catch(() => {});
     return () => {
       for (const cleanup of cleanups) cleanup();
     };
@@ -843,6 +876,7 @@ export function AppShell() {
                 onSessionCreated={handleSessionCreated}
                 onSessionForked={handleSessionForked}
                 modelsRefreshKey={modelsRefreshKey}
+                followStreaming={followStreaming}
                 chatInputRef={chatInputRef}
                 onBranchDataChange={handleBranchDataChange}
                 onSystemPromptChange={handleSystemPromptChange}
@@ -956,6 +990,7 @@ export function AppShell() {
         canOpenSkills={Boolean(activeCwd || selectedSession?.cwd || newSessionCwd)}
         autoCheckOnOpen={settingsAutoCheck}
         onAutoCheckHandled={() => setSettingsAutoCheck(false)}
+        onDesktopSettingsChange={handleDesktopSettingsChange}
       />
       <SessionExportModal
         isOpen={exportModalOpen}

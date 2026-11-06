@@ -52,6 +52,9 @@ test("SettingsModal exports SettingsModal with General, Agent, and About & Updat
   assert.match(settingsSource, /t\("settings\.tab\.general"\)/);
   assert.match(settingsSource, /t\("settings\.tab\.agent"\)/);
   assert.match(settingsSource, /t\("settings\.tab\.about"\)/);
+  assert.match(settingsSource, /t\("settings\.window\.closeAction"\)/);
+  assert.match(settingsSource, /t\("settings\.window\.followStreaming"\)/);
+  assert.match(settingsSource, /setCloseAction/);
   assert.match(settingsSource, /checkForUpdates/);
   assert.match(settingsSource, /downloadUpdate/);
   assert.match(settingsSource, /quitAndInstall/);

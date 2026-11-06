@@ -82,6 +82,7 @@ export interface UseAgentSessionOptions {
   /** Receives the workspace status line snapshot (git + workspace state). */
   onStatusline?: (status: StatuslineResponse) => void;
   modelsRefreshKey?: number;
+  followStreaming?: boolean;
   onBranchDataChange?: (
     tree: SessionTreeNode[],
     activeLeafId: string | null,
@@ -100,6 +101,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onSessionForked,
     onStatusline,
     modelsRefreshKey,
+    followStreaming,
     onBranchDataChange,
     onSystemPromptChange,
   } = opts;
@@ -136,6 +138,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [compactError, setCompactError] = useState<string | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [agentMode, setAgentMode] = useState<AgentMode>(DEFAULT_AGENT_MODE);
+  const [loadedFollowStreaming, setLoadedFollowStreaming] = useState(true);
   const [canExecutePlan, setCanExecutePlan] = useState(false);
   const [extensionUiRequest, setExtensionUiRequest] =
     useState<ExtensionUiRequestEvent | null>(null);
@@ -257,6 +260,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     messageCount: messages.length,
     agentRunning,
     streamingMessage: streamState.streamingMessage,
+    followStreaming: followStreaming ?? loadedFollowStreaming,
   });
 
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
@@ -665,8 +669,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     fetch("/api/desktop-settings")
       .then((r) => r.json())
-      .then((d: { defaultAgentMode?: AgentMode }) => {
-        if (!cancelled && d.defaultAgentMode) setAgentMode(d.defaultAgentMode);
+      .then((d: { defaultAgentMode?: AgentMode; followStreaming?: boolean }) => {
+        if (!cancelled) {
+          if (d.defaultAgentMode) setAgentMode(d.defaultAgentMode);
+          if (typeof d.followStreaming === "boolean") {
+            setLoadedFollowStreaming(d.followStreaming);
+          }
+        }
       })
       .catch(() => {});
 
@@ -731,9 +740,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         (d: {
           defaultAgentMode?: AgentMode;
           defaultToolPreset?: "none" | "default" | "full";
+          followStreaming?: boolean;
         }) => {
           if (d.defaultAgentMode) setAgentMode(d.defaultAgentMode);
           if (d.defaultToolPreset) setToolPreset(d.defaultToolPreset);
+          if (typeof d.followStreaming === "boolean") {
+            setLoadedFollowStreaming(d.followStreaming);
+          }
         },
       )
       .catch(() => {});

@@ -22,10 +22,18 @@ export interface DesktopLtmSettings {
   observePreCompact?: boolean;
 }
 
+export type CloseAction = "tray" | "quit";
+
+export function isCloseAction(value: unknown): value is CloseAction {
+  return value === "tray" || value === "quit";
+}
+
 export interface DesktopSettings {
   defaultAgentMode: AgentMode;
   defaultToolPreset: ToolPreset;
   codemodeEnabled?: boolean;
+  closeAction?: CloseAction;
+  followStreaming?: boolean;
   /** Optional LTM config; omitted when unset. Merged by getLtmConfig. */
   ltm?: DesktopLtmSettings;
 }
@@ -37,6 +45,8 @@ export function defaultDesktopSettings(): DesktopSettings {
     defaultAgentMode: DEFAULT_AGENT_MODE,
     defaultToolPreset: DEFAULT_TOOL_PRESET,
     codemodeEnabled: false,
+    closeAction: "tray",
+    followStreaming: true,
   };
 }
 
@@ -68,6 +78,9 @@ export function mergeDesktopSettings(raw: unknown): DesktopSettings {
   };
   if (ltm) result.ltm = ltm;
   result.codemodeEnabled = typeof obj.codemodeEnabled === "boolean" ? obj.codemodeEnabled : false;
+  result.closeAction = isCloseAction(obj.closeAction) ? obj.closeAction : base.closeAction;
+  result.followStreaming =
+    typeof obj.followStreaming === "boolean" ? obj.followStreaming : base.followStreaming;
   return result;
 }
 
@@ -98,6 +111,12 @@ export function validateDesktopSettingsBody(body: unknown): string | null {
   const obj = body as Record<string, unknown>;
   if (obj.codemodeEnabled !== undefined && typeof obj.codemodeEnabled !== "boolean") {
     return "codemodeEnabled must be a boolean";
+  }
+  if (obj.closeAction !== undefined && !isCloseAction(obj.closeAction)) {
+    return "closeAction must be tray | quit";
+  }
+  if (obj.followStreaming !== undefined && typeof obj.followStreaming !== "boolean") {
+    return "followStreaming must be a boolean";
   }
   if (obj.defaultAgentMode !== undefined && !isAgentMode(obj.defaultAgentMode)) {
     return "defaultAgentMode must be plan | ask | full";

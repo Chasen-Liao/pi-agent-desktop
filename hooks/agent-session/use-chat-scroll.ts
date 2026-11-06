@@ -1,17 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  shouldFollowAgentSettle,
+  shouldFollowStreamingUpdate,
+} from "./chat-scroll-policy";
 
 interface UseChatScrollOptions {
   messageCount: number;
   agentRunning: boolean;
   streamingMessage?: unknown;
+  followStreaming?: boolean;
 }
 
 export function useChatScroll({
   messageCount,
   agentRunning,
   streamingMessage,
+  followStreaming = true,
 }: UseChatScrollOptions) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -68,18 +74,31 @@ export function useChatScroll({
 
   // During streaming/thinking/tool execution, auto-scroll to bottom if user is at bottom
   useEffect(() => {
-    if (agentRunning && isAtBottomRef.current) {
+    if (
+      shouldFollowStreamingUpdate({
+        agentRunning,
+        isAtBottom: isAtBottomRef.current,
+        followStreaming,
+      })
+    ) {
       scrollToBottom("auto");
     }
-  }, [streamingMessage, messageCount, agentRunning, scrollToBottom]);
+  }, [streamingMessage, messageCount, agentRunning, followStreaming, scrollToBottom]);
 
   // When the agent settles or the transcript changes while at the bottom,
   // smoothly follow the new context without interrupting manual history review.
   useEffect(() => {
-    if (!agentRunning && initialScrollDoneRef.current && isAtBottomRef.current) {
+    if (
+      shouldFollowAgentSettle({
+        agentRunning,
+        initialScrollDone: initialScrollDoneRef.current,
+        isAtBottom: isAtBottomRef.current,
+        followStreaming,
+      })
+    ) {
       scrollToBottom("smooth");
     }
-  }, [agentRunning, messageCount, scrollToBottom]);
+  }, [agentRunning, messageCount, followStreaming, scrollToBottom]);
 
   return {
     messagesEndRef,
