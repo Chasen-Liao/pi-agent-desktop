@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ModalSurface } from "./ModalSurface";
 import { CodemodeConfig } from "./CodemodeConfig";
 import { useI18n } from "./I18nProvider";
 import { apiJson } from "./apiJson";
 import type { AgentMode, ToolPreset } from "@/lib/approval-policy";
-import type { DesktopSettings } from "@/lib/desktop-settings";
+import type { CloseAction, DesktopSettings } from "@/lib/desktop-settings";
 import type { UpdateStatusPayload } from "@/electron/update-install-gate";
 
 export type SettingsTab = "general" | "agent" | "about";
@@ -23,6 +23,7 @@ export interface SettingsModalProps {
   canOpenSkills: boolean;
   autoCheckOnOpen?: boolean;
   onAutoCheckHandled?: () => void;
+  onDesktopSettingsChange?: (settings: DesktopSettings) => void;
 }
 
 interface ElectronUpdaterWindow extends Window {
@@ -33,11 +34,13 @@ interface ElectronUpdaterWindow extends Window {
     downloadUpdate?: () => Promise<{ ok: boolean; error?: string }>;
     onUpdateStatus?: (cb: (status: UpdateStatusPayload) => void) => () => void;
     quitAndInstall?: () => Promise<{ ok: boolean; version?: string | null; error?: string }>;
+    setCloseAction?: (action: "tray" | "quit") => void;
   };
 }
 
 const DEFAULT_REPO_URL = "https://github.com/Chasen-Liao/pi-agent-desktop";
 
+/** Modal dialog for configuring appearance, window/chat behavior, agent defaults, and software updates. */
 export function SettingsModal({
   isOpen,
   onClose,
@@ -50,13 +53,19 @@ export function SettingsModal({
   canOpenSkills,
   autoCheckOnOpen = false,
   onAutoCheckHandled,
+  onDesktopSettingsChange,
 }: SettingsModalProps) {
   const { t, preference: localePreference, setPreference: setLocalePreference } = useI18n();
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const onDesktopSettingsChangeRef = useRef(onDesktopSettingsChange);
+  onDesktopSettingsChangeRef.current = onDesktopSettingsChange;
+  const settingsRevisionRef = useRef(0);
 
-  // Agent settings state
+  // Desktop & agent settings state
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentMode>("full");
   const [defaultToolPreset, setDefaultToolPreset] = useState<ToolPreset>("default");
+  const [closeAction, setCloseAction] = useState<CloseAction>("tray");
+  const [followStreaming, setFollowStreaming] = useState<boolean>(true);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -78,18 +87,27 @@ export function SettingsModal({
   });
 
   const loadDesktopSettings = useCallback(async () => {
+    const revision = settingsRevisionRef.current;
     setSettingsLoading(true);
     setSettingsError(null);
     try {
       const data = await apiJson<DesktopSettings>("/api/desktop-settings", undefined, {
         fallback: t("settings.agent.loadFailed"),
       });
+      if (revision !== settingsRevisionRef.current) return;
+      const nextCloseAction = data.closeAction ?? "tray";
+      const nextFollowStreaming = data.followStreaming ?? true;
       setDefaultAgentMode(data.defaultAgentMode ?? "full");
       setDefaultToolPreset(data.defaultToolPreset ?? "default");
+      setCloseAction(nextCloseAction);
+      setFollowStreaming(nextFollowStreaming);
     } catch (err: unknown) {
+      if (revision !== settingsRevisionRef.current) return;
       setSettingsError(err instanceof Error ? err.message : t("settings.agent.loadFailed"));
     } finally {
-      setSettingsLoading(false);
+      if (revision === settingsRevisionRef.current) {
+        setSettingsLoading(false);
+      }
     }
   }, [t]);
 
@@ -240,6 +258,8 @@ export function SettingsModal({
   if (!isOpen) return null;
 
   const updateAgentSetting = async (patch: Partial<DesktopSettings>) => {
+    const revision = ++settingsRevisionRef.current;
+    setSettingsLoading(false);
     setSettingsSaving(true);
     setSettingsError(null);
     try {
@@ -252,12 +272,23 @@ export function SettingsModal({
         },
         { fallback: t("settings.agent.saveFailed") }
       );
+      if (revision !== settingsRevisionRef.current) return;
+      const nextCloseAction = saved.closeAction ?? "tray";
+      const nextFollowStreaming = saved.followStreaming ?? true;
       setDefaultAgentMode(saved.defaultAgentMode);
       setDefaultToolPreset(saved.defaultToolPreset);
+      setCloseAction(nextCloseAction);
+      setFollowStreaming(nextFollowStreaming);
+      const win = window as ElectronUpdaterWindow;
+      win.electronAPI?.setCloseAction?.(nextCloseAction);
+      onDesktopSettingsChangeRef.current?.(saved);
     } catch (err: unknown) {
+      if (revision !== settingsRevisionRef.current) return;
       setSettingsError(err instanceof Error ? err.message : t("settings.agent.saveFailed"));
     } finally {
-      setSettingsSaving(false);
+      if (revision === settingsRevisionRef.current) {
+        setSettingsSaving(false);
+      }
     }
   };
 
@@ -435,6 +466,85 @@ export function SettingsModal({
                   <option value="en">{t("language.english")}</option>
                   <option value="zh-CN">{t("language.chineseSimplified")}</option>
                 </select>
+              </div>
+            </section>
+
+            {/* Window & Chat Behavior */}
+            <section className="p-4 rounded-panel border border-border bg-bg-panel flex flex-col gap-4">
+              <h4 className="font-semibold text-text">{t("settings.window.title")}</h4>
+
+              {settingsError && (
+                <p role="alert" className="text-[12px] text-danger">
+                  {settingsError}
+                </p>
+              )}
+
+              {/* Close Button Behavior Row */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-medium text-text">{t("settings.window.closeAction")}</div>
+                  <div className="mt-0.5 text-[12px] text-text-muted">
+                    {t("settings.window.closeActionDesc")}
+                  </div>
+                </div>
+                <div className="inline-flex rounded-control border border-border bg-bg-elevated p-0.5 shrink-0">
+                  {(
+                    [
+                      { id: "tray", label: t("settings.window.closeToTray") },
+                      { id: "quit", label: t("settings.window.closeQuit") },
+                    ] as { id: CloseAction; label: string }[]
+                  ).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      disabled={settingsLoading || settingsSaving}
+                      onClick={() => void updateAgentSetting({ closeAction: option.id })}
+                      className={`px-3 py-1 rounded-[5px] text-[12px] font-medium transition-[background-color,color,transform] duration-150 enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 cursor-pointer disabled:opacity-50 ${
+                        closeAction === option.id
+                          ? "bg-accent text-accent-contrast"
+                          : "text-text-muted hover:text-text"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-divider" />
+
+              {/* Follow Streaming Answer Row */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-medium text-text">
+                    {t("settings.window.followStreaming")}
+                  </div>
+                  <div className="mt-0.5 text-[12px] text-text-muted">
+                    {t("settings.window.followStreamingDesc")}
+                  </div>
+                </div>
+                <div className="inline-flex rounded-control border border-border bg-bg-elevated p-0.5 shrink-0">
+                  {(
+                    [
+                      { value: true, label: t("settings.window.followStreamingOn") },
+                      { value: false, label: t("settings.window.followStreamingOff") },
+                    ] as { value: boolean; label: string }[]
+                  ).map((option) => (
+                    <button
+                      key={String(option.value)}
+                      type="button"
+                      disabled={settingsLoading || settingsSaving}
+                      onClick={() => void updateAgentSetting({ followStreaming: option.value })}
+                      className={`px-3 py-1 rounded-[5px] text-[12px] font-medium transition-[background-color,color,transform] duration-150 enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 cursor-pointer disabled:opacity-50 ${
+                        followStreaming === option.value
+                          ? "bg-accent text-accent-contrast"
+                          : "text-text-muted hover:text-text"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </section>
 

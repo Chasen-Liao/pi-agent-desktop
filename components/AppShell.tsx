@@ -38,6 +38,7 @@ const SHELL_MENU_GAP = 6;
 const SHELL_MENU_EDGE_PADDING = 8;
 const SHELL_MENU_RIGHT_OFFSET = 4;
 
+/** Top-level application shell managing sidebars, chat workspace, file viewer tabs, and global modals/settings. */
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -57,6 +58,8 @@ export function AppShell() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>("general");
   const [settingsAutoCheck, setSettingsAutoCheck] = useState(false);
   const [hasUpdateBadge, setHasUpdateBadge] = useState(false);
+  const [followStreaming, setFollowStreaming] = useState(true);
+  const desktopSettingsRevisionRef = useRef(0);
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
   const shellMenuRef = useRef<HTMLDivElement>(null);
   const shellMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -140,6 +143,23 @@ export function AppShell() {
     setStatusline(status);
     setStatuslineVisible((visible) => !visible);
   }, []);
+
+  const handleDesktopSettingsChange = useCallback(
+    (settings: { followStreaming?: boolean; closeAction?: "tray" | "quit" }) => {
+      desktopSettingsRevisionRef.current += 1;
+      if (typeof settings.followStreaming === "boolean") {
+        setFollowStreaming(settings.followStreaming);
+      }
+      if (settings.closeAction === "tray" || settings.closeAction === "quit") {
+        (
+          window as Window & {
+            electronAPI?: { setCloseAction?: (action: "tray" | "quit") => void };
+          }
+        ).electronAPI?.setCloseAction?.(settings.closeAction);
+      }
+    },
+    []
+  );
 
   // Single active panel — only one dropdown open at a time
   const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "system" | null>(null);
@@ -347,7 +367,35 @@ export function AppShell() {
     if (win.electronAPI?.onUpdateDownloaded) {
       cleanups.push(win.electronAPI.onUpdateDownloaded(() => setHasUpdateBadge(true)));
     }
+    let cancelled = false;
+    const revision = desktopSettingsRevisionRef.current;
+    fetch("/api/desktop-settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          data: {
+            closeAction?: "tray" | "quit";
+            followStreaming?: boolean;
+          } | null
+        ) => {
+          if (cancelled || revision !== desktopSettingsRevisionRef.current || !data) {
+            return;
+          }
+          if (typeof data.followStreaming === "boolean") {
+            setFollowStreaming(data.followStreaming);
+          }
+          if (data.closeAction === "tray" || data.closeAction === "quit") {
+            (
+              window as Window & {
+                electronAPI?: { setCloseAction?: (action: "tray" | "quit") => void };
+              }
+            ).electronAPI?.setCloseAction?.(data.closeAction);
+          }
+        }
+      )
+      .catch(() => {});
     return () => {
+      cancelled = true;
       for (const cleanup of cleanups) cleanup();
     };
   }, []);
@@ -843,6 +891,7 @@ export function AppShell() {
                 onSessionCreated={handleSessionCreated}
                 onSessionForked={handleSessionForked}
                 modelsRefreshKey={modelsRefreshKey}
+                followStreaming={followStreaming}
                 chatInputRef={chatInputRef}
                 onBranchDataChange={handleBranchDataChange}
                 onSystemPromptChange={handleSystemPromptChange}
@@ -956,6 +1005,7 @@ export function AppShell() {
         canOpenSkills={Boolean(activeCwd || selectedSession?.cwd || newSessionCwd)}
         autoCheckOnOpen={settingsAutoCheck}
         onAutoCheckHandled={() => setSettingsAutoCheck(false)}
+        onDesktopSettingsChange={handleDesktopSettingsChange}
       />
       <SessionExportModal
         isOpen={exportModalOpen}

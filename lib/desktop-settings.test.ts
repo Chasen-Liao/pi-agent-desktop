@@ -11,19 +11,25 @@ import {
   writeDesktopSettings,
 } from "./desktop-settings.ts";
 
-test("defaultDesktopSettings is full + default tools", () => {
+test("defaultDesktopSettings is full + default tools + tray close + follow streaming", () => {
   const d = defaultDesktopSettings();
   assert.equal(d.defaultAgentMode, "full");
   assert.equal(d.defaultToolPreset, "default");
+  assert.equal(d.closeAction, "tray");
+  assert.equal(d.followStreaming, true);
 });
 
 test("mergeDesktopSettings ignores invalid fields", () => {
   const m = mergeDesktopSettings({
     defaultAgentMode: "nope",
     defaultToolPreset: "full",
+    closeAction: "invalid",
+    followStreaming: "nope",
   });
   assert.equal(m.defaultAgentMode, "full");
   assert.equal(m.defaultToolPreset, "full");
+  assert.equal(m.closeAction, "tray");
+  assert.equal(m.followStreaming, true);
 });
 
 test("read/write round-trip on disk", () => {
@@ -32,8 +38,12 @@ test("read/write round-trip on disk", () => {
     const written = writeDesktopSettings(dir, {
       defaultAgentMode: "plan",
       defaultToolPreset: "full",
+      closeAction: "quit",
+      followStreaming: false,
     });
     assert.equal(written.defaultAgentMode, "plan");
+    assert.equal(written.closeAction, "quit");
+    assert.equal(written.followStreaming, false);
     const read = readDesktopSettings(dir);
     assert.deepEqual(read, written);
   } finally {
@@ -56,6 +66,11 @@ test("validateDesktopSettingsBody", () => {
   assert.match(validateDesktopSettingsBody({ defaultAgentMode: "x" })!, /defaultAgentMode/);
   assert.match(validateDesktopSettingsBody({ codemodeEnabled: "yes" })!, /codemodeEnabled/);
   assert.equal(validateDesktopSettingsBody({ codemodeEnabled: true }), null);
+  assert.match(validateDesktopSettingsBody({ closeAction: "minimize" })!, /closeAction/);
+  assert.equal(validateDesktopSettingsBody({ closeAction: "tray" }), null);
+  assert.equal(validateDesktopSettingsBody({ closeAction: "quit" }), null);
+  assert.match(validateDesktopSettingsBody({ followStreaming: "no" })!, /followStreaming/);
+  assert.equal(validateDesktopSettingsBody({ followStreaming: false }), null);
 });
 
 test("Codemode defaults off and persists alongside other desktop preferences", () => {
