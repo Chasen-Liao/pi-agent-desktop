@@ -38,6 +38,7 @@ const SHELL_MENU_GAP = 6;
 const SHELL_MENU_EDGE_PADDING = 8;
 const SHELL_MENU_RIGHT_OFFSET = 4;
 
+/** Top-level application shell managing sidebars, chat workspace, file viewer tabs, and global modals/settings. */
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -58,6 +59,7 @@ export function AppShell() {
   const [settingsAutoCheck, setSettingsAutoCheck] = useState(false);
   const [hasUpdateBadge, setHasUpdateBadge] = useState(false);
   const [followStreaming, setFollowStreaming] = useState(true);
+  const desktopSettingsRevisionRef = useRef(0);
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
   const shellMenuRef = useRef<HTMLDivElement>(null);
   const shellMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -143,9 +145,17 @@ export function AppShell() {
   }, []);
 
   const handleDesktopSettingsChange = useCallback(
-    (settings: { followStreaming?: boolean }) => {
+    (settings: { followStreaming?: boolean; closeAction?: "tray" | "quit" }) => {
+      desktopSettingsRevisionRef.current += 1;
       if (typeof settings.followStreaming === "boolean") {
         setFollowStreaming(settings.followStreaming);
+      }
+      if (settings.closeAction === "tray" || settings.closeAction === "quit") {
+        (
+          window as Window & {
+            electronAPI?: { setCloseAction?: (action: "tray" | "quit") => void };
+          }
+        ).electronAPI?.setCloseAction?.(settings.closeAction);
       }
     },
     []
@@ -357,6 +367,8 @@ export function AppShell() {
     if (win.electronAPI?.onUpdateDownloaded) {
       cleanups.push(win.electronAPI.onUpdateDownloaded(() => setHasUpdateBadge(true)));
     }
+    let cancelled = false;
+    const revision = desktopSettingsRevisionRef.current;
     fetch("/api/desktop-settings")
       .then((res) => (res.ok ? res.json() : null))
       .then(
@@ -366,7 +378,9 @@ export function AppShell() {
             followStreaming?: boolean;
           } | null
         ) => {
-          if (!data) return;
+          if (cancelled || revision !== desktopSettingsRevisionRef.current || !data) {
+            return;
+          }
           if (typeof data.followStreaming === "boolean") {
             setFollowStreaming(data.followStreaming);
           }
@@ -381,6 +395,7 @@ export function AppShell() {
       )
       .catch(() => {});
     return () => {
+      cancelled = true;
       for (const cleanup of cleanups) cleanup();
     };
   }, []);

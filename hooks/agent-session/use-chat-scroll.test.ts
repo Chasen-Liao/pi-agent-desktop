@@ -7,6 +7,7 @@ import {
 } from "./chat-scroll-policy.ts";
 
 const hookSource = readFileSync(new URL("./use-chat-scroll.ts", import.meta.url), "utf8");
+const sessionHookSource = readFileSync(new URL("../useAgentSession.ts", import.meta.url), "utf8");
 
 test("shouldFollowStreamingUpdate only scrolls when followStreaming, agentRunning, and isAtBottom are true", () => {
   assert.equal(
@@ -80,6 +81,15 @@ test("shouldFollowAgentSettle skips final smooth scroll when followStreaming is 
     }),
     false,
   );
+  assert.equal(
+    shouldFollowAgentSettle({
+      agentRunning: false,
+      initialScrollDone: true,
+      isAtBottom: false,
+      followStreaming: true,
+    }),
+    false,
+  );
 });
 
 test("useChatScroll wires shouldFollowStreamingUpdate and shouldFollowAgentSettle while keeping user send scroll unconditional", () => {
@@ -87,4 +97,9 @@ test("useChatScroll wires shouldFollowStreamingUpdate and shouldFollowAgentSettl
   assert.match(hookSource, /shouldFollowStreamingUpdate\(\{/);
   assert.match(hookSource, /shouldFollowAgentSettle\(\{/);
   assert.match(hookSource, /if \(pendingScrollToUserRef\.current\)/);
+});
+
+test("useAgentSession uses followStreaming prop as single source of truth", () => {
+  assert.match(sessionHookSource, /followStreaming = true/);
+  assert.doesNotMatch(sessionHookSource, /loadedFollowStreaming/);
 });

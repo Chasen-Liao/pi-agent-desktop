@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 import {
   buildContextMenuTemplate,
   decideWindowCloseAction,
   isCloseAction,
   readCloseActionFromDisk,
+  resolveAgentDir,
   resolveCopyLinkLabel,
 } from "./window-options.ts";
 
@@ -18,13 +20,49 @@ test("isCloseAction accepts only tray and quit", () => {
   assert.equal(isCloseAction(null), false);
 });
 
+test("resolveAgentDir normalizes quotes, file URLs, and tilde prefixes", () => {
+  const fakeHome = join(tmpdir(), "pi-fake-home");
+
+  assert.equal(
+    resolveAgentDir(undefined, fakeHome, {}),
+    join(fakeHome, ".pi", "agent"),
+  );
+  assert.equal(
+    resolveAgentDir('  "~/custom-agent"  ', fakeHome, {}),
+    join(fakeHome, "custom-agent"),
+  );
+  assert.equal(
+    resolveAgentDir("'~'", fakeHome, {}),
+    fakeHome,
+  );
+  assert.equal(
+    resolveAgentDir(undefined, fakeHome, { PI_CODING_AGENT_DIR: "~/env-agent" }),
+    join(fakeHome, "env-agent"),
+  );
+  assert.equal(
+    resolveAgentDir(undefined, fakeHome, { PI_CODING_AGENT_DIR: "~\\win-agent" }),
+    join(fakeHome, "win-agent"),
+  );
+
+  const fileTarget = join(fakeHome, "url-agent");
+  const fileUrl = pathToFileURL(fileTarget).href;
+  assert.equal(
+    resolveAgentDir(undefined, fakeHome, { PI_CODING_AGENT_DIR: `"${fileUrl}"` }),
+    fileTarget,
+  );
+});
+
 test("readCloseActionFromDisk defaults to tray and reads persisted closeAction", () => {
   const dir = mkdtempSync(join(tmpdir(), "pi-window-options-"));
+  const prevEnv = process.env.PI_CODING_AGENT_DIR;
   try {
     assert.equal(readCloseActionFromDisk(dir), "tray");
 
     writeFileSync(join(dir, "desktop-settings.json"), JSON.stringify({ closeAction: "quit" }));
     assert.equal(readCloseActionFromDisk(dir), "quit");
+
+    process.env.PI_CODING_AGENT_DIR = `"${pathToFileURL(dir).href}"`;
+    assert.equal(readCloseActionFromDisk(), "quit");
 
     writeFileSync(join(dir, "desktop-settings.json"), JSON.stringify({ closeAction: "invalid" }));
     assert.equal(readCloseActionFromDisk(dir), "tray");
@@ -32,6 +70,11 @@ test("readCloseActionFromDisk defaults to tray and reads persisted closeAction",
     writeFileSync(join(dir, "desktop-settings.json"), "{broken json");
     assert.equal(readCloseActionFromDisk(dir), "tray");
   } finally {
+    if (prevEnv === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
+    } else {
+      process.env.PI_CODING_AGENT_DIR = prevEnv;
+    }
     rmSync(dir, { recursive: true, force: true });
   }
 });

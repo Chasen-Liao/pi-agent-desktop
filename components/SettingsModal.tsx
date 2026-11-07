@@ -40,6 +40,7 @@ interface ElectronUpdaterWindow extends Window {
 
 const DEFAULT_REPO_URL = "https://github.com/Chasen-Liao/pi-agent-desktop";
 
+/** Modal dialog for configuring appearance, window/chat behavior, agent defaults, and software updates. */
 export function SettingsModal({
   isOpen,
   onClose,
@@ -58,6 +59,7 @@ export function SettingsModal({
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const onDesktopSettingsChangeRef = useRef(onDesktopSettingsChange);
   onDesktopSettingsChangeRef.current = onDesktopSettingsChange;
+  const settingsRevisionRef = useRef(0);
 
   // Desktop & agent settings state
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentMode>("full");
@@ -85,25 +87,27 @@ export function SettingsModal({
   });
 
   const loadDesktopSettings = useCallback(async () => {
+    const revision = settingsRevisionRef.current;
     setSettingsLoading(true);
     setSettingsError(null);
     try {
       const data = await apiJson<DesktopSettings>("/api/desktop-settings", undefined, {
         fallback: t("settings.agent.loadFailed"),
       });
+      if (revision !== settingsRevisionRef.current) return;
       const nextCloseAction = data.closeAction ?? "tray";
       const nextFollowStreaming = data.followStreaming ?? true;
       setDefaultAgentMode(data.defaultAgentMode ?? "full");
       setDefaultToolPreset(data.defaultToolPreset ?? "default");
       setCloseAction(nextCloseAction);
       setFollowStreaming(nextFollowStreaming);
-      const win = window as ElectronUpdaterWindow;
-      win.electronAPI?.setCloseAction?.(nextCloseAction);
-      onDesktopSettingsChangeRef.current?.(data);
     } catch (err: unknown) {
+      if (revision !== settingsRevisionRef.current) return;
       setSettingsError(err instanceof Error ? err.message : t("settings.agent.loadFailed"));
     } finally {
-      setSettingsLoading(false);
+      if (revision === settingsRevisionRef.current) {
+        setSettingsLoading(false);
+      }
     }
   }, [t]);
 
@@ -254,6 +258,8 @@ export function SettingsModal({
   if (!isOpen) return null;
 
   const updateAgentSetting = async (patch: Partial<DesktopSettings>) => {
+    const revision = ++settingsRevisionRef.current;
+    setSettingsLoading(false);
     setSettingsSaving(true);
     setSettingsError(null);
     try {
@@ -266,6 +272,7 @@ export function SettingsModal({
         },
         { fallback: t("settings.agent.saveFailed") }
       );
+      if (revision !== settingsRevisionRef.current) return;
       const nextCloseAction = saved.closeAction ?? "tray";
       const nextFollowStreaming = saved.followStreaming ?? true;
       setDefaultAgentMode(saved.defaultAgentMode);
@@ -274,11 +281,14 @@ export function SettingsModal({
       setFollowStreaming(nextFollowStreaming);
       const win = window as ElectronUpdaterWindow;
       win.electronAPI?.setCloseAction?.(nextCloseAction);
-      onDesktopSettingsChange?.(saved);
+      onDesktopSettingsChangeRef.current?.(saved);
     } catch (err: unknown) {
+      if (revision !== settingsRevisionRef.current) return;
       setSettingsError(err instanceof Error ? err.message : t("settings.agent.saveFailed"));
     } finally {
-      setSettingsSaving(false);
+      if (revision === settingsRevisionRef.current) {
+        setSettingsSaving(false);
+      }
     }
   };
 

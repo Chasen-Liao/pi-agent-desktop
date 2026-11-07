@@ -91,6 +91,7 @@ export interface UseAgentSessionOptions {
   onSystemPromptChange?: (prompt: string | null) => void;
 }
 
+/** Coordinates session state, SSE event streaming, model/tool selection, and scroll behavior for a chat session. */
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     session,
@@ -101,7 +102,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onSessionForked,
     onStatusline,
     modelsRefreshKey,
-    followStreaming,
+    followStreaming = true,
     onBranchDataChange,
     onSystemPromptChange,
   } = opts;
@@ -138,7 +139,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [compactError, setCompactError] = useState<string | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [agentMode, setAgentMode] = useState<AgentMode>(DEFAULT_AGENT_MODE);
-  const [loadedFollowStreaming, setLoadedFollowStreaming] = useState(true);
   const [canExecutePlan, setCanExecutePlan] = useState(false);
   const [extensionUiRequest, setExtensionUiRequest] =
     useState<ExtensionUiRequestEvent | null>(null);
@@ -260,7 +260,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     messageCount: messages.length,
     agentRunning,
     streamingMessage: streamState.streamingMessage,
-    followStreaming: followStreaming ?? loadedFollowStreaming,
+    followStreaming,
   });
 
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
@@ -669,12 +669,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     fetch("/api/desktop-settings")
       .then((r) => r.json())
-      .then((d: { defaultAgentMode?: AgentMode; followStreaming?: boolean }) => {
-        if (!cancelled) {
-          if (d.defaultAgentMode) setAgentMode(d.defaultAgentMode);
-          if (typeof d.followStreaming === "boolean") {
-            setLoadedFollowStreaming(d.followStreaming);
-          }
+      .then((d: { defaultAgentMode?: AgentMode }) => {
+        if (!cancelled && d.defaultAgentMode) {
+          setAgentMode(d.defaultAgentMode);
         }
       })
       .catch(() => {});
@@ -740,13 +737,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         (d: {
           defaultAgentMode?: AgentMode;
           defaultToolPreset?: "none" | "default" | "full";
-          followStreaming?: boolean;
         }) => {
           if (d.defaultAgentMode) setAgentMode(d.defaultAgentMode);
           if (d.defaultToolPreset) setToolPreset(d.defaultToolPreset);
-          if (typeof d.followStreaming === "boolean") {
-            setLoadedFollowStreaming(d.followStreaming);
-          }
         },
       )
       .catch(() => {});

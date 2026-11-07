@@ -516,6 +516,7 @@ function cleanup() {
 // ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
+/** Creates and configures the primary Electron BrowserWindow, including CSP, navigation guards, context menu, and close behavior. */
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -722,6 +723,7 @@ function installCrashRecovery(window: BrowserWindow) {
   });
 }
 
+/** Attaches the native right-click context menu (Cut/Copy/Paste/Select All/Copy Link) to a BrowserWindow. */
 function installContextMenu(window: BrowserWindow) {
   window.webContents.on("context-menu", (_event, params) => {
     if (window.isDestroyed()) return;
@@ -755,6 +757,7 @@ function installNavigationGuards(window: BrowserWindow) {
 // ---------------------------------------------------------------------------
 // IPC handlers
 // ---------------------------------------------------------------------------
+/** Registers Electron main-process IPC handlers for directory selection, updates, theme, and window close action. */
 function registerIpcHandlers() {
   ipcMain.handle("select-directory", async () => {
     const targetWindow = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined;

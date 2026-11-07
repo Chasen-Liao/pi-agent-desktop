@@ -13,6 +13,7 @@ interface UseChatScrollOptions {
   followStreaming?: boolean;
 }
 
+/** Manages chat transcript scroll tracking and conditional auto-scrolling on user send, streaming updates, and agent settle. */
 export function useChatScroll({
   messageCount,
   agentRunning,

@@ -96,11 +96,46 @@ test("main process registers manual update check, download, and app-info IPC han
 
 test("main process installs right-click context menu and configurable window close behavior", () => {
   assert.match(source, /installContextMenu\(mainWindow\)/);
-  assert.match(source, /window\.webContents\.on\("context-menu"/);
-  assert.match(source, /buildContextMenuTemplate\(params/);
-  assert.match(source, /decideWindowCloseAction\(/);
-  assert.match(source, /ipcMain\.on\("set-close-action"/);
-  assert.match(source, /setTimeout\(\(\) => app\.quit\(\)\)/);
+
+  const contextMenuStart = source.indexOf("function installContextMenu(window: BrowserWindow)");
+  const navGuardsStart = source.indexOf("function installNavigationGuards", contextMenuStart);
+  assert.ok(contextMenuStart >= 0 && navGuardsStart > contextMenuStart);
+  const contextMenuSource = source.slice(contextMenuStart, navGuardsStart);
+  assert.match(contextMenuSource, /window\.webContents\.on\("context-menu"/);
+  assert.match(contextMenuSource, /if \(window\.isDestroyed\(\)\) return;/);
+  assert.match(contextMenuSource, /buildContextMenuTemplate\(params/);
+  assert.match(contextMenuSource, /locale:\s*app\.getLocale\(\)/);
+  assert.match(contextMenuSource, /onCopyLink:\s*\(url\)\s*=>\s*clipboard\.writeText\(url\)/);
+  assert.match(contextMenuSource, /Menu\.buildFromTemplate\(template\)/);
+  assert.match(contextMenuSource, /menu\.popup\(\{\s*window\s*\}\)/);
+
+  const closeStart = source.indexOf('mainWindow.on("close"');
+  const closedStart = source.indexOf('mainWindow.on("closed"', closeStart);
+  assert.ok(closeStart >= 0 && closedStart > closeStart);
+  const closeSource = source.slice(closeStart, closedStart);
+  const fallbackIdx = closeSource.indexOf("closeAction ?? readCloseActionFromDisk()");
+  const decisionIdx = closeSource.indexOf("decideWindowCloseAction(");
+  const hideBranchIdx = closeSource.indexOf('decision === "hide-to-tray"');
+  const preventDefaultIdx = closeSource.indexOf("e.preventDefault()", hideBranchIdx);
+  const hideCallIdx = closeSource.indexOf("mainWindow?.hide()", hideBranchIdx);
+  const quitBranchIdx = closeSource.indexOf('decision === "quit-app"');
+  const setQuittingIdx = closeSource.indexOf("isQuitting = true", quitBranchIdx);
+  const quitTimeoutIdx = closeSource.indexOf("setTimeout(() => app.quit())", quitBranchIdx);
+
+  assert.ok(fallbackIdx >= 0, "close handler must fall back to readCloseActionFromDisk()");
+  assert.ok(decisionIdx > fallbackIdx, "decideWindowCloseAction must use effectiveCloseAction");
+  assert.ok(hideBranchIdx > decisionIdx, "hide-to-tray branch must follow decision");
+  assert.ok(preventDefaultIdx > hideBranchIdx, "hide-to-tray must prevent default close");
+  assert.ok(hideCallIdx > preventDefaultIdx, "hide-to-tray must hide mainWindow");
+  assert.ok(quitBranchIdx > hideCallIdx, "quit-app branch must follow hide-to-tray branch");
+  assert.ok(setQuittingIdx > quitBranchIdx, "quit-app must mark isQuitting = true before quitting");
+  assert.ok(quitTimeoutIdx > setQuittingIdx, "quit-app must schedule app.quit()");
+
+  const setCloseActionStart = source.indexOf('ipcMain.on("set-close-action"');
+  assert.ok(setCloseActionStart >= 0, "set-close-action IPC listener expected");
+  const setCloseActionSource = source.slice(setCloseActionStart, setCloseActionStart + 200);
+  assert.match(setCloseActionSource, /if \(isCloseAction\(action\)\)/);
+  assert.match(setCloseActionSource, /closeAction = action/);
 });
 // The CSP header contents themselves are behaviorally covered in lib/csp.test.ts,
 // which also asserts electron/csp.ts and lib/csp.ts emit identical headers.

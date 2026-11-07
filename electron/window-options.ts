@@ -1,22 +1,69 @@
 import { existsSync, readFileSync } from "fs";
 import os from "os";
 import path from "path";
+import { fileURLToPath } from "url";
 import type { MenuItemConstructorOptions } from "electron";
 
 export type CloseAction = "tray" | "quit";
 
+/** Type guard checking whether a value is a valid window close action ("tray" or "quit"). */
 export function isCloseAction(value: unknown): value is CloseAction {
   return value === "tray" || value === "quit";
 }
 
-export function resolveAgentDir(agentDir?: string): string {
-  if (agentDir && agentDir.trim()) return agentDir;
-  if (process.env.PI_CODING_AGENT_DIR && process.env.PI_CODING_AGENT_DIR.trim()) {
-    return process.env.PI_CODING_AGENT_DIR;
+/**
+ * Normalizes a raw agent directory path by stripping surrounding quotes,
+ * converting `file://` URLs via `fileURLToPath`, and expanding `~` / `~/...` / `~\...` against `homedir`.
+ */
+export function normalizeAgentDirPath(rawPath: string, homedir: string = os.homedir()): string {
+  let normalized = rawPath.trim();
+  if (
+    normalized.length >= 2 &&
+    ((normalized.startsWith('"') && normalized.endsWith('"')) ||
+      (normalized.startsWith("'") && normalized.endsWith("'")))
+  ) {
+    normalized = normalized.slice(1, -1).trim();
   }
-  return path.join(os.homedir(), ".pi", "agent");
+  if (!normalized) {
+    return "";
+  }
+  if (/^file:\/\//i.test(normalized)) {
+    try {
+      return fileURLToPath(normalized);
+    } catch {
+      return normalized;
+    }
+  }
+  if (normalized === "~") {
+    return homedir;
+  }
+  if (normalized.startsWith("~/") || normalized.startsWith("~\\")) {
+    return path.join(homedir, normalized.slice(2));
+  }
+  return normalized;
 }
 
+/**
+ * Resolves the Pi coding agent configuration directory from an override,
+ * `PI_CODING_AGENT_DIR`, or `~/.pi/agent`, aligned with `getAgentDir()`.
+ */
+export function resolveAgentDir(
+  agentDir?: string,
+  homedir: string = os.homedir(),
+  env: Record<string, string | undefined> = process.env,
+): string {
+  if (agentDir) {
+    const normalizedExplicit = normalizeAgentDirPath(agentDir, homedir);
+    if (normalizedExplicit) return normalizedExplicit;
+  }
+  if (env.PI_CODING_AGENT_DIR) {
+    const normalizedEnv = normalizeAgentDirPath(env.PI_CODING_AGENT_DIR, homedir);
+    if (normalizedEnv) return normalizedEnv;
+  }
+  return path.join(homedir, ".pi", "agent");
+}
+
+/** Reads the persisted window close action from desktop-settings.json, defaulting to "tray" on missing or invalid data. */
 export function readCloseActionFromDisk(agentDir?: string): CloseAction {
   const settingsPath = path.join(resolveAgentDir(agentDir), "desktop-settings.json");
   if (!existsSync(settingsPath)) return "tray";
@@ -34,6 +81,7 @@ export function readCloseActionFromDisk(agentDir?: string): CloseAction {
 
 export type WindowCloseDecision = "allow-close" | "hide-to-tray" | "quit-app";
 
+/** Determines how the main window close event should be handled given app quit state and user closeAction preference. */
 export function decideWindowCloseAction(input: {
   isQuitting: boolean;
   closeAction: CloseAction;
@@ -58,11 +106,13 @@ export interface ContextMenuInput {
   editFlags?: ContextMenuEditFlags;
 }
 
+/** Returns the localized label for the "Copy Link Address" context menu item based on the active locale. */
 export function resolveCopyLinkLabel(locale?: string): string {
   const normalized = (locale ?? "").trim().toLowerCase();
   return normalized.startsWith("zh") ? "复制链接地址" : "Copy Link Address";
 }
 
+/** Builds the Electron context menu template for Cut, Copy, Paste, Select All, and optional link copying. */
 export function buildContextMenuTemplate(
   params: ContextMenuInput,
   options: {

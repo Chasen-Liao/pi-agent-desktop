@@ -35,6 +35,7 @@ interface Props {
   followStreaming?: boolean;
 }
 
+/** Renders the active chat session transcript, composer, minimap, and session-scoped dialogs. */
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange, onModelChange, onStatusline, followStreaming }: Props) {
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
