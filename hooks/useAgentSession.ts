@@ -82,6 +82,7 @@ export interface UseAgentSessionOptions {
   /** Receives the workspace status line snapshot (git + workspace state). */
   onStatusline?: (status: StatuslineResponse) => void;
   modelsRefreshKey?: number;
+  followStreaming?: boolean;
   onBranchDataChange?: (
     tree: SessionTreeNode[],
     activeLeafId: string | null,
@@ -90,6 +91,7 @@ export interface UseAgentSessionOptions {
   onSystemPromptChange?: (prompt: string | null) => void;
 }
 
+/** Coordinates session state, SSE event streaming, model/tool selection, and scroll behavior for a chat session. */
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     session,
@@ -100,6 +102,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onSessionForked,
     onStatusline,
     modelsRefreshKey,
+    followStreaming = true,
     onBranchDataChange,
     onSystemPromptChange,
   } = opts;
@@ -257,6 +260,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     messageCount: messages.length,
     agentRunning,
     streamingMessage: streamState.streamingMessage,
+    followStreaming,
   });
 
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
@@ -666,7 +670,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     fetch("/api/desktop-settings")
       .then((r) => r.json())
       .then((d: { defaultAgentMode?: AgentMode }) => {
-        if (!cancelled && d.defaultAgentMode) setAgentMode(d.defaultAgentMode);
+        if (!cancelled && d.defaultAgentMode) {
+          setAgentMode(d.defaultAgentMode);
+        }
       })
       .catch(() => {});
 

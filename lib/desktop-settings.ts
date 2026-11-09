@@ -22,21 +22,33 @@ export interface DesktopLtmSettings {
   observePreCompact?: boolean;
 }
 
+export type CloseAction = "tray" | "quit";
+
+/** Type guard checking whether a value is a valid desktop window close action ("tray" or "quit"). */
+export function isCloseAction(value: unknown): value is CloseAction {
+  return value === "tray" || value === "quit";
+}
+
 export interface DesktopSettings {
   defaultAgentMode: AgentMode;
   defaultToolPreset: ToolPreset;
   codemodeEnabled?: boolean;
+  closeAction?: CloseAction;
+  followStreaming?: boolean;
   /** Optional LTM config; omitted when unset. Merged by getLtmConfig. */
   ltm?: DesktopLtmSettings;
 }
 
 const DESKTOP_SETTINGS_FILENAME = "desktop-settings.json";
 
+/** Returns a fresh DesktopSettings object populated with default values. */
 export function defaultDesktopSettings(): DesktopSettings {
   return {
     defaultAgentMode: DEFAULT_AGENT_MODE,
     defaultToolPreset: DEFAULT_TOOL_PRESET,
     codemodeEnabled: false,
+    closeAction: "tray",
+    followStreaming: true,
   };
 }
 
@@ -55,6 +67,7 @@ function mergeDesktopLtmSettings(raw: unknown): DesktopLtmSettings | undefined {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/** Merges a raw untrusted settings object with default desktop settings, ignoring invalid fields. */
 export function mergeDesktopSettings(raw: unknown): DesktopSettings {
   const base = defaultDesktopSettings();
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return base;
@@ -68,9 +81,13 @@ export function mergeDesktopSettings(raw: unknown): DesktopSettings {
   };
   if (ltm) result.ltm = ltm;
   result.codemodeEnabled = typeof obj.codemodeEnabled === "boolean" ? obj.codemodeEnabled : false;
+  result.closeAction = isCloseAction(obj.closeAction) ? obj.closeAction : base.closeAction;
+  result.followStreaming =
+    typeof obj.followStreaming === "boolean" ? obj.followStreaming : base.followStreaming;
   return result;
 }
 
+/** Reads and validates desktop-settings.json from agentDir, falling back to defaults on missing or invalid data. */
 export function readDesktopSettings(agentDir: string): DesktopSettings {
   const path = desktopSettingsPath(agentDir);
   if (!existsSync(path)) return defaultDesktopSettings();
@@ -82,6 +99,7 @@ export function readDesktopSettings(agentDir: string): DesktopSettings {
   }
 }
 
+/** Atomically writes merged desktop settings to desktop-settings.json in agentDir. */
 export function writeDesktopSettings(agentDir: string, settings: DesktopSettings): DesktopSettings {
   const merged = mergeDesktopSettings(settings);
   const path = desktopSettingsPath(agentDir);
@@ -90,7 +108,7 @@ export function writeDesktopSettings(agentDir: string, settings: DesktopSettings
   return merged;
 }
 
-/** Validate PUT body; returns error string or null. */
+/** Validate an untrusted PUT /api/desktop-settings request body and return an error message if invalid. */
 export function validateDesktopSettingsBody(body: unknown): string | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return "Body must be an object";
@@ -98,6 +116,12 @@ export function validateDesktopSettingsBody(body: unknown): string | null {
   const obj = body as Record<string, unknown>;
   if (obj.codemodeEnabled !== undefined && typeof obj.codemodeEnabled !== "boolean") {
     return "codemodeEnabled must be a boolean";
+  }
+  if (obj.closeAction !== undefined && !isCloseAction(obj.closeAction)) {
+    return "closeAction must be tray | quit";
+  }
+  if (obj.followStreaming !== undefined && typeof obj.followStreaming !== "boolean") {
+    return "followStreaming must be a boolean";
   }
   if (obj.defaultAgentMode !== undefined && !isAgentMode(obj.defaultAgentMode)) {
     return "defaultAgentMode must be plan | ask | full";
