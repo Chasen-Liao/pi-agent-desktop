@@ -134,7 +134,7 @@ export function transitionUpdateStatus(
     case "error":
       return {
         ...prev,
-        status: "error",
+        status: prev.downloadedVersion ? "downloaded" : "error",
         error: event.message,
         checkedAt: now,
       };

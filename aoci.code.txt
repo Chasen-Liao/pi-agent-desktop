@@ -420,7 +420,7 @@ ModelsConfig.tsx[EU6M]: F:组织模型提供方与模型配置界面 | R:code:co
 ProjectTrustDialog.tsx[EU6S]: F:展示待确认的项目信任信息并收集选择 | R:code:lib/trust-types.ts | A:ProjectTrustDialog | S:-
 SessionExportModal.tsx[EU4S]: F:提供会话导出选项与操作 | R:code:components/I18nProvider.tsx | A:SessionExportModalProps | S:-
 SessionSidebar.tsx[EU7M]: F:管理侧栏会话列表的选择和操作 | R:code:lib/types.ts | A:SessionSidebar | S:-
-SettingsModal.tsx[EU5L]: F:组织常规、智能体与关于设置页 | R:code:components/ModalSurface.tsx | A:SettingsTab | S:-
+SettingsModal.tsx[EU5L]: F:组织常规、智能体与关于设置页，展示更新进度及安装错误 | R:code:components/ModalSurface.tsx | A:SettingsTab | S:-
 SkillsConfig.tsx[EU5L]: F:展示技能来源、详情及启用配置 | R:code:app/api/skills/search/route.ts | A:SkillsConfig | S:-
 StatsBar.tsx[EU4M]: F:显示会话统计与上下文用量 | R:code:components/I18nProvider.tsx | A:StatsBarProps | S:-
 TabBar.tsx[EU4S]: F:呈现并切换或关闭打开的标签 | R:code:components/FileIcons.tsx | A:Tab | S:-
@@ -563,7 +563,7 @@ crash-recovery.ts[RR6T]: F:计算渲染进程崩溃后的重载状态 | R:- | A:
 csp.ts[RS6T]: F:构造包含桌面服务端口的内容安全策略 | R:- | A:ElectronCspPort | S:-
 env-filter.ts[RS5T]: F:筛取子进程所需的 API 密钥环境变量 | R:- | A:pickApiKeys | S:-
 log-format.ts[RO4T]: F:格式化主进程、渲染器与服务端日志 | R:- | A:ElectronLogLevel | S:-
-main.ts[EW8L]: F:协调桌面窗口、服务子进程、日志和更新生命周期 | R:code:electron/tray.ts | A:setQuitting | S:-
+main.ts[EW8L]: F:协调桌面窗口、服务子进程、日志和更新生命周期 | R:code:electron/tray.ts,code:electron/update-install-gate.ts,code:electron/update-mac-staging.ts,code:electron/update-windows-installer.ts | A:setQuitting | S:NSIS 更新器会在确认安装进程启动前安排退出，Windows 安装路径须等已验证的安装器启动后再退出。macOS 暂存期间由暂存等待器处理原生错误。
 navigation.ts[RR6S]: F:为窗口加载提供重试与导航错误处理 | R:- | A:LoadPage | S:-
 port-selection.ts[RN5T]: F:选择可用的本地服务监听端口 | R:- | A:choosePort | S:-
 preload.ts[IS7T]: F:通过预加载脚本向渲染进程暴露受控桌面接口 | R:code:electron/update-install-gate.ts | A:- | S:-
@@ -576,8 +576,10 @@ startup.js[EU4T]: F:驱动启动页状态反馈与交互 | R:- | A:- | S:-
 title-bar-overlay.ts[RU4T]: F:随主题同步桌面窗口标题栏覆盖层 | R:- | A:TitleBarOverlayTarget | S:-
 tray.ts[EU5T]: F:创建系统托盘及窗口相关操作 | R:code:electron/main.ts | A:TrayOptions | S:-
 tsconfig.json[FV4T]: F:定义桌面进程 TypeScript 编译范围 | R:- | A:- | S:-
-update-install-gate.ts[RR6S]: F:跟踪更新下载与授权状态并判定能否退出安装 | R:- | A:UpdateInstallState | S:-
+update-install-gate.ts[RR6S]: F:跟踪下载和安装授权并转换更新状态 | R:- | A:UpdateInstallState | S:已下载后的错误须保留 downloaded 状态以继续提供安装入口。
 window-options.ts[RC5S]: F:解析窗口关闭行为与桌面路径选项 | R:- | A:CloseAction | S:-
+update-mac-staging.ts[IV5T]: F:等待 macOS 原生更新器完成安装包暂存并清理事件监听 | R:- | A:stageMacUpdate | S:关闭退出自动安装后须先暂存；原生无更新事件也是终止结果。
+update-windows-installer.ts[IV5T]: F:启动已验证的 Windows NSIS 安装器并等待进程启动 | R:- | A:launchWindowsInstaller | S:启动失败须拒绝等待，使调用方保留重试机会。
 
 ===/<repository>/hooks/agent-session/===
 agent-event-apply.ts[AM7M]: F:把会话事件映射到阶段更新和界面副作用 | R:code:lib/types.ts | A:RetryInfo | S:-

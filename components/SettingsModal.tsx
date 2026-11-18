@@ -33,7 +33,7 @@ interface ElectronUpdaterWindow extends Window {
     checkForUpdates?: () => Promise<UpdateStatusPayload>;
     downloadUpdate?: () => Promise<{ ok: boolean; error?: string }>;
     onUpdateStatus?: (cb: (status: UpdateStatusPayload) => void) => () => void;
-    quitAndInstall?: () => Promise<{ ok: boolean; version?: string | null; error?: string }>;
+    quitAndInstall?: () => Promise<{ ok: boolean; version?: string | null }>;
     setCloseAction?: (action: "tray" | "quit") => void;
   };
 }
@@ -214,8 +214,15 @@ export function SettingsModal({
   const handleQuitAndInstall = useCallback(async () => {
     const win = window as ElectronUpdaterWindow;
     if (!win.electronAPI?.quitAndInstall) return;
-    await win.electronAPI.quitAndInstall();
-  }, []);
+    try {
+      const result = await win.electronAPI.quitAndInstall();
+      if (!result.ok) {
+        setUpdateStatus((prev) => ({ ...prev, error: t("settings.about.installError") }));
+      }
+    } catch {
+      setUpdateStatus((prev) => ({ ...prev, error: t("settings.about.installError") }));
+    }
+  }, [t]);
 
   useEffect(() => {
     const win = window as ElectronUpdaterWindow;
@@ -802,6 +809,9 @@ export function SettingsModal({
                 </div>
               </div>
 
+              {updateStatus.status === "downloaded" && updateStatus.error && (
+                <p className="text-[12px] text-danger">{t("settings.about.installError")}</p>
+              )}
               {updateStatus.status === "downloading" && (
                 <div className="w-full h-1.5 rounded-full bg-bg-elevated overflow-hidden">
                   <div

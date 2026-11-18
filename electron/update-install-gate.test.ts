@@ -83,3 +83,11 @@ test("transitionUpdateStatus does not downgrade downloaded status on subsequent 
   assert.equal(status.checkedAt, 2000);
 });
 
+
+test("installation errors retain the downloaded update for retry", () => {
+  const downloaded = transitionUpdateStatus(createUpdateStatusPayload(), { type: "downloaded", version: "1.2.3" });
+  const failed = transitionUpdateStatus(downloaded, { type: "error", message: "installer failed" });
+  assert.equal(failed.status, "downloaded");
+  assert.equal(failed.downloadedVersion, "1.2.3");
+  assert.equal(failed.error, "installer failed");
+});

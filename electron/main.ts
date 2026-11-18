@@ -1,5 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, shell, utilityProcess } from "electron";
-import type { UpdateInfo } from "electron-updater";
+import { app, autoUpdater as nativeUpdater, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, shell, utilityProcess } from "electron";
 import path from "path";
 import { appendFileSync, mkdirSync } from "fs";
 import { spawn } from "child_process";
@@ -22,6 +21,8 @@ import {
   type UpdateInstallState,
   type UpdateStatusPayload,
 } from "./update-install-gate";
+import { stageMacUpdate } from "./update-mac-staging";
+import { launchWindowsInstaller } from "./update-windows-installer";
 import { buildElectronCspHeader } from "./csp";
 import { getAppIconPath } from "./app-icon";
 import { applyTitleBarOverlayTheme } from "./title-bar-overlay";
@@ -74,6 +75,9 @@ let autoUpdaterInitialized = false;
 let checkInFlight = false;
 let downloadInFlight = false;
 let interactiveUpdateCheck = false;
+let installInFlight = false;
+let macUpdateStaged = false;
+let downloadedInstallerPath: string | null = null;
 
 export function setQuitting(val: boolean) {
   isQuitting = val;
@@ -95,13 +99,15 @@ async function ensureAutoUpdaterInitialized() {
   // 不自动下载：让用户决定是否下载（避免流量敏感环境静默下载大文件，
   // 也避免渲染进程 XSS 触发 quitAndInstall 路径）。
   autoUpdater.autoDownload = false;
+  // “Later” must also defer installation across a normal app quit.
+  autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on("checking-for-update", () => {
     logInfo("autoUpdater checking-for-update");
     broadcastUpdateStatus(transitionUpdateStatus(updateStatus, { type: "checking" }));
   });
 
-  autoUpdater.on("update-available", (info: UpdateInfo) => {
+  autoUpdater.on("update-available", (info) => {
     logInfo("autoUpdater update-available", info);
     broadcastUpdateStatus(
       transitionUpdateStatus(updateStatus, { type: "available", version: info.version })
@@ -164,7 +170,7 @@ async function ensureAutoUpdaterInitialized() {
       });
   });
 
-  autoUpdater.on("update-not-available", (info: UpdateInfo) => {
+  autoUpdater.on("update-not-available", (info) => {
     logInfo("autoUpdater update-not-available", info);
     broadcastUpdateStatus(
       transitionUpdateStatus(updateStatus, { type: "not-available", version: info.version })
@@ -187,9 +193,10 @@ async function ensureAutoUpdaterInitialized() {
     );
   });
 
-  autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
+  autoUpdater.on("update-downloaded", (info) => {
     logInfo("autoUpdater update-downloaded", info);
     downloadInFlight = false;
+    downloadedInstallerPath = info.downloadedFile;
     updateInstallState = markUpdateDownloaded(updateInstallState, info.version);
     broadcastUpdateStatus(
       transitionUpdateStatus(updateStatus, { type: "downloaded", version: info.version })
@@ -212,9 +219,7 @@ async function ensureAutoUpdaterInitialized() {
       .then(({ response }) => {
         logInfo("Update restart dialog response", { response });
         if (response === 0) {
-          setQuitting(true);
-          logInfo("Calling autoUpdater.quitAndInstall");
-          autoUpdater.quitAndInstall();
+          void runQuitAndInstall();
         }
       })
       .catch((err: unknown) => {
@@ -228,6 +233,11 @@ async function ensureAutoUpdaterInitialized() {
   autoUpdater.on("error", (err) => {
     logError("autoUpdater error", err);
     downloadInFlight = false;
+    if (installInFlight && process.platform === "darwin" && !macUpdateStaged) return;
+    if (installInFlight) {
+      installInFlight = false;
+      setQuitting(false);
+    }
     broadcastUpdateStatus(
       transitionUpdateStatus(updateStatus, {
         type: "error",
@@ -237,6 +247,42 @@ async function ensureAutoUpdaterInitialized() {
   });
 
   return autoUpdater;
+}
+
+async function runQuitAndInstall(): Promise<{ ok: boolean; version?: string | null }> {
+  const decision = decideQuitAndInstall(updateInstallState);
+  if (!decision.allowed) return { ok: false };
+  if (installInFlight) return { ok: true };
+  installInFlight = true;
+  try {
+    const autoUpdater = await ensureAutoUpdaterInitialized();
+    if (process.platform === "darwin" && !macUpdateStaged) {
+      await stageMacUpdate(nativeUpdater);
+      macUpdateStaged = true;
+    }
+    if (process.platform === "win32") {
+      // NSIS is already verified by electron-updater. Wait for the installer
+      // process to start before quitting so a launch failure remains retryable.
+      const installerPath = downloadedInstallerPath;
+      if (!installerPath) throw new Error("Missing downloaded NSIS installer path");
+      await launchWindowsInstaller(installerPath);
+      app.quit();
+      return { ok: true, version: decision.version };
+    }
+    // Native macOS quitAndInstall can close windows before before-quit fires.
+    setQuitting(true);
+    autoUpdater.quitAndInstall();
+    // BaseUpdater may emit an error synchronously without throwing or quitting.
+    if (!installInFlight) return { ok: false };
+    return { ok: true, version: decision.version };
+  } catch (error) {
+    installInFlight = false;
+    setQuitting(false);
+    const message = error instanceof Error ? error.message : String(error);
+    logError("Update installation failed", error);
+    broadcastUpdateStatus(transitionUpdateStatus(updateStatus, { type: "error", message }));
+    return { ok: false };
+  }
 }
 
 async function runCheckForUpdates(options?: {
@@ -821,15 +867,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle("quit-and-install", async () => {
     logInfo("quitAndInstall requested from renderer");
-    const decision = decideQuitAndInstall(updateInstallState);
-    if (!decision.allowed) {
-      logInfo("quitAndInstall refused", { reason: decision.reason });
-      return { ok: false, error: decision.reason };
-    }
-    setQuitting(true);
-    const { autoUpdater } = await import("electron-updater");
-    autoUpdater.quitAndInstall();
-    return { ok: true, version: decision.version };
+    return runQuitAndInstall();
   });
 
   ipcMain.on("set-theme", (_event, isDark: boolean) => {
