@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-18T16:30:39Z",
-  "updated_at": "2026-11-18T16:45:02Z",
+  "updated_at": "2026-11-18T17:00:07Z",
   "files": {
     ".agents/skills/animate-expo/RECIPES.md": {
       "role": "index",
@@ -1277,9 +1277,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "c600f34ca1eea3f4543de0d30476e325d783b27195205b428e841121430947af",
-      "size": 68261,
-      "normalized_sha256": "c600f34ca1eea3f4543de0d30476e325d783b27195205b428e841121430947af"
+      "sha256": "f23efc0c068ef3720295181ae4e32bdcd0a602092c9f651ccf2518c8a30cad77",
+      "size": 69080,
+      "normalized_sha256": "f23efc0c068ef3720295181ae4e32bdcd0a602092c9f651ccf2518c8a30cad77"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -1840,9 +1840,9 @@
     },
     "components/SettingsModal.tsx": {
       "role": "index",
-      "sha256": "fdf547ec7aef9843968c4231389726a68330e775e49d7da22afd6d6cb44c211c",
-      "size": 38116,
-      "normalized_sha256": "95698795a66b1c7bb980965def8f75a2935e8c0ca3bc76d64646c596be9b8218"
+      "sha256": "2efacf5ad3842d86748ec260fcc1aa70587ab30077239b5dd508156d24af1663",
+      "size": 37692,
+      "normalized_sha256": "2efacf5ad3842d86748ec260fcc1aa70587ab30077239b5dd508156d24af1663"
     },
     "components/SkillsConfig.tsx": {
       "role": "index",
@@ -2663,9 +2663,9 @@
     },
     "electron/main-update-gate.test.ts": {
       "role": "observe",
-      "sha256": "df98c9cfe3255a219bd6e88675f2e9730014904b293f0a49dde47f24e0f488ad",
-      "size": 8526,
-      "normalized_sha256": "0cda0cdf5baeb217526eebb85f8b0410db131cd6d13fffb3dc55e4a9e7e2b17a"
+      "sha256": "7aa5672e455c72c77df1fd15f34ba8e876760708025cd329faa6aeb7578955b9",
+      "size": 7126,
+      "normalized_sha256": "7aa5672e455c72c77df1fd15f34ba8e876760708025cd329faa6aeb7578955b9"
     },
     "electron/main.test.ts": {
       "role": "observe",
@@ -2675,9 +2675,9 @@
     },
     "electron/main.ts": {
       "role": "index",
-      "sha256": "7b0f1990a568d90dd5d42adfe058d7cc91bd2d9d40204db65b5b27ec0029b2ad",
-      "size": 32045,
-      "normalized_sha256": "eea8d83291029edb911ac9b6abf4ce862a39b598887e75af4508f597d47e72d6"
+      "sha256": "1f3c6a01fa67071a527e4eb8b086f0a341157824d0bb5ecc62a7984eacbede05",
+      "size": 32762,
+      "normalized_sha256": "1f3c6a01fa67071a527e4eb8b086f0a341157824d0bb5ecc62a7984eacbede05"
     },
     "electron/navigation.test.ts": {
       "role": "observe",
@@ -2795,15 +2795,39 @@
     },
     "electron/update-install-gate.test.ts": {
       "role": "observe",
-      "sha256": "06ee38841132a1596f4c0b69f3d650cc5d1dfad77705a1afac0e3cda4b1e7b3c",
-      "size": 3236,
-      "normalized_sha256": "a608d6eb5da54744f4c62fecc70dbbba04fa7fb315ec939e3585d33ffaee52a5"
+      "sha256": "c2ac4f3bbbe35aa2189e08e3df4a714267fbe47d3959c9f37cfebcc16aa478f2",
+      "size": 3594,
+      "normalized_sha256": "c2ac4f3bbbe35aa2189e08e3df4a714267fbe47d3959c9f37cfebcc16aa478f2"
     },
     "electron/update-install-gate.ts": {
       "role": "index",
-      "sha256": "42bb97359534a2cc503f39a85a815b659ca460ee3d1c89442b7ce7802f4b3e7b",
-      "size": 3961,
-      "normalized_sha256": "ca6b07766600ec64fe8b860b3112613061a4ec6d584eba453ca8efb64336268a"
+      "sha256": "6a251433a4c08941892b586153514036983e605092788ea8a4f89a88f442ccad",
+      "size": 3851,
+      "normalized_sha256": "6a251433a4c08941892b586153514036983e605092788ea8a4f89a88f442ccad"
+    },
+    "electron/update-mac-staging.test.ts": {
+      "role": "observe",
+      "sha256": "960ba028974e48d3def763cf67659eca9cb26676e90812b863925ad276a3ea2e",
+      "size": 1518,
+      "normalized_sha256": "960ba028974e48d3def763cf67659eca9cb26676e90812b863925ad276a3ea2e"
+    },
+    "electron/update-mac-staging.ts": {
+      "role": "index",
+      "sha256": "c384b582da04806b23f3989087d7c2742d705aa307cb0d30d3aac76e8c7d9862",
+      "size": 1311,
+      "normalized_sha256": "c384b582da04806b23f3989087d7c2742d705aa307cb0d30d3aac76e8c7d9862"
+    },
+    "electron/update-windows-installer.test.ts": {
+      "role": "observe",
+      "sha256": "09392fd619f6c5d041eb95a7b5c392b2aa8b7b29b60b9770e8e0ce80bc05af4f",
+      "size": 586,
+      "normalized_sha256": "8193fd2dc1f615d00f98328960021d2cdeb320e47eac0e417da62da125fda243"
+    },
+    "electron/update-windows-installer.ts": {
+      "role": "index",
+      "sha256": "c1ccde5653bb21c4000fbe3c65f6293240703c7eb5f8e46c10183d28685cee11",
+      "size": 513,
+      "normalized_sha256": "717b5deabdb4f368562500c04bf05677c77eb15bfa4b0cbd35f7d3809bd3d14b"
     },
     "electron/window-options.test.ts": {
       "role": "observe",
@@ -3365,9 +3389,9 @@
     },
     "lib/i18n/dictionaries.ts": {
       "role": "index",
-      "sha256": "fd963ff37ba1b7e8a5bed75769fee7fdf88e0eea9824562f845c97cb98366525",
-      "size": 52643,
-      "normalized_sha256": "d917905e4ba677f881dc6cf2e80f299126a77af118028093cb8851008c780c8a"
+      "sha256": "e07afad35a0abe99e56d7ebe1dd1f9943f8adc3378d27ccead715b2f09d947bd",
+      "size": 51760,
+      "normalized_sha256": "e07afad35a0abe99e56d7ebe1dd1f9943f8adc3378d27ccead715b2f09d947bd"
     },
     "lib/i18n/index.test.ts": {
       "role": "observe",

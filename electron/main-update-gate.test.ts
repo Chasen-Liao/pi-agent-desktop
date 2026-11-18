@@ -4,35 +4,16 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
 
-test("main process quit-and-install is gated on update download state", () => {
-  assert.match(source, /decideQuitAndInstall\(updateInstallState\)/);
-  assert.match(source, /markUpdateDownloaded\(updateInstallState/);
-  // The IPC handler must refuse before download, and the only
-  // autoUpdater.quitAndInstall() call site must sit after that gate.
-  const handlerIdx = source.indexOf('ipcMain.handle("quit-and-install"');
-  assert.ok(handlerIdx >= 0, "quit-and-install IPC handler expected");
-  const gateIdx = source.indexOf("decideQuitAndInstall(updateInstallState)", handlerIdx);
-  const refusedIdx = source.indexOf("if (!decision.allowed)", gateIdx);
-  const installIdx = source.indexOf("autoUpdater.quitAndInstall()", handlerIdx);
-  assert.ok(gateIdx > handlerIdx, "gate decision must run inside the handler");
-  assert.ok(refusedIdx > gateIdx, "refusal branch must follow the gate");
-  assert.ok(installIdx > refusedIdx, "quitAndInstall must only run after the gate allows");
-  // The only other allowed call site is the update-downloaded restart dialog:
-  // that event fires only after a completed download, and
-  // markUpdateDownloaded runs before the dialog that leads to the install.
-  const secondInstallIdx = source.indexOf("autoUpdater.quitAndInstall()", installIdx + 1);
-  if (secondInstallIdx !== -1) {
-    const downloadedIdx = source.indexOf('autoUpdater.on("update-downloaded"');
-    const markIdx = source.indexOf("markUpdateDownloaded(updateInstallState", downloadedIdx);
-    assert.ok(downloadedIdx !== -1, "update-downloaded handler expected");
-    assert.ok(markIdx > downloadedIdx, "update-downloaded handler must mark install state first");
-    assert.ok(secondInstallIdx > markIdx, "second quitAndInstall must run inside the update-downloaded flow");
-    assert.equal(
-      source.indexOf("autoUpdater.quitAndInstall()", secondInstallIdx + 1),
-      -1,
-      "no further quitAndInstall call sites are allowed"
-    );
-  }
+test("both install entry points share a gated, single-flight path", () => {
+  assert.match(source, /autoUpdater\.autoInstallOnAppQuit = false/);
+  assert.match(source, /const decision = decideQuitAndInstall\(updateInstallState\)/);
+  assert.match(source, /if \(installInFlight\) return/);
+  assert.match(source, /await launchWindowsInstaller\(installerPath\);\s*app\.quit\(\);/);
+  assert.match(source, /await stageMacUpdate\(nativeUpdater\)/);
+  assert.match(source, /if \(!installInFlight\) return/);
+  assert.equal((source.match(/autoUpdater\.quitAndInstall\(\)/g) ?? []).length, 1);
+  assert.match(source, /void runQuitAndInstall\(\)/);
+  assert.match(source, /return runQuitAndInstall\(\)/);
 });
 
 test("packaged readiness requires HTTP health", () => {
