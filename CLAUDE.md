@@ -42,18 +42,9 @@ npm run dist:mac
 
 `AGENTS.md` 明确提醒：开发时不要直接运行 `next build`，会污染 `.next/` 并影响 `npm run dev`。如确需验证生产构建，使用项目脚本 `npm run build` 或完整打包脚本。Issue / PR 流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。新分支前缀：`dev/`、`future/`，不要用 `feat/`。
 
-## CodeGraph MCP 代码查询
+## 项目索引
 
-当工作区已索引（存在 `.codegraph/` 目录）时，推荐优先使用 CodeGraph MCP 工具来查询和探索代码，以减少 Token 消耗和往返次数：
-
-- **`codegraph_explore`**：首选探索工具。输入自然语言问题或一组符号/文件名（例如：`rpc-manager session fork`），它会合并返回相关符号的源码和调用路径。
-- **`codegraph_node`**：
-  - **文件读取**：当只需读取某个文件时，可传入 `file`（不传 `symbol`），它比普通文件读取工具更快，并会额外附带哪些文件依赖了该文件（Blast Radius 爆破半径分析）。
-  - **符号查询**：传入 `symbol` 和 `includeCode: true` 可单独查询某个具体符号的定义、签名及调用者/被调用者轨迹。
-- **`codegraph_search`**：快速的符号名称搜索（只返回位置/文件名，不返回源码），适用于快速定位符号位置。
-
-> [!NOTE]
-> 索引状态是由用户决定的。如果项目没有 `.codegraph/` 文件夹，可以通过在项目根目录运行 `codegraph init` 初始化索引。
+按 [AGENTS.md](AGENTS.md#项目索引) 使用 AOCI。
 
 ## 核心能力与当前状态 (Wave 1 & Wave 2 已完成)
 

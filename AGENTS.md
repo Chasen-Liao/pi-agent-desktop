@@ -19,69 +19,15 @@ Branch: `dev/`（日常）/ `future/`（大功能），默认 merge commit，见
 
 ---
 
-## CodeGraph MCP
+<!-- aoci:begin -->
+## 项目索引
 
-`.codegraph/` 存在时，优先用这些工具代替 grep/find：
+本项目默认使用 AOCI 定位代码、了解文件职责和关联。索引入口为 `aoci.txt`，文件条目在 `aoci.code.txt`。通过项目级 MCP 调用 `aoci_rules` 获取使用约定，再按索引定位到源码核实细节。
 
-- **`codegraph_explore`** — 自然语言查询，返回源码 + 调用链（**首选**）
-- **`codegraph_node`** — 文件读取（替代 view_file）或单符号深度查询
-- **`codegraph_search`** — 快速符号名 → 位置查找
+改动完成后运行 `aoci verify` 检查漂移；需要更新时调用 `aoci_maintain`，按返回的批次维护索引。
+<!-- aoci:end -->
 
-初始化：`codegraph init`（用户决策，勿自动执行）。
-
----
-
-## Architecture
-
-> 📖 详细架构文档：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-
-**双模式**
-
-- **Web**：浏览器 ──HTTP/SSE──▶ Next.js(:30141) ──进程内──▶ AgentSession
-- **Desktop**：Electron 主进程托管 Next.js standalone `server.js`（macOS: `utilityProcess`；Win/Linux: `ELECTRON_RUN_AS_NODE=1`）
-
-**关键入口**
-
-| 功能 | 路径 |
-| --- | --- |
-| 发送消息 | `POST /api/agent/[id]` → `startRpcSession()` → `AgentSessionWrapper` |
-| 模型 / 认证 | `createPiRuntime()` → `createAgentSessionServices`（含扩展注册的 provider） |
-| 历史浏览 | `GET /api/sessions/*` → `session-reader.ts`（只读，不建 Session） |
-| 会话克隆 | `POST /api/sessions/[id]/clone` → 普通目录或 Git Worktree |
-| SSE 流 | `GET /api/agent/[id]/events`（30s 心跳） |
-| UI 主入口 | `page.tsx` → `AppShell` → `ChatWindow` → `useAgentSession` |
-| LTM | `lib/ltm` · `/api/memory/*` · tools: `memory_save/recall/forget` |
-| 运行中消息 | Enter=立即 steer，Alt+Enter=Follow-up Queue（可重排） |
-
-**顶层目录**
-
-| 目录 | 内容 |
-| --- | --- |
-| `app/api/` | 39 条 API 路由 |
-| `lib/` | `rpc-manager` / `session-reader` / `session-branch-clone` / `git-worktree` / `ltm` / `i18n` 等服务端库 |
-| `components/` | 30 个顶层组件 + 3 个子目录（`chat-input` / `models-config` / `session-sidebar`） |
-| `hooks/` | 8 个顶层 hook + `agent-session/` 15 个模块 |
-| `electron/` | `main.ts` + `preload.ts` + `tray.ts` + 13 个辅助模块 |
-| `bin/pi-web.js` | CLI 入口 |
-
----
-
-## globalThis 状态（HMR 安全，必须挂全局）
-
-| 变量 | 用途 | 来源文件 |
-| --- | --- | --- |
-| `__piSessions` | `Map<sessionId, AgentSessionWrapper>` 活跃会话表 | `rpc-manager.ts` |
-| `__piSessionPathCacheState` | sessionId → .jsonl 路径缓存状态 | `session-reader.ts` |
-| `__piStartLocks` | 并发启动共享 Promise 锁 | `rpc-manager.ts` |
-| `__piWriteLocks` | per-file 写入锁 | `session-lock.ts` |
-| `__piAllowedRootsCache` | 文件访问白名单（5s TTL） | `allowed-roots.ts` |
-| `__piLtmService` | LTM `MemoryService` 单例 | `ltm/service.ts` |
-| `__piSessionOnlyTrust` | per-session 信任状态 | `project-trust-desktop.ts` |
-| `__piGitWorktreeLocks` | Worktree 创建/清理并发锁 | `git-worktree.ts` |
-| `__piLoginCallbacks` | OAuth 手动输入回调注册表 | `auth/login/[provider]/route.ts` |
-| `__piUpstreamUsageCache` | 上游配额查询缓存（120s TTL） | `lib/upstream-usage/service.ts` |
-
----
+架构细节见 [架构文档](docs/ARCHITECTURE.md)。
 
 ## Key Traps
 
@@ -123,7 +69,7 @@ SDK 存 `{id, name, arguments}`，前端用 `{toolCallId, toolName, input}`。`n
 
 `npm test` 走 `node --test` 直接执行 TS 文件，因此路由要能被测试必须满足两点：
 
-1. **import 写成可解析的形式**：`next/server.js`（不是 `next/server`）＋ 相对路径带扩展名（`../../../lib/api-error.ts`，不是 `@/lib/api-error`）。`next/server` 在 ESM 下解析不到，`@/` 别名也不被 `node --test` 解析（`import type` 除外，类型导入会被擦除）。39 条路由里 **19 条用裸 `next/server`**、**24 条用 `@/` 别名**；只有同时用 `next/server.js` 与相对路径的路由才写得了路由单测——目前 11 条符合，其中 5 条已有测试。**要测哪条就先改哪条**，不必全量改。
+1. **import 写成可解析的形式**：`next/server.js`（不是 `next/server`）＋ 相对路径带扩展名（`../../../lib/api-error.ts`，不是 `@/lib/api-error`）。`next/server` 在 ESM 下解析不到，`@/` 别名也不被 `node --test` 解析（`import type` 除外，类型导入会被擦除）。需要测试的路由按此约定调整。
 2. **隔离 agent dir**：`ProjectTrustStore` 会向上继承父目录的信任决策，而真实 store 在 `~/.pi/agent`。若曾经信任过某个父目录（例如 `%TEMP%`），它下面所有目录都会被判为"已信任"，依赖"未信任"状态的测试就会随机失败。测试里设置 `process.env.PI_CODING_AGENT_DIR` 指向临时目录即可完全隔离（pi 的 `getAgentDir()` 每次调用都读该变量）。
 
 ---

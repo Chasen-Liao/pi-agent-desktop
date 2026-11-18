@@ -1,0 +1,830 @@
+#AOCI-CODE-VOLUME: 1
+
+===/<repository>/===
+.gitattributes[FC5T]: F:固定检出文本行尾以保持跨平台基线指纹一致 | R:- | A:- | S:-
+.gitignore[FC4T]: F:排除依赖、测试及构建等本地生成文件 | R:- | A:- | S:-
+.mcp.json[FC4T]: F:声明仓库级 MCP 服务配置 | R:- | A:- | S:-
+.zcodeignore[FC2S]: F:规定 ZCode 忽略的生成文件与依赖 | R:- | A:- | S:-
+AGENTS.md[SW7T]: F:规定项目 AOCI 索引使用方式、开发命令与工程约束 | R:- | A:- | S:-
+CLAUDE.md[SW6T]: F:说明项目开发流程并引用统一的 AOCI 索引规则 | R:- | A:- | S:-
+CONTRIBUTING.md[SW5T]: F:规定议题、拉取请求与维护协作流程 | R:- | A:- | S:-
+LICENSE[SC5T]: F:声明项目软件许可 | R:- | A:- | S:-
+README.ja.md[SL4M]: F:向日语读者介绍项目特性与安装方式 | R:- | A:- | S:-
+README.md[SG6M]: F:提供产品特性、安装与使用入口 | R:- | A:- | S:-
+README.zh-CN.md[SL5M]: F:向中文读者介绍项目特性与安装方式 | R:- | A:- | S:-
+electron-builder.yml[FV7S]: F:配置桌面应用打包目标、资源与平台选项 | R:- | A:- | S:-
+eslint.config.mjs[FQ4T]: F:配置项目 ESLint 检查 | R:- | A:- | S:-
+middleware.ts[MS7T]: F:按路径检查请求来源并执行入口访问策略 | R:code:lib/csp.ts | A:shouldApplyOriginCheck | S:-
+next.config.ts[FV6T]: F:配置 Next 构建、独立输出与依赖追踪规则 | R:- | A:- | S:-
+package.json[FV8T]: F:声明应用依赖、命令行入口与开发测试打包脚本 | R:- | A:- | S:-
+postcss.config.mjs[FV3T]: F:配置 PostCSS 样式处理插件 | R:- | A:- | S:-
+skills-lock.json[FC3T]: F:锁定项目所安装技能的来源与内容哈希 | R:- | A:- | S:-
+tailwind.config.ts[FU4T]: F:配置 Tailwind 样式生成 | R:- | A:- | S:-
+tsconfig.json[FV5T]: F:配置应用 TypeScript 编译范围与模块解析 | R:- | A:- | S:-
+webgpu.d.ts[FC3T]: F:引入 WebGPU 的 TypeScript 类型声明 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/animate/===
+RECIPES.md[SU4M]: F:提供按钮按压、弹层和提示框的网页动效示例 | R:- | A:- | S:-
+SKILL.md[SU5M]: F:指导网页动画的属性、节奏和中断行为选择 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/animation-vocabulary/===
+SKILL.md[SU4S]: F:把用户描述的视觉效果映射为标准动画术语 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/apple-design/===
+SKILL.md[SU4M]: F:用响应延迟、物理运动和层次指导苹果风格界面设计 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/ask-sonner/===
+API.md[SU4T]: F:列出 Sonner 通知容器、调用选项及函数接口 | R:- | A:- | S:-
+SKILL.md[SU4T]: F:指导 Sonner 通知接入、调用选择与故障排查 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/emil-design-eng/===
+SKILL.md[SU4L]: F:规定界面细节与动效的设计审阅方法 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/find-animation-opportunities/===
+SKILL.md[SU4S]: F:筛选值得加入动画的交互并给出只读建议 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/huashu-motion/===
+SKILL.md[SW5S]: F:组织产品动态影片从导演决策到可编辑交付的流程 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/huashu-motion/bin/===
+om[XV4T]: F:启动技能随附的动效命令行并在缺失时回退到 npm 包 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/huashu-motion/references/===
+about-author.md[SG2S]: F:介绍花叔及其面向智能体的动效创作工具 | R:- | A:- | S:-
+colour.md[SU3S]: F:指导从产品素材提取色彩并建立影片调色体系 | R:- | A:- | S:-
+contract.md[SC5T]: F:规定可编辑合成变量、元素标识与场景时间线协议 | R:- | A:- | S:-
+craft.md[SU3T]: F:按叙事条件选择构图、对象运动和镜头节奏 | R:- | A:- | S:-
+director.md[SW4M]: F:指导导演根据产品、信息结构和个性确定影片方向 | R:- | A:- | S:-
+experience.md[SU3M]: F:记录发布片重制中的字幕、镜头和素材采集经验 | R:- | A:- | S:-
+grammars.md[SU3T]: F:说明叙事语法模板与旁白提示点的编排方式 | R:- | A:- | S:-
+product-demo-continuity.md[SU3T]: F:用连续取景和事件衔接解释产品操作 | R:- | A:- | S:-
+provenance.md[SU3T]: F:归纳动效设计经验的来源与证据强度 | R:- | A:- | S:-
+rhythm.md[SU3S]: F:按能量曲线与每小节事件数组织节奏 | R:- | A:- | S:-
+sound.md[SU3S]: F:指导配乐创作、音效选择与镜头同步 | R:- | A:- | S:-
+talking-head.md[SU3S]: F:从口播稿筛选关键时刻并编排包装 | R:- | A:- | S:-
+verification.md[SU3T]: F:规定动效交付前的画面复核与返工流程 | R:- | A:- | S:-
+visual-direction.md[SU3T]: F:指导镜头导演安排观察对象与观看顺序 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/huashu-motion/references/library/===
+README.md[SU3T]: F:按信息形态与产品个性导航动效语言库 | R:- | A:- | S:-
+formats.md[SU3S]: F:按影片用途区分发布短片、产品发布片与功能演示 | R:- | A:- | S:-
+product-fit.md[SU3S]: F:按发布案例对照产品类型与镜头语言 | R:- | A:- | S:-
+techniques.md[SU3M]: F:列出缓动、出入场和连续转场的技法 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/huashu-motion/references/library/languages/===
+3d-object.md[SU3T]: F:定义以空间物体为主体的镜头、节奏和声音处理 | R:- | A:- | S:-
+art-styles.md[SU3T]: F:将同一概念转换为不同艺术流派的视觉表达 | R:- | A:- | S:-
+card-montage.md[SU3T]: F:用逐张卡片切换组织短句与镜头节奏 | R:- | A:- | S:-
+character.md[SU3T]: F:以角色行动和情感推动动画叙事 | R:- | A:- | S:-
+continuous-morph.md[SU3T]: F:以连续形变让下一场景从上一场景演化 | R:- | A:- | S:-
+cursor-demo.md[SU3T]: F:用指针操作演示产品真实使用流程 | R:- | A:- | S:-
+data-story.md[SU3T]: F:用数字变化与镜头调度讲述数据故事 | R:- | A:- | S:-
+editorial-collage.md[SU3T]: F:用印刷、纸张与雕版风格组织证据拼贴 | R:- | A:- | S:-
+flat-world.md[SU3T]: F:用平面插画展示大尺度系统及其组成 | R:- | A:- | S:-
+generative-field.md[SU3T]: F:用粒子、场和光效表现生成过程 | R:- | A:- | S:-
+hand-drawn.md[SU3T]: F:以白板笔触和线条抖动呈现思考过程 | R:- | A:- | S:-
+kinetic-type.md[SU3T]: F:把文字作为镜头主体编排排版动效 | R:- | A:- | S:-
+liquid-glass.md[SU3T]: F:定义液态玻璃材质界面的空间与光照表现 | R:- | A:- | S:-
+mechanism.md[SU3T]: F:用逐步变换解释单个机制的因果关系 | R:- | A:- | S:-
+modular-grid.md[SU3T]: F:按模块网格与对齐关系组织画面运动 | R:- | A:- | S:-
+photo-led.md[SU3T]: F:以真实照片为拍摄主体设计运动 | R:- | A:- | S:-
+retro-digital.md[SU3T]: F:用像素、终端和故障效果构造复古数字视觉 | R:- | A:- | S:-
+showreel.md[SU3T]: F:统一串联多种技术的作品集镜头 | R:- | A:- | S:-
+system-diagram.md[SU3T]: F:以组件、连线和流向表达系统关系 | R:- | A:- | S:-
+talking-head.md[SU3T]: F:指导以人物口播为主体的动效包装 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/huashu-motion/references/scores/===
+first-light.abc[SU3T]: F:提供 First Light 配乐的 ABC 记谱素材 | R:- | A:- | S:-
+four-rooms.abc[SU3T]: F:提供 Four Rooms 配乐的 ABC 记谱素材 | R:- | A:- | S:-
+signal.abc[SU3T]: F:提供 Signal 配乐的 ABC 记谱素材 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/improve-animations/===
+AUDIT.md[SU3S]: F:按目的、频率、缓动和物理起点审阅动效 | R:- | A:- | S:-
+PLAN-TEMPLATE.md[SU3T]: F:提供逐项描述动效问题与实施目标的计划模板 | R:- | A:- | S:-
+SKILL.md[SU3S]: F:指导全项目动效审计及可独立执行的改进计划 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/ling-ui-design/===
+.env.example[FC3T]: F:列出视觉设计工具在本地环境文件中的配置项 | R:- | A:- | S:-
+.gitignore[FC2T]: F:定义视觉设计技能的 Git 忽略规则 | R:- | A:- | S:-
+LICENSE[SC2T]: F:声明视觉设计技能的授权条款 | R:- | A:- | S:-
+README.md[SU3S]: F:说明视觉设计工作流、安装方法及项目作用域 | R:- | A:- | S:-
+SKILL.md[SU3S]: F:规定从参考图拆解到页面实现和截图校正的流程 | R:- | A:- | S:-
+pyproject.toml[FV3T]: F:配置视觉设计工具的 Python 项目元数据 | R:- | A:- | S:-
+pyrightconfig.json[FQ3T]: F:配置视觉设计脚本的静态类型检查 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/ling-ui-design/references/===
+asset-placement.md[SU3T]: F:指导从候选素材选择并匹配参考图中的位置 | R:- | A:- | S:-
+engineering-taste.md[SU3T]: F:解释如何保留视觉依据并把参考图落实为一致的界面 | R:- | A:- | S:-
+image-generation.md[SU3T]: F:说明参考图生成的默认选项、检查和重试方式 | R:- | A:- | S:-
+layer-decomposition.md[SU3S]: F:定义图层分解请求与提示词 | R:- | A:- | S:-
+pre-implementation-analysis.md[SU3T]: F:指导编码前分析参考图的结构与实现约束 | R:- | A:- | S:-
+visual-direction.md[SU3T]: F:指导选择视觉方向并生成页面参考 | R:- | A:- | S:-
+visual-validation.md[SU3S]: F:规定页面截图与视觉验证工具的使用顺序 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/ling-ui-design/scripts/===
+_asset_regions.py[LD3T]: F:处理素材区域坐标与几何边界 | R:- | A:- | S:-
+_common.py[LC3M]: F:提供视觉设计脚本共用的配置与辅助函数 | R:- | A:- | S:-
+capture_page.py[XQ4S]: F:采集浏览器页面截图供视觉比对 | R:- | A:- | S:-
+configure.py[XC4T]: F:创建本地视觉服务配置 | R:- | A:- | S:-
+crop_elements.py[XD4L]: F:从参考图裁剪可用元素 | R:- | A:- | S:-
+decompose_layers.py[AD4M]: F:调用分层流程拆解页面参考图 | R:- | A:- | S:-
+generate_image.py[IE4T]: F:提交图像生成请求并保存产物 | R:- | A:- | S:-
+install.py[XV3S]: F:安装视觉设计技能所需组件 | R:- | A:- | S:-
+refine_crop.py[XD3M]: F:细化素材裁剪范围 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/pick-ui-library/===
+SKILL.md[SU3T]: F:根据界面任务选择对应前端库 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/prototype/===
+PICKER.md[SU3S]: F:定义原型版本选择器的标记、样式和操作 | R:- | A:- | S:-
+SKILL.md[SU3T]: F:指导制作可切换比较的多个界面原型 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/review-animations/===
+SKILL.md[SU3S]: F:规定动效代码审查的质量标准 | R:- | A:- | S:-
+STANDARDS.md[SU3S]: F:按交互频率、缓动和时长列出动效审阅标准 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/splitting-and-verifying-docs/===
+SKILL.md[SQ4M]: F:指导拆分项目顶层文档并核对源码事实 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/transitions-dev/===
+01-card-resize.md[SU3T]: F:描述卡片尺寸变化的用法与可调参数 | R:- | A:- | S:-
+02-number-pop-in.md[SU3S]: F:描述数字弹入的时序和参数 | R:- | A:- | S:-
+03-notification-badge.md[SU3S]: F:描述通知徽标的出现和更新动画 | R:- | A:- | S:-
+04-text-states-swap.md[SU3T]: F:描述文本状态切换的过渡方式 | R:- | A:- | S:-
+05-menu-dropdown.md[SU3S]: F:说明下拉菜单的展开与收起动画 | R:- | A:- | S:-
+06-modal.md[SU3T]: F:说明模态窗口开合的过渡参数 | R:- | A:- | S:-
+07-panel-reveal.md[SU3T]: F:说明面板显现的布局与动画参数 | R:- | A:- | S:-
+08-page-side-by-side.md[SU3S]: F:说明并排页面滑动的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+09-icon-swap.md[SU3T]: F:说明图标切换的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+10-success-check.md[SU3S]: F:说明成功勾选的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+11-avatar-group-hover.md[SU3M]: F:说明头像组悬停的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+12-error-state-shake.md[SU3M]: F:说明错误抖动的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+13-input-clear-dissolve.md[SU3M]: F:说明清空输入时的淡出的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+14-skeleton-reveal.md[SU3S]: F:说明骨架屏内容显现的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+15-shimmer-text.md[SU3T]: F:说明文字扫光的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+16-tabs-sliding.md[SU3S]: F:说明标签指示器滑动的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+17-tooltip.md[SU3S]: F:说明提示框开合的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+18-texts-reveal.md[SU3S]: F:说明多段文本依次显现的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+19-card-tilt.md[SU3S]: F:说明卡片悬停倾斜的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+20-plus-menu-morph.md[SU3S]: F:说明加号变形为菜单的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+21-accordion.md[SU3S]: F:说明手风琴展开的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+22-toast.md[SU3T]: F:说明通知浮层开合的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+23-like-button.md[SU3T]: F:说明点赞反馈的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+24-learn-more-hover.md[SU3T]: F:说明了解更多链接悬停的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+25-checkbox-check.md[SU3T]: F:说明复选框勾选的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+26-spinning-counter.md[SU3T]: F:说明数字滚动计数的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+27-toggle.md[SU3T]: F:说明开关切换的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+28-thinking-states.md[SU3S]: F:说明思考状态切换的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+29-reasoning-stream.md[SU3S]: F:说明推理过程流式展示的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+30-streaming-text.md[SU3T]: F:说明文本流式出现的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+31-matrix-loader.md[SU3S]: F:说明点阵加载的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+32-banner-stacking.md[SU3M]: F:说明横幅堆叠的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+33-text-morph.md[SU3S]: F:说明文字形变的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+34-text-swap-soft.md[SU3S]: F:说明文案柔和替换的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+35-donut-chart.md[SU3S]: F:说明环形图过渡的适用场景、HTML 用法与可调参数 | R:- | A:- | S:-
+LICENSE.txt[SC2T]: F:声明过渡动画技能的许可条款 | R:- | A:- | S:-
+SKILL.md[SU3M]: F:指导按交互类型选择过渡配方与参数 | R:- | A:- | S:-
+_root.css[FC4M]: F:定义过渡动画使用的根级 CSS 变量 | R:- | A:- | S:-
+
+===/<repository>/.agents/skills/transitions-polish/===
+LICENSE.txt[SC2T]: F:声明动效调优技能的许可条款 | R:- | A:- | S:-
+SKILL.md[SU3S]: F:按使用场景调节时长、位移、缩放、模糊与缓动 | R:- | A:- | S:-
+_refine-rules.md[SU3T]: F:规定动效细调时应遵循的参数选择规则 | R:- | A:- | S:-
+_root.css[FC4T]: F:提供动效调优所对照的根级样式变量 | R:- | A:- | S:-
+
+===/<repository>/.claude/===
+CLAUDE.md[SW3T]: F:指向项目统一的 AOCI 索引规则 | R:- | A:- | S:-
+settings.json[FC3T]: F:配置项目的 Claude Code 工作环境 | R:- | A:- | S:-
+
+===/<repository>/.claude/rules/===
+nextjs.md[SQ4T]: F:规定 Next.js 路由、服务端组件与缓存约定 | R:- | A:- | S:-
+nodejs.md[SQ4T]: F:规定 Node.js 项目布局与异步错误处理约定 | R:- | A:- | S:-
+react.md[SQ4T]: F:规定 React 组件、状态与 Hook 的使用约定 | R:- | A:- | S:-
+typescript.md[SQ4T]: F:规定 TypeScript 类型严格性与代码组织 | R:- | A:- | S:-
+
+===/<repository>/.cursor/===
+mcp.json[FC4T]: F:声明 Cursor 使用的 MCP 服务连接 | R:- | A:- | S:-
+
+===/<repository>/.cursor/rules/===
+nextjs.mdc[SQ3T]: F:为 Cursor 提供 Next.js 项目结构和性能规则 | R:- | A:- | S:-
+nodejs.mdc[SQ3T]: F:为 Cursor 提供 Node.js 和 Express API 设计约定 | R:- | A:- | S:-
+react.mdc[SQ3T]: F:为 Cursor 提供 React 组件与状态管理规则 | R:- | A:- | S:-
+typescript.mdc[SQ3T]: F:为 Cursor 提供 TypeScript 类型和命名约定 | R:- | A:- | S:-
+
+===/<repository>/.github/ISSUE_TEMPLATE/===
+bug.yml[FQ3T]: F:定义缺陷报告表单及复现信息字段 | R:- | A:- | S:-
+config.yml[FC3T]: F:配置 GitHub 问题模板入口 | R:- | A:- | S:-
+feature.yml[FC3T]: F:定义功能请求表单 | R:- | A:- | S:-
+packaging.yml[FV3T]: F:收集桌面打包故障的环境与复现信息 | R:- | A:- | S:-
+
+===/<repository>/.github/===
+PULL_REQUEST_TEMPLATE.md[SQ4T]: F:规定拉取请求的动机、范围与验证记录 | R:- | A:- | S:-
+
+===/<repository>/.github/workflows/===
+ci.yml[OV6S]: F:配置持续集成检查的触发与执行步骤 | R:- | A:- | S:-
+desktop-packages.yml[OV7S]: F:编排跨平台桌面安装包构建与产物交付 | R:- | A:- | S:-
+
+===/<repository>/.omp/===
+lsp.json[FC3T]: F:配置 OMP 的语言服务器 | R:- | A:- | S:-
+
+===/<repository>/.zread/wiki/===
+current[FC2T]: F:记录当前使用的 ZRead 文档版本 | R:- | A:- | S:-
+
+===/<repository>/.zread/wiki/versions/2026-10-06-001245/===
+1-xiang-mu-gai-lan.md[SW4M]: F:记录该版本的项目定位与双模式架构 | R:- | A:- | S:-
+10-electron-zhu-jin-cheng-qi-dong-lian-yu-shuang-men-jian-jiu-xu-jian-cha.md[SW4L]: F:记录该版本的Electron单实例启动与端口预留 | R:- | A:- | S:-
+11-da-bao-gou-jian-liu-cheng-yu-macos-universal-shuang-jia-gou-chu-li.md[SW4L]: F:记录该版本的独立构建及macOS双架构打包 | R:- | A:- | S:-
+12-preload-csp-zi-dong-geng-xin-yu-xi-tong-tuo-pan.md[SW4L]: F:记录该版本的Preload桥接、CSP、托盘与更新 | R:- | A:- | S:-
+13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi.md[SW4L]: F:记录该版本的会话JSONL头与条目类型 | R:- | A:- | S:-
+14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone.md[SW4M]: F:记录该版本的跨文件分叉、会话内分支及工作树克隆 | R:- | A:- | S:-
+15-hui-hua-dao-chu-agentmode-chi-jiu-hua-yu-ji-lian-shan-chu.md[SW4M]: F:记录该版本的会话导出、模式持久化与级联删除 | R:- | A:- | S:-
+16-agent-mo-shi-yu-ask-lan-jie-plan-ask-full.md[SW4L]: F:记录该版本的Plan、Ask、Full模式工具选择 | R:- | A:- | S:-
+17-extension-ui-bridge-yu-yi-bu-rpc-xiang-ying-dui-lie.md[SW4L]: F:记录该版本的扩展UI请求与异步响应队列 | R:- | A:- | S:-
+18-chang-qi-ji-yi-sqlite-hou-duan-guan-ce-gou-zi-yu-jian-suo-api.md[SW4L]: F:记录该版本的SQLite记忆采集及双通道检索 | R:- | A:- | S:-
+19-mcp-fu-wu-qi-shuang-ji-pei-zhi-yu-guan-li-ui.md[SW4L]: F:记录该版本的MCP双级配置和管理界面 | R:- | A:- | S:-
+2-kuai-su-kai-shi.md[SW4M]: F:记录该版本的开发环境安装与启动 | R:- | A:- | S:-
+20-follow-up-queue-yu-revision-bing-fa-kong-zhi.md[SW4M]: F:记录该版本的后续消息队列调度与版本并发控制 | R:- | A:- | S:-
+21-project-trust-409-wo-shou-yu-yan-chi-session-chuang-jian.md[SW4L]: F:记录该版本的项目信任握手和延迟创建会话 | R:- | A:- | S:-
+22-useagentsession-zhu-hook-yu-zi-hook-chai-fen-ce-lue.md[SW4L]: F:记录该版本的会话Hook拆分与状态归属 | R:- | A:- | S:-
+23-streamreducer-liu-shi-xiao-xi-zhuang-tai-ji-yu-zeng-liang-xuan-ran.md[SW4L]: F:记录该版本的流式消息归约与增量渲染 | R:- | A:- | S:-
+24-appshell-bu-ju-xi-tong-mian-ban-tuo-zhuai-jian-pan-kuai-jie-jian-zhu-ti-qie-huan.md[SW4L]: F:记录该版本的面板宽度、快捷键与主题切换 | R:- | A:- | S:-
+25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran.md[SW4M]: F:记录该版本的思考球图形渲染和降级路径 | R:- | A:- | S:-
+26-xiao-xi-xu-ni-hua-lie-biao-markdown-xuan-ran-yu-dai-ma-gao-liang.md[SW4L]: F:记录该版本的消息可见性优化与Markdown渲染 | R:- | A:- | S:-
+27-ce-shi-ce-lue-node-js-yuan-sheng-ce-shi-ping-tai-zi-ji-yu-mou-yan-ce-shi.md[SW4L]: F:记录该版本的原生测试、平台子集与冒烟验证 | R:- | A:- | S:-
+28-ci-cd-liu-shui-xian-yu-san-ping-tai-zhuo-mian-bao-fa-bu.md[SW4L]: F:记录该版本的持续集成与三平台桌面包发布 | R:- | A:- | S:-
+29-guan-jian-she-ji-jue-ce-yu-yi-zhi-xian-jing-su-cha.md[SW4L]: F:汇总会话、交互与桌面工程的历史设计决策 | R:- | A:- | S:-
+3-shuang-mo-shi-kai-fa-yu-yun-xing.md[SW4M]: F:介绍浏览器和桌面双模式开发与运行 | R:- | A:- | S:-
+4-mu-lu-jie-gou-yu-he-xin-mo-kuai.md[SW4M]: F:说明仓库目录和核心模块之间的职责关系 | R:- | A:- | S:-
+5-ji-zhu-zhan-yu-guan-jian-yi-lai.md[SW4M]: F:说明技术栈分层与关键依赖 | R:- | A:- | S:-
+6-si-ceng-fen-chi-jia-gou-xiang-jie.md[SW4L]: F:解释浏览器到 SDK 等四层架构 | R:- | A:- | S:-
+7-agentsession-sheng-ming-zhou-qi-yu-jin-cheng-nei-zhu-ce-biao.md[SW4L]: F:解释会话生命周期与进程内注册表 | R:- | A:startRpcSession | S:-
+8-sse-shi-jian-liu-yu-liu-shi-zhuang-tai-ji.md[SW4L]: F:解释服务端事件流与前端流式状态机 | R:- | A:AgentEvent | S:-
+9-hui-hua-de-liang-chong-fang-wen-mo-shi-zhi-du-liu-lan-yu-jiao-hu-dui-hua.md[SW4L]: F:对照只读历史浏览和交互会话的状态边界 | R:- | A:sessionScopedResetPatch | S:-
+wiki.json[FC3M]: F:描述该版本 Wiki 的文档目录元数据 | R:- | A:- | S:-
+
+===/<repository>/app/api/agent/[id]/events/===
+route.ts[EM7S]: F:订阅指定会话并以 SSE 持续发送事件和心跳 | R:code:lib/session-reader.ts | A:GET | S:-
+
+===/<repository>/app/api/agent/[id]/===
+route.ts[EM8T]: F:分派指定会话的交互命令并提供会话状态查询 | R:code:lib/session-reader.ts | A:POST | S:-
+
+===/<repository>/app/api/agent/new/===
+route.ts[EW7T]: F:处理新建智能体会话请求 | R:code:lib/rpc-manager.ts | A:POST | S:-
+
+===/<repository>/app/api/app-info/===
+route.ts[EC4T]: F:返回运行中应用的版本等标识信息 | R:code:package.json | A:GET | S:-
+
+===/<repository>/app/api/auth/all-providers/===
+route.ts[EI5T]: F:列出可用认证提供方 | R:code:lib/pi-runtime.ts | A:GET | S:-
+
+===/<repository>/app/api/auth/api-key/[provider]/===
+route.ts[EI6T]: F:读取、设置或删除指定提供方的 API 密钥配置 | R:code:lib/api-error.ts | A:GET | S:-
+
+===/<repository>/app/api/auth/login/[provider]/===
+route.ts[EI7M]: F:启动提供方登录并处理异步回调交互 | R:code:lib/auth-policy.ts | A:POST | S:-
+
+===/<repository>/app/api/auth/logout/[provider]/===
+route.ts[EI5T]: F:退出指定提供方的登录状态 | R:code:lib/pi-runtime.ts | A:POST | S:-
+
+===/<repository>/app/api/auth/providers/===
+route.ts[EI5T]: F:查询登录提供方状态 | R:code:lib/pi-runtime.ts | A:GET | S:-
+
+===/<repository>/app/api/default-cwd/===
+route.ts[EC4T]: F:设置默认工作目录 | R:code:lib/api-error.ts | A:POST | S:-
+
+===/<repository>/app/api/desktop-settings/===
+route.ts[EC5T]: F:读取和更新桌面端设置 | R:code:lib/desktop-settings.ts | A:GET | S:-
+
+===/<repository>/app/api/extensions/===
+route.ts[EE6T]: F:查询并管理项目扩展配置 | R:code:lib/api-error.ts | A:GET | S:-
+
+===/<repository>/app/api/files/[...path]/===
+route.ts[EN7M]: F:按路径与范围流式返回获准访问的本地文件 | R:code:lib/api-error.ts | A:GET | S:-
+
+===/<repository>/app/api/health/===
+route.ts[EO4T]: F:提供应用存活探针 | R:- | A:GET | S:-
+
+===/<repository>/app/api/home/===
+route.ts[EC4T]: F:返回用户主目录信息 | R:- | A:GET | S:-
+
+===/<repository>/app/api/mcp/===
+route.ts[EE6T]: F:查询、保存和删除 MCP 服务配置 | R:code:lib/api-error.ts | A:GET | S:-
+
+===/<repository>/app/api/mcp/test/===
+route.ts[EE5T]: F:探测指定 MCP 服务的连接 | R:code:lib/api-error.ts | A:POST | S:-
+
+===/<repository>/app/api/mcp/toggle/===
+route.ts[EE5T]: F:切换 MCP 服务的启用状态 | R:code:lib/api-error.ts | A:POST | S:-
+
+===/<repository>/app/api/memory/forget/===
+route.ts[ED5T]: F:删除指定长期记忆 | R:code:lib/api-error.ts | A:POST | S:-
+
+===/<repository>/app/api/memory/health/===
+route.ts[EO4T]: F:查询长期记忆服务健康状态 | R:code:lib/api-error.ts | A:GET | S:-
+
+===/<repository>/app/api/memory/recall/===
+route.ts[ED6T]: F:按检索条件召回长期记忆 | R:code:lib/api-error.ts | A:GET | S:-
+
+===/<repository>/app/api/memory/remember/===
+route.ts[ED6T]: F:写入长期记忆记录 | R:code:lib/api-error.ts | A:POST | S:-
+
+===/<repository>/app/api/memory/stats/===
+route.ts[EO4T]: F:汇总长期记忆存储统计 | R:code:lib/api-error.ts | A:GET | S:-
+
+===/<repository>/app/api/models-config/===
+route.ts[EC6T]: F:读取和维护自定义模型配置文件 | R:code:lib/api-error.ts | A:GET | S:-
+
+===/<repository>/app/api/models-config/test/===
+route.ts[EN5S]: F:执行模型连通性测试并提取响应文本 | R:code:lib/pi-runtime.ts | A:POST | S:-
+
+===/<repository>/app/api/models/===
+route.ts[EC7T]: F:从运行时列出当前可选模型 | R:code:lib/pi-runtime.ts | A:GET | S:-
+
+===/<repository>/app/api/select-directory/===
+route.ts[EU4T]: F:响应目录选择请求 | R:code:lib/api-error.ts | A:POST | S:-
+
+===/<repository>/app/api/sessions/[id]/branch/===
+route.ts[EW6T]: F:从指定会话创建分支 | R:code:lib/session-reader.ts | A:POST | S:-
+
+===/<repository>/app/api/sessions/[id]/clone/===
+route.ts[EW8M]: F:协调普通目录或 Git 工作树中的会话克隆及失败清理 | R:code:lib/session-reader.ts | A:POST | S:-
+
+===/<repository>/app/api/sessions/[id]/context/===
+route.ts[ED5T]: F:读取指定会话的上下文信息 | R:code:lib/session-reader.ts | A:GET | S:-
+
+===/<repository>/app/api/sessions/[id]/export/===
+route.ts[ED5T]: F:导出会话内容 | R:code:lib/session-reader.ts | A:GET | S:-
+
+===/<repository>/app/api/sessions/[id]/===
+route.ts[ED7M]: F:读取、更新和删除指定历史会话 | R:code:lib/session-reader.ts | A:GET | S:-
+
+===/<repository>/app/api/sessions/new/===
+route.ts[EW5T]: F:响应新建历史会话请求 | R:- | A:POST | S:-
+
+===/<repository>/app/api/sessions/===
+route.ts[ED6T]: F:查询历史会话列表 | R:code:lib/session-reader.ts | A:GET | S:-
+
+===/<repository>/app/api/skills/install/===
+route.ts[EE5T]: F:处理技能安装请求 | R:code:lib/npx.ts | A:POST | S:-
+
+===/<repository>/app/api/skills/===
+route.ts[EE5T]: F:列出当前可用技能 | R:code:lib/api-error.ts | A:GET | S:-
+
+===/<repository>/app/api/skills/search/===
+route.ts[EN5S]: F:检索技能目录并整理安装数等展示信息 | R:code:lib/npx.ts | A:SkillSearchResult | S:-
+skills-api-url.ts[CS5T]: F:校验技能搜索服务地址并构造查询 URL | R:- | A:getAllowedSkillsApiBase | S:-
+
+===/<repository>/app/api/statusline/===
+route.ts[EO5S]: F:汇总 Git 工作区等状态栏信息 | R:code:lib/allowed-roots.ts | A:GET | S:-
+
+===/<repository>/app/api/trust/===
+route.ts[EI7T]: F:读取和提交项目信任决策 | R:code:lib/api-error.ts | A:POST | S:-
+
+===/<repository>/app/api/usage/upstream/===
+route.ts[EO5T]: F:分派上游配额查询 | R:code:lib/upstream-usage/route-handler.ts | A:GET | S:-
+
+===/<repository>/app/===
+error.tsx[EU4T]: F:展示页面错误并提供恢复入口 | R:code:components/I18nProvider.tsx | A:Error | S:-
+global-error.tsx[EU5S]: F:捕获根级渲染错误并选择本地化提示 | R:code:lib/i18n/index.ts | A:GlobalError | S:-
+globals.css[FU6L]: F:定义应用全局主题、布局与动效样式 | R:- | A:- | S:-
+layout.tsx[EU6T]: F:提供根级页面结构与元数据 | R:code:components/I18nProvider.tsx | A:metadata | S:-
+page.tsx[EU7T]: F:装载应用主界面 | R:code:components/AppShell.tsx | A:Home | S:-
+
+===/<repository>/bin/===
+pi-web.js[EW6T]: F:提供命令行启动 Web 应用的入口 | R:- | A:- | S:-
+
+===/<repository>/components/===
+AgentModeSelector.tsx[EU4S]: F:选择并切换智能体交互模式 | R:code:lib/approval-policy.ts | A:AgentModeSelector | S:-
+AgentThinkingOrb.tsx[EU4S]: F:通过思考球和阶段标签呈现智能体活动 | R:code:hooks/agent-session/agent-phase.ts | A:AgentThinkingOrb | S:-
+AppShell.tsx[AU8L]: F:协调会话、聊天、文件面板和全局快捷键 | R:code:components/SessionSidebar.tsx | A:AppShell | S:-
+BranchCloneModal.tsx[EU6M]: F:收集分支或克隆参数并呈现错误 | R:code:lib/i18n/index.ts | A:BranchCloneMode | S:-
+BranchNavigator.tsx[EU6L]: F:显示会话树与活跃路径并切换分支 | R:code:lib/types.ts | A:BranchNavigator | S:-
+ChatInput.tsx[EU7L]: F:协调消息编辑、附件及发送交互 | R:code:lib/slash-commands.ts | A:ChatInput | S:-
+ChatMinimap.tsx[EU4L]: F:生成会话消息缩略导航与定位入口 | R:code:lib/types.ts | A:ChatMinimap | S:-
+ChatWindow.tsx[AU8M]: F:将会话状态、消息显示和用户输入连接到聊天窗口 | R:code:lib/types.ts | A:ChatWindow | S:-
+CodemodeConfig.tsx[EU4T]: F:配置代码执行模式 | R:code:components/apiJson.ts | A:CodemodeConfig | S:-
+ExecutePlanBar.tsx[EU4T]: F:在可执行时提供执行计划操作 | R:code:components/I18nProvider.tsx | A:ExecutePlanBar | S:-
+ExtensionUiDialog.tsx[EU5M]: F:呈现扩展交互请求并返回用户响应 | R:code:hooks/agent-session/agent-events-manager.ts | A:ExtensionUiResponsePayload | S:-
+ExtensionsConfigModal.tsx[EU5L]: F:组织 MCP、技能、扩展和诊断配置页 | R:code:components/McpConfigModal.tsx | A:ExtensionsTab | S:-
+FileExplorer.tsx[EU5M]: F:浏览工作目录文件树并触发打开或引用 | R:code:components/FileIcons.tsx | A:FileExplorer | S:-
+FileIcons.tsx[CU3M]: F:提供文件夹和不同文件类型的图标 | R:- | A:FolderIcon | S:-
+FileViewer.tsx[EU5L]: F:预览文本、差异和媒体文件 | R:code:lib/ayu-syntax-theme.ts | A:FileViewer | S:-
+GlobalRuntimeErrorReporter.tsx[EO4S]: F:捕获并上报浏览器运行时异常 | R:code:components/I18nProvider.tsx | A:GlobalRuntimeErrorReporter | S:-
+I18nProvider.tsx[AL5S]: F:向界面提供当前语言和翻译函数 | R:code:lib/i18n/index.ts | A:I18nProvider | S:-
+LiquidOrbCanvas.tsx[EU4M]: F:在画布中渲染液态思考球 | R:code:components/liquid-orb-source.ts | A:LiquidOrbCanvas | S:-
+McpConfigModal.tsx[EU6L]: F:提供按工作目录管理 MCP 配置的界面 | R:code:lib/mcp-config.ts | A:McpConfigContentProps | S:-
+MessageList.tsx[EU6T]: F:渲染会话消息列表并协调可见消息 | R:code:lib/types.ts | A:MessageList | S:-
+MessageView.tsx[EU6L]: F:按内容块展示消息文本、工具调用与操作 | R:code:lib/ayu-syntax-theme.ts | A:MessageView | S:-
+ModalSurface.tsx[CU5T]: F:提供复用的模态窗口表面 | R:- | A:ModalSurfaceProps | S:-
+ModelsConfig.tsx[EU6M]: F:组织模型提供方与模型配置界面 | R:code:components/models-config/types.ts | A:ModelsConfig | S:-
+ProjectTrustDialog.tsx[EU6S]: F:展示待确认的项目信任信息并收集选择 | R:code:lib/trust-types.ts | A:ProjectTrustDialog | S:-
+SessionExportModal.tsx[EU4S]: F:提供会话导出选项与操作 | R:code:components/I18nProvider.tsx | A:SessionExportModalProps | S:-
+SessionSidebar.tsx[EU7M]: F:管理侧栏会话列表的选择和操作 | R:code:lib/types.ts | A:SessionSidebar | S:-
+SettingsModal.tsx[EU5L]: F:组织常规、智能体与关于设置页 | R:code:components/ModalSurface.tsx | A:SettingsTab | S:-
+SkillsConfig.tsx[EU5L]: F:展示技能来源、详情及启用配置 | R:code:app/api/skills/search/route.ts | A:SkillsConfig | S:-
+StatsBar.tsx[EU4M]: F:显示会话统计与上下文用量 | R:code:components/I18nProvider.tsx | A:StatsBarProps | S:-
+TabBar.tsx[EU4S]: F:呈现并切换或关闭打开的标签 | R:code:components/FileIcons.tsx | A:Tab | S:-
+UsagePopover.tsx[EU4M]: F:展示会话和提供方的用量明细 | R:code:components/I18nProvider.tsx | A:SessionStatsProps | S:-
+apiJson.ts[CN5T]: F:统一 JSON API 响应读取与错误提取 | R:- | A:ApiJsonOptions | S:-
+file-viewer-large-source.ts[DP4T]: F:按源码字节数或行数选择大文件查看模式 | R:- | A:LARGE_SOURCE_BYTES | S:-
+file-viewer-virtualization.ts[KP5T]: F:计算长文件可见行窗口及留白 | R:- | A:VirtualLineWindowInput | S:-
+liquid-orb-source.ts[FU4M]: F:定义思考球 WGSL 着色器与初始统一变量 | R:- | A:LIQUID_ORB_SHADER | S:-
+message-content.ts[DM5T]: F:区分消息文本、图片及其他内容块 | R:code:lib/types.ts | A:getTextContent | S:-
+
+===/<repository>/components/chat-input/===
+AttachmentPreview.tsx[EU4T]: F:预览并移除待发送的图片附件 | R:code:components/chat-input/types.ts | A:AttachmentPreview | S:-
+ModelSelector.tsx[EU5S]: F:在输入框内选择会话模型 | R:code:components/chat-input/types.ts | A:ModelSelector | S:-
+PresetSelector.tsx[EU4S]: F:选择会话使用的工具预设 | R:code:components/I18nProvider.tsx | A:PresetSelector | S:-
+QueuedMessageList.tsx[EU5S]: F:展示并重排待执行消息 | R:code:lib/follow-up-queue.ts | A:QueuedMessageList | S:-
+submit-action.ts[DW6T]: F:根据运行状态与输入决定发送、引导、排队或斜杠操作 | R:- | A:ComposerSubmitAction | S:-
+thinking-levels.ts[DC5T]: F:按模型能力限制可选思考等级 | R:- | A:THINKING_LEVELS | S:-
+types.ts[CU4T]: F:定义聊天输入、附件与模型选项接口 | R:- | A:AttachedImage | S:-
+
+===/<repository>/components/models-config/===
+AddProviderPicker.tsx[EU4S]: F:提供添加模型服务商的选择入口 | R:code:components/models-config/types.ts | A:AddProviderPicker | S:-
+ApiKeyDetail.tsx[EU5S]: F:展示并维护提供方 API 密钥 | R:code:components/models-config/types.ts | A:ApiKeyDetail | S:-
+FormControls.tsx[CU4S]: F:提供模型配置字段、样式和协议选项 | R:code:components/I18nProvider.tsx | A:inputStyle | S:-
+ModelDetail.tsx[EU5M]: F:编辑模型参数与协议兼容配置 | R:code:components/models-config/types.ts | A:ModelDetail | S:-
+OAuthDetail.tsx[EU5M]: F:展示并操作提供方 OAuth 登录 | R:code:components/models-config/types.ts | A:OAuthDetail | S:-
+PROVIDER_ICONS.tsx[CU3T]: F:将模型服务商映射到对应图标 | R:- | A:IconComponent | S:-
+ProviderDetail.tsx[EU5T]: F:编辑服务商设置并管理其模型 | R:code:components/models-config/types.ts | A:ProviderDetail | S:-
+ThinkingLevelMapEditor.tsx[EU4S]: F:编辑思考等级映射 | R:- | A:ThinkingLevelMapEditor | S:-
+types.ts[FC4T]: F:定义提供方、登录状态和模型编辑数据类型 | R:- | A:OAuthProvider | S:-
+
+===/<repository>/components/session-sidebar/===
+PiAgentTitle.tsx[EU3T]: F:渲染带文字变换效果的侧栏标题 | R:- | A:PiAgentTitle | S:-
+ProjectGroup.tsx[EU5T]: F:展开项目分组并提供会话操作 | R:code:components/I18nProvider.tsx | A:ProjectGroup | S:-
+ProjectSortMenu.tsx[EU4T]: F:选择侧栏项目排序方式 | R:code:components/I18nProvider.tsx | A:ProjectSortMenu | S:-
+SessionTree.tsx[EU5S]: F:递归展示会话树并处理节点操作 | R:code:lib/types.ts | A:SessionTreeItem | S:-
+SidebarHeader.tsx[EU4S]: F:组织侧栏新建项目与会话等入口 | R:code:components/session-sidebar/PiAgentTitle.tsx | A:SidebarHeader | S:-
+SidebarIcon.tsx[CU3T]: F:提供侧栏操作图标 | R:- | A:SidebarIcon | S:-
+SortableProjects.tsx[EU5S]: F:支持拖动调整项目顺序及动画偏好 | R:code:components/I18nProvider.tsx | A:SortableProjects | S:-
+helpers.ts[CU4T]: F:提供侧栏树结构、相对时间与目录选择辅助 | R:code:lib/types.ts | A:SessionTreeNode | S:-
+projects.ts[DD5S]: F:按工作目录建立项目分组并生成会话标题 | R:code:lib/types.ts | A:SidebarProject | S:-
+useSidebarPreferences.ts[PD4T]: F:管理侧栏用户偏好状态 | R:code:components/session-sidebar/projects.ts | A:useSidebarPreferences | S:-
+
+===/<repository>/docs/===
+ARCHITECTURE-OPTIMIZATION-REVIEW-2026-06-26.md[SQ4L]: F:记录六月架构优化审查的事实、优先级与路线图 | R:- | A:- | S:-
+ARCHITECTURE-REVIEW.md[SQ4L]: F:按严重度梳理架构审查发现 | R:- | A:- | S:-
+ARCHITECTURE.md[SG7L]: F:解释双模式架构、会话生命周期与工程约束 | R:- | A:- | S:-
+RELEASING.md[SV6T]: F:规定桌面端和 npm 的发布流程 | R:- | A:- | S:-
+SKILL_find_skills.md[SE3S]: F:说明如何用技能命令行发现适用技能 | R:- | A:- | S:-
+architecture.html[SG4L]: F:通过静态网页展示项目架构 | R:- | A:- | S:-
+fixed-issues-2026-10-22.md[SQ4S]: F:记录技能路径校验、状态栏和信任握手三项修复的复审 | R:- | A:- | S:-
+index.html[EU4L]: F:提供项目文档站首页 | R:- | A:- | S:-
+memory-architecture-viz.html[SD4M]: F:可视化展示记忆子系统的结构 | R:- | A:- | S:-
+memory-architecture.html[SD4L]: F:以静态页面说明长期记忆架构 | R:- | A:- | S:-
+ponytail-audit.md[SQ4S]: F:评估工程复杂性并记录可简化项目 | R:- | A:- | S:-
+script.js[EU3S]: F:驱动文档站的页面交互 | R:- | A:- | S:-
+styles.css[FU3L]: F:定义文档站排版与外观 | R:- | A:- | S:-
+
+===/<repository>/docs/assets/===
+liquid-orb.js[EU3M]: F:为文档页面绘制液态思考球 | R:- | A:- | S:-
+liquid-orb.wgsl.js[FU3M]: F:提供文档演示使用的液态球着色器代码 | R:- | A:- | S:-
+
+===/<repository>/docs/investigations/===
+white-screen.md[SR4S]: F:记录白屏问题的实验环境、观察结果与修订结论 | R:- | A:- | S:-
+
+===/<repository>/docs/releases/===
+v0.10.0.md[SV3T]: F:记录版本 0.10.0 的升级、修复与安全依赖 | R:- | A:- | S:-
+v0.11.0.md[SV3T]: F:记录版本 0.11.0 的侧栏变化与兼容说明 | R:- | A:- | S:-
+v0.12.0.md[SV3T]: F:记录版本 0.12.0 的仓库清理及安全修复 | R:- | A:- | S:-
+v0.13.0.md[SV3T]: F:记录版本 0.13.0 的统一设置与手动更新 | R:- | A:- | S:-
+v0.14.0.md[SV3T]: F:记录版本 0.14.0 的窗口关闭、流式滚动与编辑菜单 | R:- | A:- | S:-
+v0.8.0.md[SV3T]: F:记录版本 0.8.0 的运行时及依赖变化 | R:- | A:- | S:-
+v0.8.1.md[SV3T]: F:记录版本 0.8.1 的修复与验证 | R:- | A:- | S:-
+v0.8.2.md[SV3T]: F:记录版本 0.8.2 的修复及默认行为 | R:- | A:- | S:-
+v0.8.3.md[SV3T]: F:记录版本 0.8.3 的新增功能与修复 | R:- | A:- | S:-
+v0.8.4.md[SV3T]: F:记录版本 0.8.4 的功能变化与限制 | R:- | A:- | S:-
+v0.8.5.md[SV3T]: F:记录版本 0.8.5 的新增功能及修复 | R:- | A:- | S:-
+v0.8.6.md[SV3T]: F:记录版本 0.8.6 的新增功能与改进 | R:- | A:- | S:-
+v0.8.7.md[SV3T]: F:记录版本 0.8.7 的改进与验证 | R:- | A:- | S:-
+v0.8.8.md[SV3T]: F:记录版本 0.8.8 的修复、新增与文档变动 | R:- | A:- | S:-
+v0.8.9.md[SV3T]: F:记录版本 0.8.9 的新增功能及安全修复 | R:- | A:- | S:-
+v0.9.0.md[SV3T]: F:记录版本 0.9.0 的变更和安全说明 | R:- | A:- | S:-
+
+===/<repository>/docs/research/===
+issue-20-white-screen-analysis.md[SR4M]: F:分析对话期间白屏的机制与证据等级 | R:- | A:- | S:-
+issue-9-startup-lifecycle-analysis.md[SR4S]: F:分析首次启动停留加载页的生命周期证据 | R:- | A:- | S:-
+pi-core-upgrade-2026-09-30.md[SE4S]: F:研究 Pi 核心依赖升级与内置 MCP 接入 | R:- | A:- | S:-
+pi-core-upgrade-2026-10-11.md[SE4T]: F:记录 Pi SDK 从 0.99.1 升至 1.1.0 的兼容分析与实施结果 | R:- | A:- | S:-
+
+===/<repository>/docs/superpowers/plans/===
+2026-08-03-long-term-memory.md[SW4L]: F:规划长期记忆模块的实施顺序和文件边界 | R:- | A:projectIdFromCwd | S:-
+2026-08-26-electron-43-upgrade.md[SV4T]: F:规划 Electron 36 到 43 的迁移与验证 | R:- | A:- | S:-
+
+===/<repository>/docs/superpowers/specs/===
+2026-07-28-wave1-approval-plan-trust-design.md[SW5M]: F:规定审批、计划、信任及扩展交互桥接的设计 | R:- | A:- | S:-
+2026-07-28-wave2-design.md[SW5M]: F:定义 MCP 管理、会话分支导出与扩展管理需求 | R:- | A:McpTransportType | S:-
+2026-08-03-long-term-memory-design.md[SD5M]: F:记录长期记忆子系统设计目标与已定决策 | R:- | A:MemoryType | S:-
+
+===/<repository>/docs/wiki/content/===
+1-xiang-mu-gai-lan.md[SG4M]: F:在项目 Wiki 中说明项目定位与双模式架构 | R:- | A:- | S:-
+10-electron-zhu-jin-cheng-qi-dong-lian-yu-shuang-men-jian-jiu-xu-jian-cha.md[SG4L]: F:在项目 Wiki 中说明Electron单实例启动及端口预留 | R:- | A:choosePort | S:-
+11-da-bao-gou-jian-liu-cheng-yu-macos-universal-shuang-jia-gou-chu-li.md[SG4L]: F:在项目 Wiki 中说明构建管线与macOS通用包 | R:- | A:- | S:-
+12-preload-csp-zi-dong-geng-xin-yu-xi-tong-tuo-pan.md[SG4L]: F:在项目 Wiki 中说明Preload、CSP、更新与托盘 | R:- | A:- | S:-
+13-pi-hui-hua-wen-jian-ge-shi-yu-jsonl-jie-xi.md[SG4L]: F:在项目 Wiki 中说明会话JSONL格式 | R:- | A:getSessionEntriesAsync | S:-
+14-san-chong-fen-zhi-ji-zhi-fork-hui-hua-nei-fen-zhi-git-worktree-clone.md[SG4M]: F:在项目 Wiki 中说明三种分支机制 | R:- | A:- | S:-
+15-hui-hua-dao-chu-agentmode-chi-jiu-hua-yu-ji-lian-shan-chu.md[SG4M]: F:在项目 Wiki 中说明会话导出与模式持久化 | R:- | A:exportSessionToHtml | S:-
+16-agent-mo-shi-yu-ask-lan-jie-plan-ask-full.md[SG4L]: F:在项目 Wiki 中说明智能体模式与工具选择 | R:- | A:PLAN_TOOLS | S:-
+17-extension-ui-bridge-yu-yi-bu-rpc-xiang-ying-dui-lie.md[SG4L]: F:在项目 Wiki 中说明扩展UI桥接与异步响应 | R:- | A:ExtensionUiMethod | S:-
+18-chang-qi-ji-yi-sqlite-hou-duan-guan-ce-gou-zi-yu-jian-suo-api.md[SG4L]: F:在项目 Wiki 中说明长期记忆采集与检索 | R:- | A:projectIdFromCwd | S:-
+19-mcp-fu-wu-qi-shuang-ji-pei-zhi-yu-guan-li-ui.md[SG4L]: F:在项目 Wiki 中说明MCP双级配置 | R:- | A:McpServerConfig | S:-
+2-kuai-su-kai-shi.md[SG4M]: F:在项目 Wiki 中说明开发环境安装与启动 | R:- | A:- | S:-
+20-follow-up-queue-yu-revision-bing-fa-kong-zhi.md[SG4M]: F:在项目 Wiki 中说明后续消息队列调度 | R:- | A:- | S:-
+21-project-trust-409-wo-shou-yu-yan-chi-session-chuang-jian.md[SG4L]: F:在项目 Wiki 中说明项目信任握手与延迟建会话 | R:- | A:evaluateProjectTrust | S:-
+22-useagentsession-zhu-hook-yu-zi-hook-chai-fen-ce-lue.md[SG4L]: F:在项目 Wiki 中说明会话Hook状态所有权 | R:- | A:applyAgentEvent | S:-
+23-streamreducer-liu-shi-xiao-xi-zhuang-tai-ji-yu-zeng-liang-xuan-ran.md[SG4L]: F:在项目 Wiki 中说明流式消息状态机 | R:- | A:StreamingState | S:-
+24-appshell-bu-ju-xi-tong-mian-ban-tuo-zhuai-jian-pan-kuai-jie-jian-zhu-ti-qie-huan.md[SG4L]: F:在项目 Wiki 中说明面板拖拽、快捷键与主题切换 | R:- | A:useDragDrop | S:-
+25-ye-tai-si-kao-qiu-webgpu-you-xian-canvas-jiang-ji-xuan-ran.md[SG4M]: F:在项目 Wiki 中说明思考球渲染与降级 | R:- | A:- | S:-
+26-xiao-xi-xu-ni-hua-lie-biao-markdown-xuan-ran-yu-dai-ma-gao-liang.md[SG4L]: F:在项目 Wiki 中说明消息列表优化与Markdown渲染 | R:- | A:useMessageRefs | S:-
+27-ce-shi-ce-lue-node-js-yuan-sheng-ce-shi-ping-tai-zi-ji-yu-mou-yan-ce-shi.md[SG4L]: F:在项目 Wiki 中说明测试策略与平台子集 | R:- | A:resolve | S:-
+28-ci-cd-liu-shui-xian-yu-san-ping-tai-zhuo-mian-bao-fa-bu.md[SG4L]: F:在项目 Wiki 中说明持续集成与三平台桌面发布 | R:- | A:- | S:-
+29-guan-jian-she-ji-jue-ce-yu-yi-zhi-xian-jing-su-cha.md[SG4L]: F:在项目 Wiki 中说明关键设计决策与已知陷阱 | R:- | A:- | S:-
+3-shuang-mo-shi-kai-fa-yu-yun-xing.md[SG4M]: F:在项目 Wiki 中说明双模式开发运行 | R:- | A:- | S:-
+4-mu-lu-jie-gou-yu-he-xin-mo-kuai.md[SG4M]: F:在项目 Wiki 中说明目录与模块职责 | R:- | A:- | S:-
+5-ji-zhu-zhan-yu-guan-jian-yi-lai.md[SG4M]: F:在项目 Wiki 中说明技术栈与依赖 | R:- | A:- | S:-
+6-si-ceng-fen-chi-jia-gou-xiang-jie.md[SG4L]: F:在项目 Wiki 中说明四层架构及调用方向 | R:- | A:- | S:-
+7-agentsession-sheng-ming-zhou-qi-yu-jin-cheng-nei-zhu-ce-biao.md[SG4L]: F:在项目 Wiki 中说明会话生命周期与进程内注册表 | R:- | A:startRpcSession | S:-
+8-sse-shi-jian-liu-yu-liu-shi-zhuang-tai-ji.md[SG4L]: F:在项目 Wiki 中说明SSE事件流和状态机 | R:- | A:AgentEvent | S:-
+9-hui-hua-de-liang-chong-fang-wen-mo-shi-zhi-du-liu-lan-yu-jiao-hu-dui-hua.md[SG4L]: F:在项目 Wiki 中说明只读浏览与交互模式 | R:- | A:sessionScopedResetPatch | S:-
+VERSION[FC2T]: F:记录已发布 Wiki 内容的版本标识 | R:- | A:- | S:-
+wiki.json[FC3M]: F:保存 Wiki 章节与文档元数据 | R:- | A:- | S:-
+
+===/<repository>/docs/wiki/===
+index.html[EU3T]: F:提供 Wiki 浏览器的 HTML 入口 | R:- | A:- | S:-
+sanitize-mermaid.mjs[CU4T]: F:规范 Mermaid 行和标签以支持图表渲染 | R:- | A:sanitizeMermaidSource | S:-
+wiki.css[FU3M]: F:定义 Wiki 阅读器的页面样式 | R:- | A:- | S:-
+wiki.js[EU4M]: F:解析 Wiki 路由并改写内容链接 | R:code:docs/wiki/sanitize-mermaid.mjs | A:- | S:-
+
+===/<repository>/electron/===
+app-icon.ts[RC3T]: F:按平台选择桌面应用图标路径 | R:- | A:getAppIconPath | S:-
+crash-recovery.ts[RR6T]: F:计算渲染进程崩溃后的重载状态 | R:- | A:getNextCrashReloadState | S:-
+csp.ts[RS6T]: F:构造包含桌面服务端口的内容安全策略 | R:- | A:ElectronCspPort | S:-
+env-filter.ts[RS5T]: F:筛取子进程所需的 API 密钥环境变量 | R:- | A:pickApiKeys | S:-
+log-format.ts[RO4T]: F:格式化主进程、渲染器与服务端日志 | R:- | A:ElectronLogLevel | S:-
+main.ts[EW8L]: F:协调桌面窗口、服务子进程、日志和更新生命周期 | R:code:electron/tray.ts | A:setQuitting | S:-
+navigation.ts[RR6S]: F:为窗口加载提供重试与导航错误处理 | R:- | A:LoadPage | S:-
+port-selection.ts[RN5T]: F:选择可用的本地服务监听端口 | R:- | A:choosePort | S:-
+preload.ts[IS7T]: F:通过预加载脚本向渲染进程暴露受控桌面接口 | R:code:electron/update-install-gate.ts | A:- | S:-
+process-tree.ts[RR6T]: F:处理服务子进程树的跨平台终止 | R:- | A:killProcessDescendants | S:-
+restart-policy.ts[RR6T]: F:依据服务进程状态决定重启策略 | R:- | A:ServerState | S:-
+server-process.ts[IR6S]: F:统一封装普通子进程与 Electron 实用进程的生命周期 | R:- | A:ServerProcessExitListener | S:-
+server-wait.ts[RR6M]: F:等待 Next 启动输出与 HTTP 服务就绪并控制重试延迟 | R:- | A:getServerRetryDelayMs | S:-
+startup.html[EU3M]: F:提供桌面启动等待页面 | R:- | A:- | S:-
+startup.js[EU4T]: F:驱动启动页状态反馈与交互 | R:- | A:- | S:-
+title-bar-overlay.ts[RU4T]: F:随主题同步桌面窗口标题栏覆盖层 | R:- | A:TitleBarOverlayTarget | S:-
+tray.ts[EU5T]: F:创建系统托盘及窗口相关操作 | R:code:electron/main.ts | A:TrayOptions | S:-
+tsconfig.json[FV4T]: F:定义桌面进程 TypeScript 编译范围 | R:- | A:- | S:-
+update-install-gate.ts[RR6S]: F:跟踪更新下载与授权状态并判定能否退出安装 | R:- | A:UpdateInstallState | S:-
+window-options.ts[RC5S]: F:解析窗口关闭行为与桌面路径选项 | R:- | A:CloseAction | S:-
+
+===/<repository>/hooks/agent-session/===
+agent-event-apply.ts[AM7M]: F:把会话事件映射到阶段更新和界面副作用 | R:code:lib/types.ts | A:RetryInfo | S:-
+agent-events-manager.ts[AM7S]: F:管理智能体事件连接、订阅和连接状态 | R:code:lib/types.ts | A:ExtensionUiRequestEvent | S:-
+agent-phase.ts[DM5T]: F:更新会话阶段和运行中的工具集合 | R:- | A:AgentPhase | S:-
+chat-scroll-policy.ts[DU5T]: F:判断流式更新及会话结束时是否自动滚动 | R:- | A:shouldFollowStreamingUpdate | S:-
+prompt-dispatch-gate.ts[DW5T]: F:防止同一提示发送动作重入 | R:- | A:PromptDispatchState | S:-
+session-command-target.ts[DW5T]: F:解析会话命令应发送到的目标 | R:- | A:SessionCommandTarget | S:-
+session-lifecycle-reset.ts[DD5S]: F:生成会话切换后的状态重置与加载补丁 | R:- | A:ThinkingLevelOption | S:-
+session-loader-api.ts[IN5T]: F:请求会话数据和指定叶节点上下文 | R:code:hooks/agent-session/use-session-loader.ts | A:fetchSession | S:-
+session-stats.ts[DA4T]: F:从消息计算会话用量统计 | R:code:lib/types.ts | A:SessionStats | S:-
+statusline.ts[IO4T]: F:获取并格式化工作目录状态栏信息 | R:code:lib/types.ts | A:fetchStatusline | S:-
+stream-state.ts[DM7T]: F:通过归约器维护增量消息与流式状态 | R:code:lib/types.ts | A:StreamingState | S:-
+use-agent-events.ts[AM6T]: F:在 React 生命周期内订阅智能体事件连接 | R:code:hooks/agent-session/agent-events-manager.ts | A:useAgentEvents | S:-
+use-chat-scroll.ts[AU5S]: F:管理聊天列表滚动与跟随状态 | R:code:hooks/agent-session/chat-scroll-policy.ts | A:useChatScroll | S:-
+use-session-commands.ts[AW7L]: F:编排输入、会话命令与运行中交互 | R:code:lib/types.ts | A:UseSessionCommandsOptions | S:-
+use-session-loader.ts[AD6S]: F:载入会话并防止过期请求覆盖当前状态 | R:code:lib/types.ts | A:latestRequestStale | S:-
+use-session-model-tools.ts[AC5S]: F:协调当前会话的模型与工具设置 | R:code:lib/agent-client.ts | A:UseSessionModelToolsOptions | S:-
+user-message-reconciliation.ts[DM6T]: F:将待确认用户消息与已接收消息合并 | R:code:lib/types.ts | A:reconcilePendingUserMessage | S:-
+
+===/<repository>/hooks/===
+useAgentSession.ts[AW8L]: F:组合会话载入、命令、事件和流式 UI 状态 | R:code:lib/types.ts | A:UseAgentSessionOptions | S:-
+useAudio.ts[AU4T]: F:管理界面音频交互 | R:- | A:useAudio | S:-
+useDismissOnOutsideClick.ts[CU4T]: F:通过外部点击或 Escape 关闭浮层 | R:- | A:DismissReason | S:-
+useDragDrop.ts[CU4T]: F:识别拖入文件并分派释放操作 | R:- | A:useDragDrop | S:-
+useFileTabs.ts[AU5T]: F:管理文件标签和关闭后的活跃项选择 | R:code:components/TabBar.tsx | A:computeNextActiveId | S:-
+usePanelLayout.ts[AU5T]: F:管理应用面板布局状态 | R:- | A:usePanelLayout | S:-
+useTheme.ts[AU5T]: F:订阅并维护界面主题状态 | R:- | A:useTheme | S:-
+useUpstreamUsage.ts[AO5T]: F:按提供方载入上游配额使用情况 | R:code:lib/upstream-usage/types.ts | A:useUpstreamUsage | S:-
+
+===/<repository>/lib/===
+active-thinking.ts[DM4T]: F:从流式消息中分离活跃的思考内容 | R:code:lib/types.ts | A:splitActiveThinking | S:-
+agent-client.ts[IN6T]: F:向会话 API 发送类型化智能体命令 | R:- | A:sendAgentCommand | S:-
+agent-commands.ts[DW6T]: F:定义命令集合并校验提交的命令 | R:- | A:AgentCommandType | S:-
+agent-mode-persistence.ts[PD5T]: F:从会话自定义条目恢复最后使用的智能体模式 | R:code:lib/approval-policy.ts | A:AgentModeCustomData | S:-
+allowed-roots.ts[DS7T]: F:维护允许访问的目录根并规范化跨平台路径 | R:code:lib/session-reader.ts | A:normalizeSlashes | S:-
+api-error.ts[CN5T]: F:统一生成请求标识、错误消息与 JSON 响应 | R:- | A:errorMessage | S:-
+approval-policy.ts[DS7T]: F:按会话模式和预设确定工具权限与审批策略 | R:- | A:AgentMode | S:-
+atomic-write.ts[PR6T]: F:通过临时文件与重命名完成原子写入并处理共享冲突 | R:- | A:WriteFileAtomicOptions | S:-
+auth-policy.ts[DS7T]: F:校验提供方名称、请求来源和允许的源 | R:- | A:validateProviderName | S:-
+ayu-syntax-theme.ts[FU3S]: F:提供 Ayu 明暗两套语法高亮主题 | R:- | A:ayuDarkSyntaxTheme | S:-
+csp.ts[DS6T]: F:构造 Web 及桌面连接策略所需的 CSP 指令 | R:- | A:CspConnectMode | S:-
+desktop-approval-extension.ts[IE7T]: F:把桌面端模式和工具审批策略接入 Pi 扩展 | R:code:lib/approval-policy.ts | A:AgentModeRef | S:-
+desktop-ltm-extension.ts[IE6M]: F:注册长期记忆工具并按配置开放使用 | R:code:lib/ltm/http.ts | A:MEMORY_TOOL_NAMES | S:-
+desktop-packages-workflow.test.mjs[TQ4T]: F:验证桌面打包工作流的工程约束 | R:- | A:- | S:-
+desktop-runtime-tools.ts[DC6T]: F:按模式、预设和注册情况选择运行时工具 | R:code:lib/pi-types.ts | A:isMcpTool | S:-
+desktop-settings.ts[PC6S]: F:读取、规范化并保存桌面设置与长期记忆选项 | R:code:lib/atomic-write.ts | A:DesktopLtmSettings | S:-
+electron-builder-config.test.mjs[TQ5T]: F:验证桌面打包配置中的独立资源规则 | R:code:lib/electron-updater-runtime-deps.mjs | A:- | S:-
+electron-icon-assets.test.mjs[TQ4T]: F:检查桌面图标资源是否符合打包要求 | R:- | A:- | S:-
+electron-titlebar-layout.test.mjs[TQ4T]: F:验证桌面标题栏布局约束 | R:- | A:- | S:-
+electron-updater-runtime-deps.mjs[XV5T]: F:检查打包配置是否包含更新器运行时依赖 | R:- | A:ELECTRON_UPDATER_RUNTIME_PACKAGES | S:-
+extension-render-key.ts[CU3T]: F:为扩展列表项计算稳定渲染标识 | R:- | A:getExtensionRenderKey | S:-
+extension-ui-bridge.ts[IM7M]: F:把扩展确认、选择和输入请求桥接至异步 UI 响应 | R:- | A:ExtensionUiMethod | S:-
+extensions-config.ts[DE6M]: F:管理扩展与技能的配置作用域和诊断信息 | R:code:lib/atomic-write.ts | A:ExtensionScope | S:-
+file-browser.ts[DD6S]: F:列举目录内容并按文件类型处理浏览数据 | R:- | A:IGNORED_DIR_NAMES | S:-
+file-paths.ts[CD4T]: F:规范化文件路径并生成 API 路径编码 | R:- | A:normalizeFilePathSlashes | S:-
+follow-up-queue.ts[DM7T]: F:维护后续消息队列、顺序与版本快照 | R:- | A:FollowUpImage | S:-
+fork-session-wait.ts[RR5T]: F:等待并解析分叉后生成的新会话 | R:- | A:ForkWaitSession | S:-
+git-worktree.ts[IW7L]: F:创建与清理 Git 工作树并校验仓库身份 | R:- | A:GitCommandResult | S:-
+installer-script.test.mjs[TQ4T]: F:检查安装程序脚本宏定义及行为约束 | R:- | A:- | S:-
+mcp-config.ts[PE6L]: F:维护全局和项目级 MCP 连接及传输配置 | R:code:lib/atomic-write.ts | A:McpTransportType | S:-
+normalize.ts[DM6T]: F:将 SDK 工具调用字段转换为统一消息表示 | R:code:lib/types.ts | A:isObject | S:-
+npx.ts[IV4T]: F:定位 npm 执行入口并运行 npx 子命令 | R:- | A:RunNpxOptions | S:-
+panel-layout.js[DU4T]: F:按窗口尺寸限制面板宽度并计算默认值 | R:- | A:- | S:-
+panel-layout.test.mjs[TQ4T]: F:验证面板宽度边界与默认布局 | R:code:lib/panel-layout.js | A:- | S:-
+path-policy.ts[DS6S]: F:校验智能体工作目录与可写路径 | R:- | A:validateAgentCwd | S:-
+pi-runtime.ts[IE8S]: F:构建 Pi 运行时并接入认证、模型和扩展服务 | R:- | A:CreatePiRuntimeOptions | S:-
+pi-types.ts[CE5T]: F:定义桌面侧对 Pi 模型、工具和导航结果的接口 | R:- | A:ContextUsage | S:-
+project-trust-desktop.ts[DI7S]: F:评估项目及父目录信任并管理会话级决策 | R:code:lib/trust-types.ts | A:getTrustParentPath | S:-
+rpc-manager.ts[AW9L]: F:注册活跃会话、串行化启动并桥接命令和事件 | R:code:lib/session-reader.ts | A:AgentEvent | S:-
+session-branch-clone.ts[DW7M]: F:校验会话分支与目录或工作树克隆参数 | R:code:lib/types.ts | A:BranchPayload | S:-
+session-cascade.ts[PD6T]: F:在会话级联变更中重写子会话头 | R:- | A:RewriteResult | S:-
+session-export.ts[ID5S]: F:把会话文本、消息内容和工具记录导出为可读格式 | R:code:lib/types.ts | A:HtmlExportOptions | S:-
+session-lock.ts[PR6T]: F:以文件为粒度串行化会话写操作 | R:- | A:withFileLock | S:-
+session-path-cache.ts[PD5T]: F:缓存会话文件位置并为未命中设置过期时间 | R:- | A:SESSION_MISS_TTL_MS | S:-
+session-reader.ts[PD8M]: F:只读解析会话 JSONL、定位文件并重建浏览数据 | R:code:lib/types.ts | A:getSessionsDir | S:-
+skills-policy.ts[DS5T]: F:校验允许安装的技能包名称 | R:- | A:validateSkillsPackage | S:-
+slash-commands.ts[DU5T]: F:组织内置命令和技能的斜杠命令候选 | R:- | A:SlashSkill | S:-
+tool-presets.ts[DC5T]: F:整理工具预设及可用工具列表 | R:code:lib/approval-policy.ts | A:ToolEntry | S:-
+trust-fetch.ts[II6T]: F:处理信任握手后重试原请求 | R:code:lib/trust-types.ts | A:ensureTrustThenFetch | S:-
+trust-types.ts[CI5T]: F:定义信任选项、交互载荷与标识校验 | R:- | A:TrustOptionId | S:-
+types.ts[CD6M]: F:规定会话头、消息内容和条目类型 | R:- | A:SessionHeader | S:-
+
+===/<repository>/lib/i18n/===
+dictionaries.ts[FL5L]: F:保存中英文界面词典及翻译键类型 | R:- | A:en | S:-
+index.ts[CL5T]: F:解析语言偏好并提供翻译入口 | R:code:lib/i18n/dictionaries.ts | A:SUPPORTED_LOCALES | S:-
+
+===/<repository>/lib/ltm/===
+backend.ts[LD5T]: F:规定长期记忆后端的存取接口 | R:code:lib/ltm/types.ts | A:MemoryBackend | S:-
+config.ts[FC5T]: F:生成并合并长期记忆配置默认值 | R:code:lib/desktop-settings.ts | A:LtmConfig | S:-
+http.ts[IN5M]: F:解析记忆 API 输入并统一禁用、忙碌等错误响应 | R:code:lib/api-error.ts | A:LTM_DISABLED | S:-
+jaccard.ts[KA5T]: F:对中日韩字符与拉丁词汇分词并衡量文本相似度 | R:- | A:jaccardSimilarity | S:-
+observe-hooks.ts[AM6S]: F:从会话生命周期事件中提取可记录的记忆观察 | R:code:lib/ltm/observe-payload.ts | A:contentToText | S:-
+observe-payload.ts[DM5T]: F:把会话结束和压缩前信息整理为受限长度观察记录 | R:- | A:buildAgentEndObservation | S:-
+project-id.ts[DD5T]: F:由工作目录生成长期记忆的项目标识 | R:- | A:projectIdFromCwd | S:-
+service.ts[AD7M]: F:管理记忆服务实例、失败重试及项目作用域操作 | R:code:lib/ltm/backend.ts | A:LTM_FAILURE_RETRY_MS | S:-
+sqlite-backend.ts[PD7L]: F:通过 SQLite 与全文检索持久化和查询长期记忆 | R:code:lib/ltm/backend.ts | A:sanitizeFtsQuery | S:-
+types.ts[CD5T]: F:定义记忆写入、召回及观察事件的数据结构 | R:- | A:MemoryType | S:-
+
+===/<repository>/lib/upstream-usage/===
+format.ts[CL4T]: F:格式化配额时间窗口与订阅状态 | R:- | A:formatDuration | S:-
+route-handler.ts[EN5T]: F:生成查询上游配额的 HTTP 处理函数 | R:code:lib/api-error.ts | A:createUsageGetHandler | S:-
+service.ts[IO6L]: F:查询并缓存上游提供方配额与余额状态 | R:code:lib/pi-runtime.ts | A:CACHE_TTL_MS | S:-
+types.ts[CO4T]: F:定义用量窗口、余额与提供方统计结构 | R:- | A:UpstreamWindowUsage | S:-
+
+===/<repository>/orbital/===
+INDEX.md[SD3T]: F:导航 Orbital 导入的项目记忆及其存放位置 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/00/===
+002f5116a338134a45d091eff9d73de57617922cdc897d4a2653c6728a89dfb3[PD2T]: F:保存 generative-field.md 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/0a/===
+0a446896c186630cf4b5a7d4e663c2701dde57f460ee25ff4c7669567e9255ff[PD2T]: F:保存 stream-state.test.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/0d/===
+0d2a39625b749604a288ca268e49b82dc2a00f22acad4a6c4ab26a2436409692[PD2T]: F:保存 session-lock.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/17/===
+17766a581c131c2538a41094316b70236f2d7b0a00aefd764a9b6e20449ed8ab[PD2T]: F:保存 route.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/1d/===
+1db4078024ba124a74e44ea1960ffe5863ca60b4230c07868aaaeac051327c9f[PD2T]: F:保存 types.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/1f/===
+1fd10abd997c66bfce1a93c4aa8e9b23cd89d48f7055837fbeb3f877237f95fb[PD2T]: F:保存 route.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/25/===
+251b9776b7a37c007b7e655588d98d4e2413e1b071f00a60f5317d01fc342bbc[PD2T]: F:保存 page.tsx 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/26/===
+26ed972c7dbad2ac64f08958251dfe090544ffb25c0af50e2a703d652a3596e9[PD2T]: F:保存 file-viewer-virtualization.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/2e/===
+2e93cf39fac2815de676e3e9b3035497299a4bfb585527196afc5fe46a552471[PD2T]: F:保存 backend.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/31/===
+31dd7c93814e3f6233f6d3d9aaf633aab3f4f5ca7007f610e86813fff56fefe6[PD2T]: F:保存 ayu-syntax-theme.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/3e/===
+3ebbdbe8af70f422d517ee64429ba4b14871824ae76268c2180d7376b2fabffe[PD2T]: F:保存 title-bar-overlay.test.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/44/===
+441eb79c6776b05413eabdb493b3084e7c9c2f0aae5cc50b2c6a7140d7707f83[PD2T]: F:保存 tsconfig.json 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/47/===
+47c0dacebca9f56c9020b68584470dfc51f07650a3719904e98f4b447a5dd003[PD2T]: F:保存 .gitignore 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/4a/===
+4a47d6ace70ef06f3567fdd5529879a61a21f77bdeba6e97938b4e6d931f463e[PD2T]: F:保存 session-stats.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/4e/===
+4e39b8372618e4f6c1dee3344cba2a01ab54728d97177d0bd067cd1155b9d2cc[PD2T]: F:保存 message-content.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/54/===
+542c1e110be9982004288f667a3fcd4e8992b092b47f02a9177d370293f32cba[PD2T]: F:保存 crash-recovery.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/55/===
+55e80f6a1bc359d181688854bb720f9a8dcae0d1974d324db23e73501643d6a9[PD2T]: F:保存 app-icon.test.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/64/===
+644768c4aaeb4767bce293344eeb0c125fb804a94d801440424072202d85e3a1[PD2T]: F:保存 window.svg 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/6a/===
+6a03f38d552e8c35823c69191fd1a22c6b4fa1f9fbce3fe0ea5af0dd73345144[PD2T]: F:保存 panel-layout.js 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/6b/===
+6b31d60925f1c5a8d2999de47639f08c106e66bb560daf61a8a730533dc5b8e8[PD2T]: F:保存 om 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/72/===
+72116f1b4372daa3bf8d4023cd1a69f89cabea0311d9168d9d311939c1aded77[PD2T]: F:保存 INDEX.md 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/73/===
+733c5fc15c7924e7bb18f0b8c69ffe84598cfb67a30ff3539ab3ca32828963ca[PD2T]: F:保存 route.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/78/===
+785224dff134b664942ce00c158700d150102eaf219c076373071969d174634b[PD2T]: F:保存 LICENSE.txt 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/7f/===
+7f0e57c76d08a0022df13486c5c41065df87bc55ad054ee395ff9fae8fa512f5[PD2T]: F:保存 lsp.json 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/86/===
+867ed061bd395320a0d4f987e33acbc746614bcf8a27843b4448229417364935[PD2T]: F:保存 crash-recovery.test.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/8f/===
+8f451764385842604870fab6349e7b44f3e604e7cc31f474c7fcb34912deb704[PD2T]: F:保存 route.ts 的内容寻址历史快照 | R:- | A:- | S:-
+8f8b64b08589253bc20bf418edc93c0dfa52ae30b716c03f180a25d81e9aa730[PD2T]: F:保存 mcp.json 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/9d/===
+9dd4776fdb874335e074e1223efb2d79110ea467ded7982d3f8360b31aa4d2dd[PD2T]: F:保存 next.config.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/aa/===
+aa135db67de50633a8b235c000dda50584acde8d9c86f829f5d2a57feec61a52[PD2T]: F:保存 ExecutePlanBar.tsx 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/ae/===
+ae11d1d1db799e469a458143eb00df31ccc28fcd341336eea7f608332bfa0245[PD2T]: F:保存 follow-up-queue.test.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/b4/===
+b4fb7681bd4b8eafe9de650eab30eae9d2775b9138238ab4e8bf4445b79b803e[PD2T]: F:保存 session-lock.test.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/b6/===
+b61f12ea5a26c6574a4a3e6defdcc87d40ec904eca32d1e7d0052173069781ad[PD2T]: F:保存 electron-titlebar-layout.test.mjs 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/c7/===
+c7d48148261d136ccba947b65b455983d7316c966ae62b7285bb1e0520e7828a[PD2T]: F:保存 SidebarIcon.tsx 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/d3/===
+d3fa5d2c104d95495f237a7b0319d3820e7ae4b90fb349fc6cf7316ad3feef2f[PD2T]: F:保存 ensure-standalone-macos-universal-runtimes.test.mjs 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/d4/===
+d442b69ae8a75653d546c7bb5f5ee2baf4b064208ffb96cc9d6bfada274f42fc[PD2T]: F:保存 useAudio.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/dd/===
+dd46ede6e39da40433084349ae94d63e940279b078738e89b785f0c20b28f09b[PD2T]: F:保存 postcss.config.mjs 的内容寻址历史快照 | R:- | A:- | S:-
+dd84b15455095d84398069ba9e3f2c7f37abb9654c1946e94c5054804840c748[PD2T]: F:保存 ProjectGroup.tsx 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/df/===
+dfd004a72959a4a17f043a1f17a26724a3d8037652463c6e1edcb5f01dba101e[PD2T]: F:保存 slash-commands.test.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/e3/===
+e3e0f996d2551727d7fd4eb2a928baffd7ad36027be3c8576945de31a98f5ef0[PD2T]: F:保存 port-selection.test.ts 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/f0/===
+f081337b2fee635b455b63275406a3e7f39d6a014e25ad90dab5a67e62a12ac4[PD2T]: F:保存 vercel.svg 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/blobs/f4/===
+f48c677433c24d45ab7fd301e867fcdbd816df726daea8e920b996f0f9a14151[PD2T]: F:保存 talking-head.md 的内容寻址历史快照 | R:- | A:- | S:-
+
+===/<repository>/orbital/history/===
+index.json[PD4T]: F:映射项目路径到 Orbital 快照哈希、大小与修改时间 | R:- | A:- | S:-
+versions.jsonl[PD4L]: F:按行记录快照版本、前序哈希与变动归属 | R:- | A:- | S:-
+
+===/<repository>/orbital/imported/claude-code/===
+INDEX.md[SD3T]: F:导航从 Claude Code 导入的项目记忆 | R:- | A:- | S:-
+huashu-motion-studio-reverts-index.md[SD3T]: F:记录动效工作室回写索引文件的历史经验 | R:- | A:- | S:-
+local-lint-errors-from-artifacts.md[SQ3T]: F:记录生成产物引起本地 lint 报错的排查经验 | R:- | A:- | S:-
+
+===/<repository>/scripts/===
+dereference-standalone-symlinks.mjs[OV5T]: F:将独立构建目录中的符号链接物化为实际文件 | R:- | A:collectSymlinks | S:-
+dereference-standalone-symlinks.test.mjs[TQ4T]: F:用临时目录验证构建符号链接处理行为 | R:code:scripts/dereference-standalone-symlinks.mjs | A:- | S:-
+ensure-standalone-macos-universal-runtimes.mjs[OV6M]: F:补齐通用 macOS 包所需的双架构原生运行时 | R:- | A:requiredDarwinSharpPackages | S:-
+ensure-standalone-macos-universal-runtimes.test.mjs[TQ5T]: F:验证 macOS 通用包依赖收集逻辑 | R:code:scripts/ensure-standalone-macos-universal-runtimes.mjs | A:- | S:-
+ensure-standalone-next-runtimes.mjs[OV6T]: F:补齐独立服务所需的 Next 运行时文件 | R:- | A:- | S:-
+ensure-standalone-next-runtimes.test.mjs[TQ5T]: F:验证 Next 独立构建运行时补齐行为 | R:- | A:- | S:-
+ensure-standalone-pi-runtime.mjs[OV6T]: F:收集独立构建所需的 Pi 运行时依赖 | R:- | A:- | S:-
+smoke-packaged-standalone.mjs[TQ5T]: F:在打包产物中定位并冒烟检查独立服务 | R:- | A:- | S:-
+smoke-standalone-server.mjs[TQ5M]: F:在空闲端口启动独立服务并执行冒烟检查 | R:- | A:- | S:-
+sync-github-pages-wiki.mjs[OV4T]: F:将当前版本 Wiki 内容同步至 Pages 文档目录 | R:- | A:WIKI_ROOT_REL | S:-
+sync-github-pages-wiki.test.mjs[TQ4T]: F:验证 Wiki 版本同步计划与目标内容 | R:code:scripts/sync-github-pages-wiki.mjs | A:- | S:-
+sync-landing-orb.mjs[XV4M]: F:同步并调整落地页思考球资源的配色 | R:- | A:- | S:-
+wiki-sanitize-mermaid.test.mjs[TQ4T]: F:验证 Wiki 中 Mermaid 标签的规范化 | R:code:docs/wiki/sanitize-mermaid.mjs | A:- | S:-
